@@ -204,25 +204,50 @@ class LogFrame(ctk.CTkFrame):
         self.log_text.configure(state='disabled')
 
 
-class ThemeToggleButton(ctk.CTkButton):
-    """Button for toggling between light and dark themes."""
+class ThemeToggleButton(ctk.CTkFrame):
+    """Modern iOS-style theme toggle switch."""
     
     def __init__(self, parent, **kwargs):
         """Initialize the theme toggle button.
         
         Args:
             parent: Parent widget
-            **kwargs: Additional keyword arguments for CTkButton
+            **kwargs: Additional keyword arguments for CTkFrame
         """
-        super().__init__(
-            parent,
-            text="🌙",
-            width=40,
-            height=30,
-            **kwargs
-        )
+        super().__init__(parent, corner_radius=15, height=30, width=60, **kwargs)
         
         self.callback: Optional[Callable[[], None]] = None
+        
+        # Create the toggle switch background
+        self.switch_bg = ctk.CTkFrame(
+            self,
+            corner_radius=13,
+            height=26,
+            width=56
+        )
+        self.switch_bg.pack(expand=True, fill="both", padx=2, pady=2)
+        
+        # Create the sliding circle
+        self.slider = ctk.CTkFrame(
+            self.switch_bg,
+            width=22,
+            height=22,
+            corner_radius=11
+        )
+        
+        # Position elements based on current theme
+        self._update_position()
+        
+        # Bind click events to all components
+        self.switch_bg.bind("<Button-1>", self._on_click)
+        self.slider.bind("<Button-1>", self._on_click)
+        self.bind("<Button-1>", self._on_click)
+        
+        # Add hover effect
+        self.switch_bg.bind("<Enter>", self._on_enter)
+        self.switch_bg.bind("<Leave>", self._on_leave)
+        self.slider.bind("<Enter>", self._on_enter)
+        self.slider.bind("<Leave>", self._on_leave)
     
     def set_callback(self, callback: Callable[[], None]) -> None:
         """Set the callback for theme toggle.
@@ -231,9 +256,20 @@ class ThemeToggleButton(ctk.CTkButton):
             callback: Function to call when button is clicked
         """
         self.callback = callback
-        self.configure(command=self._on_click)
     
-    def _on_click(self) -> None:
+    def _on_enter(self, event=None) -> None:
+        """Handle mouse enter for hover effect."""
+        current = ctk.get_appearance_mode()
+        if current == "Dark":
+            self.switch_bg.configure(fg_color="#3a3a3a")
+        else:
+            self.switch_bg.configure(fg_color="#d0d0d0")
+    
+    def _on_leave(self, event=None) -> None:
+        """Handle mouse leave for hover effect."""
+        self._update_colors()
+    
+    def _on_click(self, event=None) -> None:
         """Handle button click."""
         self._toggle_appearance()
         if self.callback:
@@ -245,13 +281,38 @@ class ThemeToggleButton(ctk.CTkButton):
         
         if current == "Dark":
             ctk.set_appearance_mode("Light")
-            self.configure(text="🌙")
         else:
             ctk.set_appearance_mode("Dark")
-            self.configure(text="☀️")
+        
+        # Update position and colors
+        self._update_position()
+    
+    def _update_position(self) -> None:
+        """Update slider position based on current theme."""
+        current = ctk.get_appearance_mode()
+        
+        if current == "Dark":
+            # Dark mode - slider on the right
+            self.slider.place(x=32, y=2)
+        else:
+            # Light mode - slider on the left
+            self.slider.place(x=2, y=2)
+        
+        self._update_colors()
+    
+    def _update_colors(self) -> None:
+        """Update colors based on current theme."""
+        current = ctk.get_appearance_mode()
+        
+        if current == "Dark":
+            # Dark mode colors
+            self.switch_bg.configure(fg_color="#2b2b2b")
+            self.slider.configure(fg_color="white")
+        else:
+            # Light mode colors  
+            self.switch_bg.configure(fg_color="#cccccc")
+            self.slider.configure(fg_color="white")
     
     def update_icon(self) -> None:
-        """Update icon based on current appearance mode."""
-        current = ctk.get_appearance_mode()
-        icon = "☀️" if current == "Dark" else "🌙"
-        self.configure(text=icon)
+        """Update position based on current appearance mode."""
+        self._update_position()
