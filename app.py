@@ -41,7 +41,7 @@ class MinecraftLauncher:
     def load_config(self):
         """Load configuration from JSON file"""
         default_config = {
-            "github_repo": "facufierro/FFTClientMinecraft1211",
+            # github_repo is now hardcoded in code, not in config
             "use_releases": True,
             "release_tag": "latest",  # "latest" for most recent, or specific tag like "v1.0.0"
             "minecraft_dir": "../FFTClientMinecraft1211",
@@ -106,7 +106,7 @@ class MinecraftLauncher:
         status_frame.columnconfigure(1, weight=1)
         
         ttk.Label(status_frame, text="Repository:").grid(row=0, column=0, sticky=tk.W)
-        self.repo_label = ttk.Label(status_frame, text=self.config['github_repo'])
+        self.repo_label = ttk.Label(status_frame, text="facufierro/FFTClientMinecraft1211")
         self.repo_label.grid(row=0, column=1, sticky=tk.W, padx=(10, 0))
         
         ttk.Label(status_frame, text="Local Directory:").grid(row=1, column=0, sticky=tk.W)
@@ -203,12 +203,13 @@ class MinecraftLauncher:
         
         def check_thread():
             try:
+                github_repo = "facufierro/FFTClientMinecraft1211"
                 if self.config.get('use_releases', True):
                     # Check GitHub releases
                     if self.config['release_tag'] == "latest":
-                        releases_url = f"https://api.github.com/repos/{self.config['github_repo']}/releases/latest"
+                        releases_url = f"https://api.github.com/repos/{github_repo}/releases/latest"
                     else:
-                        releases_url = f"https://api.github.com/repos/{self.config['github_repo']}/releases/tags/{self.config['release_tag']}"
+                        releases_url = f"https://api.github.com/repos/{github_repo}/releases/tags/{self.config['release_tag']}"
                     
                     self.log("Checking for new releases...")
                     response = requests.get(releases_url, timeout=10)
@@ -227,7 +228,7 @@ class MinecraftLauncher:
                         self.root.after(0, self.check_error, f"Could not fetch release info: HTTP {response.status_code}")
                 else:
                     # Original branch-based checking (fallback)
-                    repo_url = f"https://api.github.com/repos/{self.config['github_repo']}/contents"
+                    repo_url = f"https://api.github.com/repos/{github_repo}/contents"
                     updates_needed = []
                     
                     for folder in self.config['folders_to_sync']:
@@ -250,7 +251,6 @@ class MinecraftLauncher:
                             self.log(f"Error checking folder {folder}: {str(e)}")
                     
                     self.root.after(0, self.check_complete, updates_needed)
-                
             except Exception as e:
                 self.root.after(0, self.check_error, str(e))
         
@@ -333,12 +333,13 @@ class MinecraftLauncher:
 
         def force_update_thread():
             try:
+                github_repo = "facufierro/FFTClientMinecraft1211"
                 # Always fetch the latest release data, even if current_version matches
                 if self.config.get('use_releases', True):
                     if self.config['release_tag'] == "latest":
-                        releases_url = f"https://api.github.com/repos/{self.config['github_repo']}/releases/latest"
+                        releases_url = f"https://api.github.com/repos/{github_repo}/releases/latest"
                     else:
-                        releases_url = f"https://api.github.com/repos/{self.config['github_repo']}/releases/tags/{self.config['release_tag']}"
+                        releases_url = f"https://api.github.com/repos/{github_repo}/releases/tags/{self.config['release_tag']}"
                     self.log("Force update: fetching release info...")
                     response = requests.get(releases_url, timeout=10)
                     if response.status_code == 200:
@@ -550,17 +551,7 @@ class MinecraftLauncher:
         frame = ttk.Frame(settings_window, padding="20")
         frame.pack(fill=tk.BOTH, expand=True)
         
-        # Repository settings
-        ttk.Label(frame, text="GitHub Repository (owner/repo):").pack(anchor=tk.W)
-        repo_entry = ttk.Entry(frame, width=50)
-        repo_entry.insert(0, self.config['github_repo'])
-        repo_entry.pack(fill=tk.X, pady=(0, 10))
-
-        def on_repo_change(*args):
-            self.config['github_repo'] = repo_entry.get().strip()
-            self.save_config()
-            self.repo_label.config(text=self.config['github_repo'])
-        repo_entry.bind('<KeyRelease>', lambda e: on_repo_change())
+        # Repository setting removed; repo is now hardcoded
 
         # Release/Branch settings
         use_releases_var = tk.BooleanVar(value=self.config.get('use_releases', True))
