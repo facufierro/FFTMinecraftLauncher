@@ -140,6 +140,9 @@ class MinecraftLauncher:
         self.update_button = ttk.Button(buttons_frame, text="Update Files", 
                                        command=self.update_files, state='disabled')
         self.update_button.grid(row=0, column=1, padx=(0, 10))
+
+        self.force_update_button = ttk.Button(buttons_frame, text="Force Update", command=self.force_update)
+        self.force_update_button.grid(row=0, column=4, padx=(0, 10))
         
         self.launch_button = ttk.Button(buttons_frame, text="Launch Minecraft", 
                                        command=self.launch_minecraft, state='disabled')
@@ -151,12 +154,12 @@ class MinecraftLauncher:
         
         # Log frame
         log_frame = ttk.LabelFrame(main_frame, text="Log", padding="10")
-        log_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S))
+        log_frame.grid(row=4, column=0, columnspan=3, sticky="nsew")
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         
         self.log_text = scrolledtext.ScrolledText(log_frame, height=15, state='disabled')
-        self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.log_text.grid(row=0, column=0, sticky="nsew")
         
         # Initialize
         self.log("Launcher initialized")
@@ -314,6 +317,80 @@ class MinecraftLauncher:
     
     def update_files(self):
         """Download and update files from repository or release"""
+        # ...existing code...
+
+    def force_update(self):
+        """Force update: always download and overwrite everything from the release, even if up to date."""
+        # ...existing code...
+        """Force update: always download and overwrite everything from the release, even if up to date."""
+        if self.is_updating:
+            return
+        self.is_updating = True
+        self.update_button.config(state='disabled')
+        self.check_button.config(state='disabled')
+        self.progress_bar.start()
+        self.progress_var.set("Force updating files...")
+
+        def force_update_thread():
+            try:
+                # Always fetch the latest release data, even if current_version matches
+                if self.config.get('use_releases', True):
+                    if self.config['release_tag'] == "latest":
+                        releases_url = f"https://api.github.com/repos/{self.config['github_repo']}/releases/latest"
+                    else:
+                        releases_url = f"https://api.github.com/repos/{self.config['github_repo']}/releases/tags/{self.config['release_tag']}"
+                    self.log("Force update: fetching release info...")
+                    response = requests.get(releases_url, timeout=10)
+                    if response.status_code == 200:
+                        release_data = response.json()
+                        self.latest_release_data = release_data
+                        # Now run the update_files logic, but always update
+                        # Download from release
+                        download_url = None
+                        for asset in release_data.get('assets', []):
+                            if asset['name'].endswith('.zip'):
+                                download_url = asset['browser_download_url']
+                                break
+                        if not download_url:
+                            download_url = release_data['zipball_url']
+                        self.log(f"Force downloading release {release_data['tag_name']} from: {download_url}")
+                        resp = requests.get(download_url, timeout=30)
+                        resp.raise_for_status()
+                        zip_path = self.launcher_dir / "temp_update.zip"
+                        with open(zip_path, 'wb') as f:
+                            f.write(resp.content)
+                        self.log("Extracting files...")
+                        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                            extract_path = self.launcher_dir / "temp_extract"
+                            zip_ref.extractall(extract_path)
+                        repo_folders = list(extract_path.glob("*"))
+                        if repo_folders:
+                            repo_folder = repo_folders[0]
+                            extracted_items = [p for p in repo_folder.iterdir()]
+                            self.log(f"Extracted repo folder contents: {[p.name for p in extracted_items]}")
+                            for item in extracted_items:
+                                dst_path = self.minecraft_dir / item.name
+                                self.log(f"Force syncing '{item.name}' to '{dst_path}'")
+                                if item.is_dir():
+                                    if dst_path.exists():
+                                        shutil.rmtree(dst_path)
+                                    shutil.copytree(item, dst_path)
+                                else:
+                                    shutil.copy2(item, dst_path)
+                        self.config['current_version'] = release_data['tag_name']
+                        self.save_config()
+                        shutil.rmtree(extract_path)
+                        zip_path.unlink()
+                        self.root.after(0, self.update_complete)
+                    else:
+                        self.root.after(0, self.update_error, f"Could not fetch release info: HTTP {response.status_code}")
+                else:
+                    self.root.after(0, self.update_error, "Force update only supported for releases mode.")
+            except Exception as e:
+                self.root.after(0, self.update_error, str(e))
+        self.update_thread = threading.Thread(target=force_update_thread, daemon=True)
+        self.update_thread.start()
+        """Download and update files from repository or release"""
         if self.is_updating:
             return
         
@@ -328,106 +405,95 @@ class MinecraftLauncher:
                 if self.config.get('use_releases', True) and hasattr(self, 'latest_release_data'):
                     # Download from release
                     release_data = self.latest_release_data
-                    
                     # Find the source code zip asset
                     download_url = None
                     for asset in release_data.get('assets', []):
                         if asset['name'].endswith('.zip'):
                             download_url = asset['browser_download_url']
                             break
-                    
                     # If no assets, use the source code archive
                     if not download_url:
                         download_url = release_data['zipball_url']
-                    
                     self.log(f"Downloading release {release_data['tag_name']} from: {download_url}")
-                    
                     response = requests.get(download_url, timeout=30)
                     response.raise_for_status()
-                    
                     # Save and extract ZIP
                     zip_path = self.launcher_dir / "temp_update.zip"
                     with open(zip_path, 'wb') as f:
                         f.write(response.content)
-                    
                     self.log("Extracting files...")
                     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                         extract_path = self.launcher_dir / "temp_extract"
                         zip_ref.extractall(extract_path)
-                    
                     # Find the extracted repo folder
                     repo_folders = list(extract_path.glob("*"))
                     if repo_folders:
                         repo_folder = repo_folders[0]
-                        
-                        # Copy specified folders
-                        for folder in self.config['folders_to_sync']:
-                            src_folder = repo_folder / folder
-                            dst_folder = self.minecraft_dir / folder
-                            
-                            if src_folder.exists():
-                                self.log(f"Updating folder: {folder}")
-                                if dst_folder.exists():
-                                    shutil.rmtree(dst_folder)
-                                shutil.copytree(src_folder, dst_folder)
+                        # List all folders/files in the extracted repo folder
+                        extracted_items = [p for p in repo_folder.iterdir()]
+                        self.log(f"Extracted repo folder contents: {[p.name for p in extracted_items]}")
+                        # For each folder or file in the extracted repo folder, copy it to the minecraft_dir
+                        for item in extracted_items:
+                            dst_path = self.minecraft_dir / item.name
+                            self.log(f"Syncing '{item.name}' to '{dst_path}'")
+                            if item.is_dir():
+                                if dst_path.exists():
+                                    shutil.rmtree(dst_path)
+                                shutil.copytree(item, dst_path)
                             else:
-                                self.log(f"Folder not found in release: {folder}")
-                    
+                                shutil.copy2(item, dst_path)
                     # Update version in config
                     self.config['current_version'] = release_data['tag_name']
                     self.save_config()
-                    
                     # Cleanup
                     shutil.rmtree(extract_path)
                     zip_path.unlink()
-                    
                     self.root.after(0, self.update_complete)
-                
                 else:
                     # Original branch-based download
                     repo_url = f"https://github.com/{self.config['github_repo']}/archive/{self.config['github_branch']}.zip"
                     self.log(f"Downloading from: {repo_url}")
-                    
                     response = requests.get(repo_url, timeout=30)
                     response.raise_for_status()
-                    
                     # Save and extract ZIP
                     zip_path = self.launcher_dir / "temp_update.zip"
                     with open(zip_path, 'wb') as f:
                         f.write(response.content)
-                    
                     self.log("Extracting files...")
                     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                         extract_path = self.launcher_dir / "temp_extract"
                         zip_ref.extractall(extract_path)
-                    
                     # Find the extracted repo folder
                     repo_folders = list(extract_path.glob("*"))
                     if repo_folders:
                         repo_folder = repo_folders[0]
-                        
-                        # Copy specified folders
                         for folder in self.config['folders_to_sync']:
                             src_folder = repo_folder / folder
                             dst_folder = self.minecraft_dir / folder
-                            
                             if src_folder.exists():
                                 self.log(f"Updating folder: {folder}")
                                 if dst_folder.exists():
-                                    shutil.rmtree(dst_folder)
-                                shutil.copytree(src_folder, dst_folder)
+                                    for item in dst_folder.iterdir():
+                                        if item.is_dir():
+                                            shutil.rmtree(item)
+                                        else:
+                                            item.unlink()
+                                else:
+                                    dst_folder.mkdir(parents=True, exist_ok=True)
+                                for item in src_folder.iterdir():
+                                    s = item
+                                    d = dst_folder / item.name
+                                    if s.is_dir():
+                                        shutil.copytree(s, d)
+                                    else:
+                                        shutil.copy2(s, d)
                             else:
                                 self.log(f"Folder not found in repo: {folder}")
-                    
-                    # Cleanup
                     shutil.rmtree(extract_path)
                     zip_path.unlink()
-                    
                     self.root.after(0, self.update_complete)
-                
             except Exception as e:
                 self.root.after(0, self.update_error, str(e))
-    
         self.update_thread = threading.Thread(target=update_thread, daemon=True)
         self.update_thread.start()
     
