@@ -5,25 +5,19 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+from ..constants import GITHUB_REPO, DEFAULT_SYNC_FOLDERS
 
 
 @dataclass
 class LauncherConfig:
     """Configuration settings for the Minecraft launcher."""
     
-    # Repository settings
-    github_repo: str = "facufierro/FFTClientMinecraft1211"
-    use_releases: bool = True
-    release_tag: str = "latest"
-    
     # Local paths
     minecraft_dir: str = "../FFTClientMinecraft1211"
     minecraft_executable: str = "minecraft.exe"
     
     # Sync settings
-    folders_to_sync: List[str] = field(default_factory=lambda: [
-        "config", "mods", "resourcepacks", "kubejs", "scripts", "defaultconfigs"
-    ])
+    folders_to_sync: List[str] = field(default_factory=lambda: DEFAULT_SYNC_FOLDERS)
     
     # Behavior settings
     check_on_startup: bool = True
@@ -33,6 +27,11 @@ class LauncherConfig:
     # State
     current_version: Optional[str] = None
     last_check: Optional[str] = None
+    
+    @property
+    def github_repo(self) -> str:
+        """Get the GitHub repository (hardcoded constant)."""
+        return GITHUB_REPO
     
     @classmethod
     def load_from_file(cls, config_path: str) -> 'LauncherConfig':
@@ -49,6 +48,9 @@ class LauncherConfig:
             # Create config with loaded data, using defaults for missing keys
             config = cls()
             for key, value in data.items():
+                # Skip github_repo as it's now a constant
+                if key == 'github_repo':
+                    continue
                 if hasattr(config, key):
                     setattr(config, key, value)
                     
@@ -60,10 +62,10 @@ class LauncherConfig:
     def save_to_file(self, config_path: str) -> None:
         """Save configuration to JSON file."""
         try:
-            # Convert to dict, excluding None values
+            # Convert to dict, excluding None values and github_repo (constant)
             data = {
                 key: value for key, value in self.__dict__.items()
-                if value is not None
+                if value is not None and key != 'github_repo'
             }
             
             with open(config_path, 'w', encoding='utf-8') as f:
@@ -84,9 +86,6 @@ class LauncherConfig:
     def validate(self) -> List[str]:
         """Validate the configuration and return a list of errors."""
         errors = []
-        
-        if not self.github_repo:
-            errors.append("GitHub repository must be specified")
         
         if not self.minecraft_dir:
             errors.append("Minecraft directory must be specified")

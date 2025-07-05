@@ -128,7 +128,6 @@ class MainWindow:
         config = self.launcher_core.config
         
         # Update status frame
-        self.status_frame.update_repository(config.github_repo)
         self.status_frame.update_directory(str(config.get_minecraft_path()))
         self.status_frame.update_version(config.current_version or "Unknown")
         

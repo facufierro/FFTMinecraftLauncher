@@ -20,22 +20,16 @@ class StatusFrame(ctk.CTkFrame):
         self.columnconfigure(1, weight=1)
         
         # Status labels
-        self.repo_title, self.repo_label = UIUtils.create_info_frame(
-            self, "Repository", "Not set", 0
-        )
         self.dir_title, self.dir_label = UIUtils.create_info_frame(
-            self, "Local Directory", "Not set", 1
+            self, "Local Directory", "Not set", 0
         )
         self.lastcheck_title, self.lastcheck_label = UIUtils.create_info_frame(
-            self, "Last Check", "Never", 2
+            self, "Last Check", "Never", 1
         )
         self.version_title, self.version_label = UIUtils.create_info_frame(
-            self, "Current Version", "Unknown", 3
+            self, "Current Version", "Unknown", 2
         )
     
-    def update_repository(self, repo: str) -> None:
-        """Update repository display."""
-        self.repo_label.configure(text=repo)
     
     def update_directory(self, directory: str) -> None:
         """Update directory display."""

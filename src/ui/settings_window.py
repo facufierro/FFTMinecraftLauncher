@@ -23,7 +23,6 @@ class SettingsWindow:
         # Initialize entry widgets (will be set in _setup_ui)
         self.minecraft_dir_entry: Optional[ctk.CTkEntry] = None
         self.minecraft_executable_entry: Optional[ctk.CTkEntry] = None
-        self.github_repo_entry: Optional[ctk.CTkEntry] = None
         
         self._create_window()
     
@@ -73,14 +72,9 @@ class SettingsWindow:
             form_frame, "Minecraft Executable", "minecraft_executable", 1
         )
         
-        # GitHub Repository
-        self._create_setting_group(
-            form_frame, "GitHub Repository", "github_repo", 2
-        )
-        
         # Checkboxes
         checkbox_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-        checkbox_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        checkbox_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         
         # Check on startup
         self.check_startup_var = ctk.BooleanVar()
@@ -160,8 +154,6 @@ class SettingsWindow:
             self.minecraft_dir_entry.insert(0, config.minecraft_dir)
         if self.minecraft_executable_entry:
             self.minecraft_executable_entry.insert(0, config.minecraft_executable)
-        if self.github_repo_entry:
-            self.github_repo_entry.insert(0, config.github_repo)
         
         # Load checkbox settings
         self.check_startup_var.set(config.check_on_startup)
@@ -242,8 +234,6 @@ class SettingsWindow:
             self.minecraft_dir_entry.delete(0, 'end')
         if self.minecraft_executable_entry:
             self.minecraft_executable_entry.delete(0, 'end')
-        if self.github_repo_entry:
-            self.github_repo_entry.delete(0, 'end')
     
     def is_open(self) -> bool:
         """Check if the settings window is open.

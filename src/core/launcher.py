@@ -122,10 +122,6 @@ class LauncherCore:
             if hasattr(self.config, key):
                 setattr(self.config, key, value)
         
-        # Re-initialize services if repo changed
-        if 'github_repo' in kwargs:
-            self._initialize_services()
-        
         self.events.emit(EventType.CONFIG_CHANGED, {
             'old': old_config,
             'new': dict(self.config.__dict__)
