@@ -31,7 +31,7 @@ class SettingsWindow:
         """Create the settings window."""
         self.window = ctk.CTkToplevel(self.parent)
         self.window.title("Launcher Settings")
-        UIUtils.center_window(self.window, 450, 400)
+        UIUtils.center_window(self.window, 600, 400)
         self.window.transient(self.parent)
         self.window.grab_set()
         
