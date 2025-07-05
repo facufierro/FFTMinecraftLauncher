@@ -510,7 +510,7 @@ class MinecraftLauncher:
         """Open settings dialog"""
         settings_window = tk.Toplevel(self.root)
         settings_window.title("Launcher Settings")
-        self.center_window(settings_window, 380, 260)
+        self.center_window(settings_window, 380, 230)
         settings_window.transient(self.root)
         settings_window.grab_set()
         
