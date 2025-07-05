@@ -502,7 +502,7 @@ class MinecraftLauncher:
         """Open settings dialog"""
         settings_window = tk.Toplevel(self.root)
         settings_window.title("Launcher Settings")
-        settings_window.geometry("500x400")
+        settings_window.geometry("380x260")  # Reduced size for a more compact dialog
         settings_window.transient(self.root)
         settings_window.grab_set()
         
