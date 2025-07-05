@@ -1,7 +1,6 @@
-"""
-FFT Minecraft Launcher
-A launcher that syncs specific folders from GitHub repo before launching Minecraft client.
-"""
+
+# FFT Minecraft Launcher (customtkinter version)
+# A launcher that syncs specific folders from GitHub repo before launching Minecraft client.
 
 import os
 import sys
@@ -11,18 +10,21 @@ import hashlib
 import requests
 import zipfile
 import threading
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+import customtkinter as ctk
+from tkinter import messagebox
 from pathlib import Path
 import subprocess
 from datetime import datetime
 
 class MinecraftLauncher:
     def __init__(self):
-        self.root = tk.Tk()
+        ctk.set_appearance_mode("System")  # or "Dark"/"Light"
+        ctk.set_default_color_theme("dark-blue")
+        self.root = ctk.CTk()
         self.root.title("FFT Minecraft Launcher")
         self.center_window(self.root, 800, 600)
         self.root.resizable(True, True)
+        self.night_mode = False
 
     def center_window(self, window, width, height):
         window.update_idletasks()
@@ -35,6 +37,7 @@ class MinecraftLauncher:
         # Configuration
         self.config_file = "launcher_config.json"
         self.load_config()
+        self.night_mode = self.config.get('night_mode', False)
         
         # Paths
         self.launcher_dir = Path(__file__).parent
@@ -45,6 +48,23 @@ class MinecraftLauncher:
         self.update_thread = None
         
         self.setup_ui()
+        self.add_dark_mode_toggle()
+
+    def add_dark_mode_toggle(self):
+        # Place a button with a sun/moon icon in the top right using CTkButton
+        self.dark_mode_btn = ctk.CTkButton(self.root, text="🌙", width=40, command=self.toggle_night_mode)
+        self.dark_mode_btn.place(relx=1.0, x=-10, y=10, anchor='ne')
+
+    def toggle_night_mode(self):
+        # Use customtkinter's built-in appearance mode
+        current = ctk.get_appearance_mode()
+        if current == "Dark":
+            ctk.set_appearance_mode("Light")
+            self.dark_mode_btn.configure(text="🌙")
+        else:
+            ctk.set_appearance_mode("Dark")
+            self.dark_mode_btn.configure(text="☀️")
+    # No longer needed with customtkinter
         
     def load_config(self):
         """Load configuration from JSON file"""
@@ -86,91 +106,81 @@ class MinecraftLauncher:
             print(f"Error saving config: {e}")
     
     def setup_ui(self):
-        """Setup the user interface"""
-        # Style
-        style = ttk.Style()
-        style.theme_use('clam')
-        
+        """Setup the user interface using customtkinter"""
         # Main frame
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # Configure grid weights
+        main_frame = ctk.CTkFrame(self.root, corner_radius=10)
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         main_frame.rowconfigure(4, weight=1)
-        
+
         # Title
-        title_label = ttk.Label(main_frame, text="FFT Minecraft Launcher", 
-                               font=('Arial', 16, 'bold'))
+        title_label = ctk.CTkLabel(main_frame, text="FFT Minecraft Launcher", font=ctk.CTkFont(size=20, weight="bold"))
         title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
-        
+
         # Status frame
-        status_frame = ttk.LabelFrame(main_frame, text="Status", padding="10")
-        status_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        status_frame = ctk.CTkFrame(main_frame, corner_radius=8)
+        status_frame.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 10))
         status_frame.columnconfigure(1, weight=1)
-        
-        ttk.Label(status_frame, text="Repository:").grid(row=0, column=0, sticky=tk.W)
-        self.repo_label = ttk.Label(status_frame, text="facufierro/FFTClientMinecraft1211")
-        self.repo_label.grid(row=0, column=1, sticky=tk.W, padx=(10, 0))
-        
-        ttk.Label(status_frame, text="Local Directory:").grid(row=1, column=0, sticky=tk.W)
-        self.dir_label = ttk.Label(status_frame, text=str(self.minecraft_dir.resolve()))
-        self.dir_label.grid(row=1, column=1, sticky=tk.W, padx=(10, 0))
-        
-        ttk.Label(status_frame, text="Last Check:").grid(row=2, column=0, sticky=tk.W)
-        self.last_check_label = ttk.Label(status_frame, text="Never")
-        self.last_check_label.grid(row=2, column=1, sticky=tk.W, padx=(10, 0))
-        
+
+        ctk.CTkLabel(status_frame, text="Repository:").grid(row=0, column=0, sticky="w")
+        self.repo_label = ctk.CTkLabel(status_frame, text="facufierro/FFTClientMinecraft1211")
+        self.repo_label.grid(row=0, column=1, sticky="w", padx=(10, 0))
+
+        ctk.CTkLabel(status_frame, text="Local Directory:").grid(row=1, column=0, sticky="w")
+        self.dir_label = ctk.CTkLabel(status_frame, text=str(self.minecraft_dir.resolve()))
+        self.dir_label.grid(row=1, column=1, sticky="w", padx=(10, 0))
+
+        ctk.CTkLabel(status_frame, text="Last Check:").grid(row=2, column=0, sticky="w")
+        self.last_check_label = ctk.CTkLabel(status_frame, text="Never")
+        self.last_check_label.grid(row=2, column=1, sticky="w", padx=(10, 0))
+
         # Progress frame
-        progress_frame = ttk.Frame(main_frame)
-        progress_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
+        progress_frame = ctk.CTkFrame(main_frame, corner_radius=8)
+        progress_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(0, 10))
         progress_frame.columnconfigure(0, weight=1)
-        
-        self.progress_var = tk.StringVar(value="Ready")
-        self.progress_label = ttk.Label(progress_frame, textvariable=self.progress_var)
-        self.progress_label.grid(row=0, column=0, sticky=tk.W)
-        
-        self.progress_bar = ttk.Progressbar(progress_frame, mode='indeterminate')
-        self.progress_bar.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
-        
+
+        self.progress_var = ctk.StringVar(value="Ready")
+        self.progress_label = ctk.CTkLabel(progress_frame, textvariable=self.progress_var)
+        self.progress_label.grid(row=0, column=0, sticky="w")
+
+        self.progress_bar = ctk.CTkProgressBar(progress_frame)
+        self.progress_bar.grid(row=1, column=0, sticky="ew", pady=(5, 0))
+        self.progress_bar.set(0)
+
         # Buttons frame
-        buttons_frame = ttk.Frame(main_frame)
+        buttons_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         buttons_frame.grid(row=3, column=0, columnspan=3, pady=(0, 10))
-        
-        self.check_button = ttk.Button(buttons_frame, text="Check for Updates", 
-                                      command=self.check_updates)
+
+        self.check_button = ctk.CTkButton(buttons_frame, text="Check for Updates", command=self.check_updates)
         self.check_button.grid(row=0, column=0, padx=(0, 10))
-        
-        self.update_button = ttk.Button(buttons_frame, text="Update Files", 
-                                       command=self.update_files, state='disabled')
+
+        self.update_button = ctk.CTkButton(buttons_frame, text="Update Files", command=self.update_files, state="disabled")
         self.update_button.grid(row=0, column=1, padx=(0, 10))
 
-        self.force_update_button = ttk.Button(buttons_frame, text="Force Update", command=self.force_update)
+        self.force_update_button = ctk.CTkButton(buttons_frame, text="Force Update", command=self.force_update)
         self.force_update_button.grid(row=0, column=4, padx=(0, 10))
-        
-        self.launch_button = ttk.Button(buttons_frame, text="Launch Minecraft", 
-                                       command=self.launch_minecraft, state='disabled')
+
+        self.launch_button = ctk.CTkButton(buttons_frame, text="Launch Minecraft", command=self.launch_minecraft, state="disabled")
         self.launch_button.grid(row=0, column=2, padx=(0, 10))
-        
-        self.settings_button = ttk.Button(buttons_frame, text="Settings", 
-                                         command=self.open_settings)
+
+        self.settings_button = ctk.CTkButton(buttons_frame, text="Settings", command=self.open_settings)
         self.settings_button.grid(row=0, column=3)
-        
+
         # Log frame
-        log_frame = ttk.LabelFrame(main_frame, text="Log", padding="10")
+        log_frame = ctk.CTkFrame(main_frame, corner_radius=8)
         log_frame.grid(row=4, column=0, columnspan=3, sticky="nsew")
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
-        
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=15, state='disabled')
+
+        self.log_text = ctk.CTkTextbox(log_frame, height=250, state="disabled")
         self.log_text.grid(row=0, column=0, sticky="nsew")
-        
+
         # Initialize
         self.log("Launcher initialized")
         self.check_minecraft_dir()
-        
+
         if self.config.get('check_on_startup', True):
             self.root.after(1000, self.check_updates)  # Check after 1 second
     
@@ -178,23 +188,23 @@ class MinecraftLauncher:
         """Add a message to the log"""
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{timestamp}] {message}\n"
-        
-        self.log_text.config(state='normal')
-        self.log_text.insert(tk.END, formatted_message)
-        self.log_text.see(tk.END)
-        self.log_text.config(state='disabled')
-        
+
+        self.log_text.configure(state='normal')
+        self.log_text.insert('end', formatted_message)
+        self.log_text.see('end')
+        self.log_text.configure(state='disabled')
+
         print(f"LOG: {message}")  # Also print to console
     
     def check_minecraft_dir(self):
         """Check if Minecraft directory exists and is accessible"""
         if not self.minecraft_dir.exists():
             self.log(f"Warning: Minecraft directory not found: {self.minecraft_dir}")
-            self.launch_button.config(state='disabled')
+            self.launch_button.configure(state='disabled')
             return False
-        
+
         self.log(f"Minecraft directory found: {self.minecraft_dir}")
-        self.launch_button.config(state='normal')
+        self.launch_button.configure(state='normal')
         return True
     
     def check_updates(self):
@@ -203,7 +213,7 @@ class MinecraftLauncher:
             return
         
         self.is_updating = True
-        self.check_button.config(state='disabled')
+        self.check_button.configure(state='disabled')
         self.progress_bar.start()
         self.progress_var.set("Checking for updates...")
         
@@ -250,40 +260,40 @@ class MinecraftLauncher:
         """Called when release-based update check is complete"""
         self.is_updating = False
         self.progress_bar.stop()
-        self.check_button.config(state='normal')
-        self.last_check_label.config(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        
+        self.check_button.configure(state='normal')
+        self.last_check_label.configure(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
         if updates_needed:
             self.progress_var.set(f"New release available: {latest_version}")
-            self.update_button.config(state='normal')
+            self.update_button.configure(state='normal')
             self.log(f"New release available: {latest_version}")
             self.latest_release_data = release_data  # Store for download
         else:
             self.progress_var.set(f"Up to date (Version: {latest_version})")
-            self.update_button.config(state='disabled')
+            self.update_button.configure(state='disabled')
             self.log(f"Already up to date with version: {latest_version}")
     
     def check_complete(self, updates_needed):
         """Called when update check is complete"""
         self.is_updating = False
         self.progress_bar.stop()
-        self.check_button.config(state='normal')
-        self.last_check_label.config(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        
+        self.check_button.configure(state='normal')
+        self.last_check_label.configure(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
         if updates_needed:
             self.progress_var.set(f"Updates available for: {', '.join(updates_needed)}")
-            self.update_button.config(state='normal')
+            self.update_button.configure(state='normal')
             self.log(f"Found updates for {len(updates_needed)} folders")
         else:
             self.progress_var.set("All files up to date")
-            self.update_button.config(state='disabled')
+            self.update_button.configure(state='disabled')
             self.log("All files are up to date")
     
     def check_error(self, error_msg):
         """Called when update check fails"""
         self.is_updating = False
         self.progress_bar.stop()
-        self.check_button.config(state='normal')
+        self.check_button.configure(state='normal')
         self.progress_var.set("Error checking updates")
         self.log(f"Error checking updates: {error_msg}")
         messagebox.showerror("Error", f"Failed to check for updates:\n{error_msg}")
@@ -299,8 +309,8 @@ class MinecraftLauncher:
         if self.is_updating:
             return
         self.is_updating = True
-        self.update_button.config(state='disabled')
-        self.check_button.config(state='disabled')
+        self.update_button.configure(state='disabled')
+        self.check_button.configure(state='disabled')
         self.progress_bar.start()
         self.progress_var.set("Force updating files...")
 
@@ -363,8 +373,8 @@ class MinecraftLauncher:
             return
         
         self.is_updating = True
-        self.update_button.config(state='disabled')
-        self.check_button.config(state='disabled')
+        self.update_button.configure(state='disabled')
+        self.check_button.configure(state='disabled')
         self.progress_bar.start()
         self.progress_var.set("Downloading updates...")
         
@@ -469,8 +479,8 @@ class MinecraftLauncher:
         """Called when update is complete"""
         self.is_updating = False
         self.progress_bar.stop()
-        self.check_button.config(state='normal')
-        self.update_button.config(state='disabled')
+        self.check_button.configure(state='normal')
+        self.update_button.configure(state='disabled')
         self.progress_var.set("Update completed successfully")
         self.log("Files updated successfully")
         messagebox.showinfo("Success", "Files updated successfully!")
@@ -479,7 +489,7 @@ class MinecraftLauncher:
         """Called when update fails"""
         self.is_updating = False
         self.progress_bar.stop()
-        self.check_button.config(state='normal')
+        self.check_button.configure(state='normal')
         self.progress_var.set("Error updating files")
         self.log(f"Error updating files: {error_msg}")
         messagebox.showerror("Error", f"Failed to update files:\n{error_msg}")
@@ -507,62 +517,56 @@ class MinecraftLauncher:
             messagebox.showerror("Error", f"Failed to launch Minecraft:\n{str(e)}")
     
     def open_settings(self):
-        """Open settings dialog"""
-        settings_window = tk.Toplevel(self.root)
+        """Open settings dialog (customtkinter)"""
+        settings_window = ctk.CTkToplevel(self.root)
         settings_window.title("Launcher Settings")
-        self.center_window(settings_window, 380, 230)
+        self.center_window(settings_window, 380, 250)
         settings_window.transient(self.root)
         settings_window.grab_set()
-        
+
         # Settings form
-        frame = ttk.Frame(settings_window, padding="20")
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Repository setting removed; repo is now hardcoded
+        frame = ctk.CTkFrame(settings_window, corner_radius=10)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Release/Branch settings removed; always using GitHub Releases and latest tag
-
-        ttk.Label(frame, text="Minecraft Directory:").pack(anchor=tk.W)
-        dir_entry = ttk.Entry(frame, width=50)
+        ctk.CTkLabel(frame, text="Minecraft Directory:").pack(anchor="w")
+        dir_entry = ctk.CTkEntry(frame, width=280)
         dir_entry.insert(0, self.config['minecraft_dir'])
-        dir_entry.pack(fill=tk.X, pady=(0, 10))
-        def on_dir_change(*args):
+        dir_entry.pack(fill="x", pady=(0, 10))
+        def on_dir_change(event=None):
             self.config['minecraft_dir'] = dir_entry.get().strip()
             self.save_config()
             self.minecraft_dir = Path(self.config['minecraft_dir'])
-            self.dir_label.config(text=str(self.minecraft_dir.resolve()))
-        dir_entry.bind('<KeyRelease>', lambda e: on_dir_change())
+            self.dir_label.configure(text=str(self.minecraft_dir.resolve()))
+        dir_entry.bind('<KeyRelease>', on_dir_change)
 
-        ttk.Label(frame, text="Minecraft Executable:").pack(anchor=tk.W)
-        exe_entry = ttk.Entry(frame, width=50)
+        ctk.CTkLabel(frame, text="Minecraft Executable:").pack(anchor="w")
+        exe_entry = ctk.CTkEntry(frame, width=280)
         exe_entry.insert(0, self.config['minecraft_executable'])
-        exe_entry.pack(fill=tk.X, pady=(0, 10))
-        def on_exe_change(*args):
+        exe_entry.pack(fill="x", pady=(0, 10))
+        def on_exe_change(event=None):
             self.config['minecraft_executable'] = exe_entry.get().strip()
             self.save_config()
-        exe_entry.bind('<KeyRelease>', lambda e: on_exe_change())
+        exe_entry.bind('<KeyRelease>', on_exe_change)
 
         # Checkboxes
-        check_startup_var = tk.BooleanVar(value=self.config.get('check_on_startup', True))
-        def on_check_startup_change(*args):
+        check_startup_var = ctk.BooleanVar(value=self.config.get('check_on_startup', True))
+        def on_check_startup_change():
             self.config['check_on_startup'] = check_startup_var.get()
             self.save_config()
-        check_startup_cb = ttk.Checkbutton(frame, text="Check for updates on startup", variable=check_startup_var, command=on_check_startup_change)
-        check_startup_cb.pack(anchor=tk.W, pady=(0, 5))
+        check_startup_cb = ctk.CTkCheckBox(frame, text="Check for updates on startup", variable=check_startup_var, command=on_check_startup_change)
+        check_startup_cb.pack(anchor="w", pady=(0, 5))
 
-        auto_update_var = tk.BooleanVar(value=self.config.get('auto_update', False))
-        def on_auto_update_change(*args):
+        auto_update_var = ctk.BooleanVar(value=self.config.get('auto_update', False))
+        def on_auto_update_change():
             self.config['auto_update'] = auto_update_var.get()
             self.save_config()
-        auto_update_cb = ttk.Checkbutton(frame, text="Auto-update without asking", variable=auto_update_var, command=on_auto_update_change)
-        auto_update_cb.pack(anchor=tk.W, pady=(0, 10))
-
-        # Removed 'Folders to sync' section as functionality is now different
+        auto_update_cb = ctk.CTkCheckBox(frame, text="Auto-update without asking", variable=auto_update_var, command=on_auto_update_change)
+        auto_update_cb.pack(anchor="w", pady=(0, 10))
 
         # Buttons
-        button_frame = ttk.Frame(frame)
-        button_frame.pack(fill=tk.X)
-        ttk.Button(button_frame, text="Close", command=settings_window.destroy).pack(side=tk.RIGHT)
+        button_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        button_frame.pack(fill="x")
+        ctk.CTkButton(button_frame, text="Close", command=settings_window.destroy).pack(side="right")
     
     def run(self):
         """Start the launcher"""
