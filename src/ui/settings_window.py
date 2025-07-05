@@ -64,12 +64,12 @@ class SettingsWindow:
         
         # Minecraft Directory
         self._create_setting_group(
-            form_frame, "Minecraft Directory", "minecraft_dir", 0
+            form_frame, "Instance Directory", "minecraft_dir", 0
         )
         
         # Minecraft Executable
         self._create_setting_group(
-            form_frame, "Minecraft Executable", "minecraft_executable", 1
+            form_frame, "Launcher Executable", "minecraft_executable", 1
         )
         
         # Checkboxes
