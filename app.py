@@ -520,7 +520,6 @@ class MinecraftLauncher:
         """Launch the Minecraft client"""
         try:
             minecraft_exe = self.minecraft_dir / self.config['minecraft_executable']
-            
             if not minecraft_exe.exists():
                 # Try common Minecraft launcher names
                 possible_names = ['minecraft.exe', 'MinecraftLauncher.exe', 'launcher.exe']
@@ -532,14 +531,9 @@ class MinecraftLauncher:
                 else:
                     messagebox.showerror("Error", f"Minecraft executable not found in {self.minecraft_dir}")
                     return
-            
             self.log(f"Launching Minecraft: {minecraft_exe}")
             subprocess.Popen([str(minecraft_exe)], cwd=str(self.minecraft_dir))
-            
-            # Optionally close the launcher
-            if messagebox.askyesno("Launch Successful", "Minecraft launched successfully!\n\nClose launcher?"):
-                self.root.quit()
-                
+            self.root.quit()
         except Exception as e:
             self.log(f"Error launching Minecraft: {str(e)}")
             messagebox.showerror("Error", f"Failed to launch Minecraft:\n{str(e)}")
