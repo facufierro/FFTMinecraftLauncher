@@ -614,16 +614,7 @@ class MinecraftLauncher:
         auto_update_cb = ttk.Checkbutton(frame, text="Auto-update without asking", variable=auto_update_var, command=on_auto_update_change)
         auto_update_cb.pack(anchor=tk.W, pady=(0, 10))
 
-        # Folders to sync
-        ttk.Label(frame, text="Folders to sync (one per line):").pack(anchor=tk.W)
-        folders_text = tk.Text(frame, height=8, width=50)
-        folders_text.insert('1.0', '\n'.join(self.config['folders_to_sync']))
-        folders_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        def on_folders_change(event=None):
-            folders_content = folders_text.get('1.0', tk.END).strip()
-            self.config['folders_to_sync'] = [f.strip() for f in folders_content.split('\n') if f.strip()]
-            self.save_config()
-        folders_text.bind('<KeyRelease>', on_folders_change)
+        # Removed 'Folders to sync' section as functionality is now different
 
         # Buttons
         button_frame = ttk.Frame(frame)
