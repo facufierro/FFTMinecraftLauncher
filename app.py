@@ -555,70 +555,80 @@ class MinecraftLauncher:
         repo_entry = ttk.Entry(frame, width=50)
         repo_entry.insert(0, self.config['github_repo'])
         repo_entry.pack(fill=tk.X, pady=(0, 10))
-        
+
+        def on_repo_change(*args):
+            self.config['github_repo'] = repo_entry.get().strip()
+            self.save_config()
+            self.repo_label.config(text=self.config['github_repo'])
+        repo_entry.bind('<KeyRelease>', lambda e: on_repo_change())
+
         # Release/Branch settings
         use_releases_var = tk.BooleanVar(value=self.config.get('use_releases', True))
-        ttk.Checkbutton(frame, text="Use GitHub Releases (recommended)", 
-                       variable=use_releases_var).pack(anchor=tk.W, pady=(0, 5))
-        
+        def on_use_releases_change(*args):
+            self.config['use_releases'] = use_releases_var.get()
+            self.save_config()
+        use_releases_cb = ttk.Checkbutton(frame, text="Use GitHub Releases (recommended)", variable=use_releases_var, command=on_use_releases_change)
+        use_releases_cb.pack(anchor=tk.W, pady=(0, 5))
+
         ttk.Label(frame, text="Release Tag (use 'latest' for newest):").pack(anchor=tk.W)
         release_entry = ttk.Entry(frame, width=50)
         release_entry.insert(0, self.config.get('release_tag', 'latest'))
         release_entry.pack(fill=tk.X, pady=(0, 10))
-        
+        def on_release_tag_change(*args):
+            self.config['release_tag'] = release_entry.get().strip()
+            self.save_config()
+        release_entry.bind('<KeyRelease>', lambda e: on_release_tag_change())
+
         ttk.Label(frame, text="Minecraft Directory:").pack(anchor=tk.W)
         dir_entry = ttk.Entry(frame, width=50)
         dir_entry.insert(0, self.config['minecraft_dir'])
         dir_entry.pack(fill=tk.X, pady=(0, 10))
-        
+        def on_dir_change(*args):
+            self.config['minecraft_dir'] = dir_entry.get().strip()
+            self.save_config()
+            self.minecraft_dir = Path(self.config['minecraft_dir'])
+            self.dir_label.config(text=str(self.minecraft_dir.resolve()))
+        dir_entry.bind('<KeyRelease>', lambda e: on_dir_change())
+
         ttk.Label(frame, text="Minecraft Executable:").pack(anchor=tk.W)
         exe_entry = ttk.Entry(frame, width=50)
         exe_entry.insert(0, self.config['minecraft_executable'])
         exe_entry.pack(fill=tk.X, pady=(0, 10))
-        
+        def on_exe_change(*args):
+            self.config['minecraft_executable'] = exe_entry.get().strip()
+            self.save_config()
+        exe_entry.bind('<KeyRelease>', lambda e: on_exe_change())
+
         # Checkboxes
         check_startup_var = tk.BooleanVar(value=self.config.get('check_on_startup', True))
-        ttk.Checkbutton(frame, text="Check for updates on startup", 
-                       variable=check_startup_var).pack(anchor=tk.W, pady=(0, 5))
-        
+        def on_check_startup_change(*args):
+            self.config['check_on_startup'] = check_startup_var.get()
+            self.save_config()
+        check_startup_cb = ttk.Checkbutton(frame, text="Check for updates on startup", variable=check_startup_var, command=on_check_startup_change)
+        check_startup_cb.pack(anchor=tk.W, pady=(0, 5))
+
         auto_update_var = tk.BooleanVar(value=self.config.get('auto_update', False))
-        ttk.Checkbutton(frame, text="Auto-update without asking", 
-                       variable=auto_update_var).pack(anchor=tk.W, pady=(0, 10))
-        
+        def on_auto_update_change(*args):
+            self.config['auto_update'] = auto_update_var.get()
+            self.save_config()
+        auto_update_cb = ttk.Checkbutton(frame, text="Auto-update without asking", variable=auto_update_var, command=on_auto_update_change)
+        auto_update_cb.pack(anchor=tk.W, pady=(0, 10))
+
         # Folders to sync
         ttk.Label(frame, text="Folders to sync (one per line):").pack(anchor=tk.W)
         folders_text = tk.Text(frame, height=8, width=50)
         folders_text.insert('1.0', '\n'.join(self.config['folders_to_sync']))
         folders_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        
+        def on_folders_change(event=None):
+            folders_content = folders_text.get('1.0', tk.END).strip()
+            self.config['folders_to_sync'] = [f.strip() for f in folders_content.split('\n') if f.strip()]
+            self.save_config()
+        folders_text.bind('<KeyRelease>', on_folders_change)
+
         # Buttons
         button_frame = ttk.Frame(frame)
         button_frame.pack(fill=tk.X)
-        
-        def save_settings():
-            self.config['github_repo'] = repo_entry.get().strip()
-            self.config['use_releases'] = use_releases_var.get()
-            self.config['release_tag'] = release_entry.get().strip()
-            self.config['minecraft_dir'] = dir_entry.get().strip()
-            self.config['minecraft_executable'] = exe_entry.get().strip()
-            self.config['check_on_startup'] = check_startup_var.get()
-            self.config['auto_update'] = auto_update_var.get()
-            
-            folders_content = folders_text.get('1.0', tk.END).strip()
-            self.config['folders_to_sync'] = [f.strip() for f in folders_content.split('\n') if f.strip()]
-            
-            self.save_config()
-            
-            # Update UI
-            self.minecraft_dir = Path(self.config['minecraft_dir'])
-            self.repo_label.config(text=self.config['github_repo'])
-            self.dir_label.config(text=str(self.minecraft_dir.resolve()))
-            
-            self.log("Settings saved")
-            settings_window.destroy()
-        
-        ttk.Button(button_frame, text="Save", command=save_settings).pack(side=tk.RIGHT, padx=(10, 0))
-        ttk.Button(button_frame, text="Cancel", command=settings_window.destroy).pack(side=tk.RIGHT)
+        ttk.Button(button_frame, text="Close", command=settings_window.destroy).pack(side=tk.RIGHT)
     
     def run(self):
         """Start the launcher"""
