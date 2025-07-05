@@ -21,8 +21,16 @@ class MinecraftLauncher:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("FFT Minecraft Launcher")
-        self.root.geometry("800x600")
+        self.center_window(self.root, 800, 600)
         self.root.resizable(True, True)
+
+    def center_window(self, window, width, height):
+        window.update_idletasks()
+        screen_width = window.winfo_screenwidth()
+        screen_height = window.winfo_screenheight()
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
+        window.geometry(f"{width}x{height}+{x}+{y}")
         
         # Configuration
         self.config_file = "launcher_config.json"
@@ -502,7 +510,7 @@ class MinecraftLauncher:
         """Open settings dialog"""
         settings_window = tk.Toplevel(self.root)
         settings_window.title("Launcher Settings")
-        settings_window.geometry("380x260")  # Reduced size for a more compact dialog
+        self.center_window(settings_window, 380, 260)
         settings_window.transient(self.root)
         settings_window.grab_set()
         
