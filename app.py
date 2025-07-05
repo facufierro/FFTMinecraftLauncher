@@ -41,9 +41,7 @@ class MinecraftLauncher:
     def load_config(self):
         """Load configuration from JSON file"""
         default_config = {
-            # github_repo is now hardcoded in code, not in config
-            "use_releases": True,
-            "release_tag": "latest",  # "latest" for most recent, or specific tag like "v1.0.0"
+            # github_repo, use_releases, and release_tag are now hardcoded in code, not in config
             "minecraft_dir": "../FFTClientMinecraft1211",
             "folders_to_sync": [
                 "config",
@@ -204,53 +202,20 @@ class MinecraftLauncher:
         def check_thread():
             try:
                 github_repo = "facufierro/FFTClientMinecraft1211"
-                if self.config.get('use_releases', True):
-                    # Check GitHub releases
-                    if self.config['release_tag'] == "latest":
-                        releases_url = f"https://api.github.com/repos/{github_repo}/releases/latest"
-                    else:
-                        releases_url = f"https://api.github.com/repos/{github_repo}/releases/tags/{self.config['release_tag']}"
-                    
-                    self.log("Checking for new releases...")
-                    response = requests.get(releases_url, timeout=10)
-                    
-                    if response.status_code == 200:
-                        release_data = response.json()
-                        latest_version = release_data['tag_name']
-                        current_version = self.config.get('current_version')
-                        
-                        self.log(f"Latest release: {latest_version}")
-                        self.log(f"Current version: {current_version or 'None'}")
-                        
-                        updates_needed = current_version != latest_version
-                        self.root.after(0, self.check_complete_releases, updates_needed, latest_version, release_data)
-                    else:
-                        self.root.after(0, self.check_error, f"Could not fetch release info: HTTP {response.status_code}")
+                # Always use GitHub releases and latest tag
+                releases_url = f"https://api.github.com/repos/{github_repo}/releases/latest"
+                self.log("Checking for new releases...")
+                response = requests.get(releases_url, timeout=10)
+                if response.status_code == 200:
+                    release_data = response.json()
+                    latest_version = release_data['tag_name']
+                    current_version = self.config.get('current_version')
+                    self.log(f"Latest release: {latest_version}")
+                    self.log(f"Current version: {current_version or 'None'}")
+                    updates_needed = current_version != latest_version
+                    self.root.after(0, self.check_complete_releases, updates_needed, latest_version, release_data)
                 else:
-                    # Original branch-based checking (fallback)
-                    repo_url = f"https://api.github.com/repos/{github_repo}/contents"
-                    updates_needed = []
-                    
-                    for folder in self.config['folders_to_sync']:
-                        self.log(f"Checking folder: {folder}")
-                        
-                        try:
-                            response = requests.get(f"{repo_url}/{folder}", timeout=10)
-                            if response.status_code == 200:
-                                remote_files = response.json()
-                                local_folder = self.minecraft_dir / folder
-                                
-                                if self.folder_needs_update(local_folder, remote_files):
-                                    updates_needed.append(folder)
-                                    self.log(f"Updates available for: {folder}")
-                                else:
-                                    self.log(f"Up to date: {folder}")
-                            else:
-                                self.log(f"Could not check folder {folder}: HTTP {response.status_code}")
-                        except Exception as e:
-                            self.log(f"Error checking folder {folder}: {str(e)}")
-                    
-                    self.root.after(0, self.check_complete, updates_needed)
+                    self.root.after(0, self.check_error, f"Could not fetch release info: HTTP {response.status_code}")
             except Exception as e:
                 self.root.after(0, self.check_error, str(e))
         
@@ -335,58 +300,52 @@ class MinecraftLauncher:
             try:
                 github_repo = "facufierro/FFTClientMinecraft1211"
                 # Always fetch the latest release data, even if current_version matches
-                if self.config.get('use_releases', True):
-                    if self.config['release_tag'] == "latest":
-                        releases_url = f"https://api.github.com/repos/{github_repo}/releases/latest"
-                    else:
-                        releases_url = f"https://api.github.com/repos/{github_repo}/releases/tags/{self.config['release_tag']}"
-                    self.log("Force update: fetching release info...")
-                    response = requests.get(releases_url, timeout=10)
-                    if response.status_code == 200:
-                        release_data = response.json()
-                        self.latest_release_data = release_data
-                        # Now run the update_files logic, but always update
-                        # Download from release
-                        download_url = None
-                        for asset in release_data.get('assets', []):
-                            if asset['name'].endswith('.zip'):
-                                download_url = asset['browser_download_url']
-                                break
-                        if not download_url:
-                            download_url = release_data['zipball_url']
-                        self.log(f"Force downloading release {release_data['tag_name']} from: {download_url}")
-                        resp = requests.get(download_url, timeout=30)
-                        resp.raise_for_status()
-                        zip_path = self.launcher_dir / "temp_update.zip"
-                        with open(zip_path, 'wb') as f:
-                            f.write(resp.content)
-                        self.log("Extracting files...")
-                        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                            extract_path = self.launcher_dir / "temp_extract"
-                            zip_ref.extractall(extract_path)
-                        repo_folders = list(extract_path.glob("*"))
-                        if repo_folders:
-                            repo_folder = repo_folders[0]
-                            extracted_items = [p for p in repo_folder.iterdir()]
-                            self.log(f"Extracted repo folder contents: {[p.name for p in extracted_items]}")
-                            for item in extracted_items:
-                                dst_path = self.minecraft_dir / item.name
-                                self.log(f"Force syncing '{item.name}' to '{dst_path}'")
-                                if item.is_dir():
-                                    if dst_path.exists():
-                                        shutil.rmtree(dst_path)
-                                    shutil.copytree(item, dst_path)
-                                else:
-                                    shutil.copy2(item, dst_path)
-                        self.config['current_version'] = release_data['tag_name']
-                        self.save_config()
-                        shutil.rmtree(extract_path)
-                        zip_path.unlink()
-                        self.root.after(0, self.update_complete)
-                    else:
-                        self.root.after(0, self.update_error, f"Could not fetch release info: HTTP {response.status_code}")
+                releases_url = f"https://api.github.com/repos/{github_repo}/releases/latest"
+                self.log("Force update: fetching release info...")
+                response = requests.get(releases_url, timeout=10)
+                if response.status_code == 200:
+                    release_data = response.json()
+                    self.latest_release_data = release_data
+                    # Now run the update_files logic, but always update
+                    # Download from release
+                    download_url = None
+                    for asset in release_data.get('assets', []):
+                        if asset['name'].endswith('.zip'):
+                            download_url = asset['browser_download_url']
+                            break
+                    if not download_url:
+                        download_url = release_data['zipball_url']
+                    self.log(f"Force downloading release {release_data['tag_name']} from: {download_url}")
+                    resp = requests.get(download_url, timeout=30)
+                    resp.raise_for_status()
+                    zip_path = self.launcher_dir / "temp_update.zip"
+                    with open(zip_path, 'wb') as f:
+                        f.write(resp.content)
+                    self.log("Extracting files...")
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        extract_path = self.launcher_dir / "temp_extract"
+                        zip_ref.extractall(extract_path)
+                    repo_folders = list(extract_path.glob("*"))
+                    if repo_folders:
+                        repo_folder = repo_folders[0]
+                        extracted_items = [p for p in repo_folder.iterdir()]
+                        self.log(f"Extracted repo folder contents: {[p.name for p in extracted_items]}")
+                        for item in extracted_items:
+                            dst_path = self.minecraft_dir / item.name
+                            self.log(f"Force syncing '{item.name}' to '{dst_path}'")
+                            if item.is_dir():
+                                if dst_path.exists():
+                                    shutil.rmtree(dst_path)
+                                shutil.copytree(item, dst_path)
+                            else:
+                                shutil.copy2(item, dst_path)
+                    self.config['current_version'] = release_data['tag_name']
+                    self.save_config()
+                    shutil.rmtree(extract_path)
+                    zip_path.unlink()
+                    self.root.after(0, self.update_complete)
                 else:
-                    self.root.after(0, self.update_error, "Force update only supported for releases mode.")
+                    self.root.after(0, self.update_error, f"Could not fetch release info: HTTP {response.status_code}")
             except Exception as e:
                 self.root.after(0, self.update_error, str(e))
         self.update_thread = threading.Thread(target=force_update_thread, daemon=True)
@@ -553,22 +512,7 @@ class MinecraftLauncher:
         
         # Repository setting removed; repo is now hardcoded
 
-        # Release/Branch settings
-        use_releases_var = tk.BooleanVar(value=self.config.get('use_releases', True))
-        def on_use_releases_change(*args):
-            self.config['use_releases'] = use_releases_var.get()
-            self.save_config()
-        use_releases_cb = ttk.Checkbutton(frame, text="Use GitHub Releases (recommended)", variable=use_releases_var, command=on_use_releases_change)
-        use_releases_cb.pack(anchor=tk.W, pady=(0, 5))
-
-        ttk.Label(frame, text="Release Tag (use 'latest' for newest):").pack(anchor=tk.W)
-        release_entry = ttk.Entry(frame, width=50)
-        release_entry.insert(0, self.config.get('release_tag', 'latest'))
-        release_entry.pack(fill=tk.X, pady=(0, 10))
-        def on_release_tag_change(*args):
-            self.config['release_tag'] = release_entry.get().strip()
-            self.save_config()
-        release_entry.bind('<KeyRelease>', lambda e: on_release_tag_change())
+        # Release/Branch settings removed; always using GitHub Releases and latest tag
 
         ttk.Label(frame, text="Minecraft Directory:").pack(anchor=tk.W)
         dir_entry = ttk.Entry(frame, width=50)
