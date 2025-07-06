@@ -112,7 +112,7 @@ class ButtonFrame(ctk.CTkFrame):
         self.update_button.grid(row=0, column=1, padx=(0, 10))
         
         self.launch_button = ctk.CTkButton(
-            self, text="Open Minecraft Launcher", width=140, state="disabled"
+            self, text="Launch", width=100, state="disabled", fg_color="green", hover_color="darkgreen"
         )
         self.launch_button.grid(row=0, column=2, padx=(0, 10))
         

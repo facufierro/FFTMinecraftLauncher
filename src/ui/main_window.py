@@ -187,8 +187,9 @@ class MainWindow:
             success: Whether launch was successful
         """
         if success:
-            # Don't close the launcher - let the user manage both
             self._add_log("Minecraft launcher opened successfully")
+            # Close the launcher after successfully opening Minecraft
+            self.root.after(1000, self.close)  # Wait 1 second then close
         else:
             self._add_log("Failed to open Minecraft launcher")
     
