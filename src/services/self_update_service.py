@@ -304,15 +304,37 @@ echo Updating FFT Launcher to version {new_version}...
 REM Wait for the current process to exit
 timeout /t 3 /nobreak >nul
 
+REM Kill any remaining launcher processes
+taskkill /f /im FFTMinecraftLauncher.exe >nul 2>&1
+taskkill /f /im FFTLauncher.exe >nul 2>&1
+
+REM Wait a bit more
+timeout /t 2 /nobreak >nul
+
 REM Create backup of current executable
 if exist "{self.current_executable}" (
     echo Creating backup...
     copy "{self.current_executable}" "{script_dir / backup_name}" >nul
+    if errorlevel 1 (
+        echo Warning: Could not create backup
+    )
 )
 
 REM Copy new executable
 echo Installing new version...
 copy "{new_executable}" "{self.current_executable}" >nul
+if errorlevel 1 (
+    echo Error: Failed to copy new executable
+    pause
+    exit /b 1
+)
+
+REM Verify the new executable exists and has content
+if not exist "{self.current_executable}" (
+    echo Error: New executable not found after copy
+    pause
+    exit /b 1
+)
 
 REM Update version in config if needed
 echo Updating configuration...
@@ -321,9 +343,12 @@ REM Start the new launcher
 echo Starting updated launcher...
 start "" "{self.current_executable}"
 
+REM Wait a moment to ensure it started
+timeout /t 3 /nobreak >nul
+
 REM Clean up
-timeout /t 2 /nobreak >nul
-del "%~f0"
+del "{new_executable}" >nul 2>&1
+del "%~f0" >nul 2>&1
 '''
             else:  # Unix-like
                 script_path = script_dir / "update_launcher.sh"
@@ -333,24 +358,48 @@ echo "Updating FFT Launcher to version {new_version}..."
 # Wait for the current process to exit
 sleep 3
 
+# Kill any remaining launcher processes
+pkill -f FFTMinecraftLauncher 2>/dev/null || true
+pkill -f FFTLauncher 2>/dev/null || true
+
+# Wait a bit more
+sleep 2
+
 # Create backup of current executable
 if [ -f "{self.current_executable}" ]; then
     echo "Creating backup..."
     cp "{self.current_executable}" "{script_dir / backup_name}"
+    if [ $? -ne 0 ]; then
+        echo "Warning: Could not create backup"
+    fi
 fi
 
 # Copy new executable
 echo "Installing new version..."
 cp "{new_executable}" "{self.current_executable}"
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to copy new executable"
+    exit 1
+fi
+
+# Verify the new executable exists
+if [ ! -f "{self.current_executable}" ]; then
+    echo "Error: New executable not found after copy"
+    exit 1
+fi
+
 chmod +x "{self.current_executable}"
 
 # Start the new launcher
 echo "Starting updated launcher..."
 "{self.current_executable}" &
 
+# Wait a moment to ensure it started
+sleep 3
+
 # Clean up
-sleep 2
-rm "$0"
+rm -f "{new_executable}" 2>/dev/null || true
+rm -f "$0" 2>/dev/null || true
 '''
             
             # Write script file

@@ -27,7 +27,8 @@ class MainWindow:
         # Self-update service (console only - no UI)
         if launcher_core.config:
             self.self_update_service = SelfUpdateService(launcher_core.config)
-            # No progress callback - only console logging
+            # Set progress callback for self-updates to show in log
+            self.self_update_service.set_progress_callback(self._on_self_update_progress)
         else:
             self.self_update_service = None
         
@@ -192,13 +193,60 @@ class MainWindow:
                 # Just log the result - no UI updates
                 if update_info:
                     version = update_info.get('version', 'Unknown')
-                    self.root.after(0, lambda: self._add_log(f"Launcher update available: v{version} (console only)"))
+                    self.root.after(0, lambda: self._add_log(f"Launcher update available: v{version}"))
+                    
+                    # Check if auto-update is enabled for launcher updates
+                    if self.launcher_core.config and self.launcher_core.config.auto_update:
+                        self.root.after(0, lambda: self._start_launcher_auto_update(update_info))
                 else:
                     self.root.after(0, lambda: self._add_log("Launcher is up to date"))
         
         # Run in a separate thread to avoid blocking UI
         import threading
         threading.Thread(target=check_async, daemon=True).start()
+    
+    def _start_launcher_auto_update(self, update_info) -> None:
+        """Start automatic launcher self-update process."""
+        if not self.self_update_service:
+            return
+            
+        self._add_log("Auto-updating launcher...")
+        self.progress_frame.update_progress("Updating launcher...", None, "loading")
+        
+        def update_async():
+            if self.self_update_service:  # Type guard for mypy
+                try:
+                    success = self.self_update_service.download_and_install_update(update_info)
+                    if success:
+                        self.root.after(0, lambda: self._add_log("Launcher will restart to complete update..."))
+                        self.root.after(0, lambda: self.progress_frame.update_progress("Restarting launcher...", 1.0, "success"))
+                        # Exit the current launcher - the update script will restart it
+                        self.root.after(3000, lambda: self.root.quit())
+                    else:
+                        self.root.after(0, lambda: self._add_log("Launcher update failed"))
+                        self.root.after(0, lambda: self.progress_frame.update_progress("Launcher update failed", 0, "error"))
+                except Exception as e:
+                    self.root.after(0, lambda: self._add_log(f"Launcher update error: {e}"))
+                    self.root.after(0, lambda: self.progress_frame.update_progress("Launcher update error", 0, "error"))
+        
+        # Run in a separate thread to avoid blocking UI
+        import threading
+        threading.Thread(target=update_async, daemon=True).start()
+    
+    def _on_self_update_progress(self, message: str, progress: Optional[float] = None, status_type: str = "info") -> None:
+        """Handle self-update progress updates.
+        
+        Args:
+            message: Progress message
+            progress: Progress value (0.0 to 1.0), None for indeterminate
+            status_type: Type of status ('info', 'success', 'warning', 'error', 'loading')
+        """
+        # Show self-update progress in the log
+        self._add_log(f"Launcher Update: {message}")
+        
+        # Update progress bar if progress is provided
+        if progress is not None:
+            self.progress_frame.update_progress(f"Updating launcher: {message}", progress)
     
     # Main action handler
     def _handle_launch_action(self) -> None:
@@ -217,6 +265,16 @@ class MainWindow:
     def _launch_minecraft(self) -> None:
         """Launch Minecraft launcher."""
         self.launcher_core.launch_minecraft(self._on_minecraft_launched)
+    
+    def _start_auto_update(self) -> None:
+        """Start automatic update process."""
+        if self.needs_update and self.update_info:
+            self._add_log("Starting automatic update...")
+            self.button_frame.set_button_states({'launch': 'disabled'})
+            self.launcher_core.perform_update()
+        else:
+            self._add_log("No update needed")
+            self.button_frame.set_button_states({'launch': 'normal'})
     
     def _on_minecraft_launched(self, success: bool) -> None:
         """Handle Minecraft launcher result.
@@ -263,14 +321,20 @@ class MainWindow:
             self.progress_frame.update_progress(
                 f"New version available: {update_info.latest_version}", 0
             )
+            
+            # Check if auto-update is enabled
+            if self.launcher_core.config and self.launcher_core.config.auto_update:
+                self._add_log("Auto-update enabled - starting update automatically...")
+                self.root.after(1000, self._start_auto_update)  # Wait 1 second then auto-update
+            else:
+                self.button_frame.set_button_states({'launch': 'normal'})
         else:
             self.button_frame.set_launch_button_text("Launch")
             self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
             self.progress_frame.update_progress(
                 f"Up to date (Version: {update_info.latest_version})", 1.0
             )
-        
-        self.button_frame.set_button_states({'launch': 'normal'})
+            self.button_frame.set_button_states({'launch': 'normal'})
     
     def _on_update_check_failed(self, error: str) -> None:
         """Handle update check failed."""
