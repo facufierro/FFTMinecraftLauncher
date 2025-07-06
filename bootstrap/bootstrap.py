@@ -286,12 +286,19 @@ def launch_main_app():
         env = os.environ.copy()
         env['PYTHONPATH'] = str(launcher_dir.absolute())
         
-        # Launch Python script and detach from it (don't wait)
-        # Use the launcher directory as working directory
-        subprocess.Popen([python_exe, str(main_script.name)], 
-                        cwd=str(launcher_dir.absolute()), 
-                        env=env,
-                        creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
+        # Launch Python script and detach from it completely
+        # Use DETACHED_PROCESS to avoid console inheritance
+        creation_flags = 0
+        if os.name == 'nt':
+            creation_flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        
+        process = subprocess.Popen([python_exe, str(main_script.name)], 
+                                 cwd=str(launcher_dir.absolute()), 
+                                 env=env,
+                                 stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL,
+                                 creationflags=creation_flags)
         
         print("Launcher started successfully!")
         return True
@@ -324,123 +331,93 @@ def main():
     launcher_dir = bootstrap_dir / "launcher"
     print(f"DEBUG: Looking for launcher at: {launcher_dir}")
     
-    # If no launcher exists, try to get updates
-    if not launcher_dir.exists():
+    # Single update check and installation logic
+    needs_install = not launcher_dir.exists()
+    
+    if needs_install:
         print("First time setup - downloading launcher...")
-        
-        # Check for updates
-        update_info = check_for_updates()
-        if update_info:
-            print(f"Update available: v{update_info['version']}")
-            if download_and_install_update(update_info):
-                print("Update completed!")
-            else:
-                print("Update failed!")
-                # Try to use local launcher_package.zip as fallback
-                local_package = bootstrap_dir / "launcher_package.zip"
-                if local_package.exists():
-                    print("Using local launcher package as fallback...")
-                    try:
-                        launcher_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        # Extract with proper directory handling
-                        temp_extract_dir = Path(tempfile.mkdtemp())
-                        with zipfile.ZipFile(local_package, 'r') as zip_ref:
-                            zip_ref.extractall(temp_extract_dir)
-                        
-                        # Find the actual content to move
-                        extracted_items = list(temp_extract_dir.iterdir())
-                        
-                        if len(extracted_items) == 1 and extracted_items[0].is_dir():
-                            # If there's only one directory, move its contents
-                            source_dir = extracted_items[0]
-                            for item in source_dir.iterdir():
-                                dest = launcher_dir / item.name
-                                if item.is_dir():
-                                    shutil.copytree(item, dest, dirs_exist_ok=True)
-                                else:
-                                    shutil.copy2(item, dest)
-                        else:
-                            # Move all items directly
-                            for item in extracted_items:
-                                dest = launcher_dir / item.name
-                                if item.is_dir():
-                                    shutil.copytree(item, dest, dirs_exist_ok=True)
-                                else:
-                                    shutil.copy2(item, dest)
-                        
-                        # Clean up temp extract directory
-                        shutil.rmtree(temp_extract_dir, ignore_errors=True)
-                        print("Local package extracted successfully!")
-                    except Exception as e:
-                        print(f"Failed to extract local package: {e}")
-        else:
-            print("No updates available or update check failed.")
-            # Try to use local launcher_package.zip as fallback
-            local_package = bootstrap_dir / "launcher_package.zip"
-            if local_package.exists():
-                print("Using local launcher package as fallback...")
-                try:
-                    launcher_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    # Extract with proper directory handling
-                    temp_extract_dir = Path(tempfile.mkdtemp())
-                    with zipfile.ZipFile(local_package, 'r') as zip_ref:
-                        zip_ref.extractall(temp_extract_dir)
-                    
-                    # Find the actual content to move
-                    extracted_items = list(temp_extract_dir.iterdir())
-                    
-                    if len(extracted_items) == 1 and extracted_items[0].is_dir():
-                        # If there's only one directory, move its contents
-                        source_dir = extracted_items[0]
-                        for item in source_dir.iterdir():
-                            dest = launcher_dir / item.name
-                            if item.is_dir():
-                                shutil.copytree(item, dest, dirs_exist_ok=True)
-                            else:
-                                shutil.copy2(item, dest)
-                    else:
-                        # Move all items directly
-                        for item in extracted_items:
-                            dest = launcher_dir / item.name
-                            if item.is_dir():
-                                shutil.copytree(item, dest, dirs_exist_ok=True)
-                            else:
-                                shutil.copy2(item, dest)
-                    
-                    # Clean up temp extract directory
-                    shutil.rmtree(temp_extract_dir, ignore_errors=True)
-                    print("Local package extracted successfully!")
-                except Exception as e:
-                    print(f"Failed to extract local package: {e}")
     else:
-        # Launcher exists, check for updates
-        update_info = check_for_updates()
-        if update_info:
-            print(f"Update available: v{update_info['version']}")
-            if download_and_install_update(update_info):
-                print("Update completed!")
+        print("Checking for updates...")
+    
+    # Check for updates (only once)
+    update_info = check_for_updates()
+    
+    if update_info:
+        print(f"{'Installing' if needs_install else 'Updating to'} v{update_info['version']}")
+        if not download_and_install_update(update_info):
+            if needs_install:
+                print("Installation failed! Trying local package...")
+                if not try_local_package(bootstrap_dir, launcher_dir):
+                    print("Error: No launcher found and download failed!")
+                    input("Press Enter to exit...")
+                    sys.exit(1)
             else:
                 print("Update failed, using current version...")
-        else:
-            print("Launcher is up to date!")
+    elif needs_install:
+        print("No updates available, trying local package...")
+        if not try_local_package(bootstrap_dir, launcher_dir):
+            print("Error: No launcher found and download failed!")
+            input("Press Enter to exit...")
+            sys.exit(1)
+    else:
+        print("Launcher is up to date!")
     
-    # Launch main app
-    if not launcher_dir.exists():
-        print("Error: No launcher found and download failed!")
-        input("Press Enter to exit...")
-        sys.exit(1)
-    
-    # Launch the main app and exit
+    # Launch main app and exit
+    print("Starting launcher...")
     if launch_main_app():
         # Give the app a moment to start, then exit
         import time
-        time.sleep(2)
+        time.sleep(1)
         print("Bootstrap completed - exiting.")
         sys.exit(0)
     else:
         sys.exit(1)
+
+
+def try_local_package(bootstrap_dir, launcher_dir):
+    """Try to extract from local launcher_package.zip"""
+    local_package = bootstrap_dir / "launcher_package.zip"
+    if not local_package.exists():
+        return False
+        
+    try:
+        print("Using local launcher package...")
+        launcher_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Extract with proper directory handling
+        import tempfile
+        temp_extract_dir = Path(tempfile.mkdtemp())
+        with zipfile.ZipFile(local_package, 'r') as zip_ref:
+            zip_ref.extractall(temp_extract_dir)
+        
+        # Find the actual content to move
+        extracted_items = list(temp_extract_dir.iterdir())
+        
+        if len(extracted_items) == 1 and extracted_items[0].is_dir():
+            # If there's only one directory, move its contents
+            source_dir = extracted_items[0]
+            for item in source_dir.iterdir():
+                dest = launcher_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dest, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, dest)
+        else:
+            # Move all items directly
+            for item in extracted_items:
+                dest = launcher_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dest, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, dest)
+        
+        # Clean up temp extract directory
+        shutil.rmtree(temp_extract_dir, ignore_errors=True)
+        print("Local package extracted successfully!")
+        return True
+    except Exception as e:
+        print(f"Failed to extract local package: {e}")
+        return False
 
 
 if __name__ == "__main__":
