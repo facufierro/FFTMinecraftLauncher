@@ -8,6 +8,8 @@ __pycache__/
 # Build Artifacts
 build/
 dist/
+FFTMinecraftLauncher.exe
+launcher_package.zip
 
 # Runtime Files
 launcher/
