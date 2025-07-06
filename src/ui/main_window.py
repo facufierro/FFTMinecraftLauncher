@@ -96,6 +96,15 @@ class MainWindow:
             'launch': self._handle_launch_action
         })
         
+        # Launch after update checkbox
+        self.launch_after_update_var = ctk.BooleanVar(value=True)
+        self.launch_after_update_cb = ctk.CTkCheckBox(
+            main_frame,
+            text="Launch After Update",
+            variable=self.launch_after_update_var
+        )
+        self.launch_after_update_cb.grid(row=3, column=0, sticky="e", padx=(0, 20), pady=(40, 0))
+        
         # Log frame
         self.log_frame = LogFrame(main_frame)
         self.log_frame.grid(row=4, column=0, sticky="nsew", padx=20, pady=(0, 20))
@@ -197,7 +206,10 @@ class MainWindow:
                     
                     # Check if auto-update is enabled for launcher updates
                     if self.launcher_core.config and self.launcher_core.config.auto_update:
+                        self.root.after(0, lambda: self._add_log("Auto-update enabled - updating launcher automatically..."))
                         self.root.after(0, lambda: self._start_launcher_auto_update(update_info))
+                    else:
+                        self.root.after(0, lambda: self._add_log("Auto-update disabled - launcher update available but not installing automatically"))
                 else:
                     self.root.after(0, lambda: self._add_log("Launcher is up to date"))
         
@@ -257,7 +269,7 @@ class MainWindow:
             self.button_frame.set_button_states({'launch': 'disabled'})
             self.launcher_core.check_for_updates()
         else:
-            # Perform update
+            # Updates are available - perform update then launch
             self._add_log("Starting update...")
             self.button_frame.set_button_states({'launch': 'disabled'})
             self.launcher_core.perform_update()
@@ -265,16 +277,6 @@ class MainWindow:
     def _launch_minecraft(self) -> None:
         """Launch Minecraft launcher."""
         self.launcher_core.launch_minecraft(self._on_minecraft_launched)
-    
-    def _start_auto_update(self) -> None:
-        """Start automatic update process."""
-        if self.needs_update and self.update_info:
-            self._add_log("Starting automatic update...")
-            self.button_frame.set_button_states({'launch': 'disabled'})
-            self.launcher_core.perform_update()
-        else:
-            self._add_log("No update needed")
-            self.button_frame.set_button_states({'launch': 'normal'})
     
     def _on_minecraft_launched(self, success: bool) -> None:
         """Handle Minecraft launcher result.
@@ -322,10 +324,10 @@ class MainWindow:
                 f"New version available: {update_info.latest_version}", 0
             )
             
-            # Check if auto-update is enabled
+            # Auto-update on startup if enabled
             if self.launcher_core.config and self.launcher_core.config.auto_update:
                 self._add_log("Auto-update enabled - starting update automatically...")
-                self.root.after(1000, self._start_auto_update)  # Wait 1 second then auto-update
+                self.root.after(1000, self._handle_launch_action)
             else:
                 self.button_frame.set_button_states({'launch': 'normal'})
         else:
@@ -360,14 +362,18 @@ class MainWindow:
         if self.launcher_core.config:
             self.status_frame.update_version(self.launcher_core.config.current_version or "Unknown")
         
-        # Reset button to launch mode and automatically launch
+        # Reset button to launch mode
         self.needs_update = False
         self.button_frame.set_launch_button_text("Launch")
         self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
         
-        # Auto-launch Minecraft after update
-        self._add_log("Launching Minecraft...")
-        self.root.after(1000, self._launch_minecraft)  # Wait 1 second then launch
+        # Check if auto-launch is enabled
+        if self.launch_after_update_var.get():
+            self._add_log("Launching Minecraft...")
+            self.root.after(1000, self._launch_minecraft)  # Wait 1 second then launch
+        else:
+            self._add_log("Update completed - ready to launch")
+            self.button_frame.set_button_states({'launch': 'normal'})
     
     def _on_update_failed(self, error: str) -> None:
         """Handle update failed."""
