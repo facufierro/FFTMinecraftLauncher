@@ -13,12 +13,42 @@ _env\Scripts\python.exe -m PyInstaller bootstrap\bootstrap.spec --noconfirm --cl
 
 echo Creating launcher package...
 if exist launcher_package.zip del launcher_package.zip
+
+echo Getting version from git tag...
+for /f "tokens=*" %%i in ('powershell -Command "git tag --list --sort=-version:refname | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } | Select-Object -First 1"') do set GIT_VERSION=%%i
+if "%GIT_VERSION%"=="" (
+    echo Warning: No valid git tags found, using default version
+    set GIT_VERSION=v1.0.0
+)
+echo Using version: %GIT_VERSION%
+
+echo Cleaning Python cache files...
+for /d /r %%d in (__pycache__) do @if exist "%%d" rd /s /q "%%d"
+
+echo Stopping any Python processes...
+taskkill /F /IM python.exe 2>nul
+taskkill /F /IM pythonw.exe 2>nul
+
+timeout /t 2 /nobreak >nul
+
 mkdir temp_launcher 2>nul
 copy app.py temp_launcher\
-copy version.json temp_launcher\
-xcopy /E /I src temp_launcher\src\
 
-powershell -Command "Compress-Archive -Path './temp_launcher/*' -DestinationPath './launcher_package.zip' -Force"
+echo Creating dynamic version.json...
+echo { > temp_launcher\version.json
+echo   "version": "%GIT_VERSION:~1%", >> temp_launcher\version.json
+echo   "release_date": "%DATE%", >> temp_launcher\version.json
+echo   "description": "FFT Minecraft Launcher with Bootstrap System" >> temp_launcher\version.json
+echo } >> temp_launcher\version.json
+
+echo Copying source files (excluding cache)...
+robocopy src temp_launcher\src /E /XD __pycache__ .pytest_cache /XF *.pyc *.pyo *.pyd
+
+echo Creating zip package...
+powershell -Command "Start-Sleep -Seconds 1; Compress-Archive -Path './temp_launcher/*' -DestinationPath './launcher_package.zip' -Force"
+
+echo Cleaning up...
+timeout /t 1 /nobreak >nul
 rmdir /S /Q temp_launcher
 
 echo Build complete!
