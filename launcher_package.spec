@@ -10,7 +10,13 @@ a = Analysis(
     datas=[
         ('src', 'src'),
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        'customtkinter',
+        'requests',
+        'PIL',
+        'threading',
+        'subprocess'
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -37,6 +43,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
 coll = COLLECT(
     exe,
     a.binaries,

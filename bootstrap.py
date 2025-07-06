@@ -73,7 +73,13 @@ class BootstrapUpdater:
         """Get download URL for the launcher package."""
         assets = release_data.get('assets', [])
         
-        # Look for zip file containing launcher
+        # Look for launcher_package.zip specifically
+        for asset in assets:
+            name = asset.get('name', '').lower()
+            if name == 'launcher_package.zip':
+                return asset.get('browser_download_url')
+        
+        # Fallback: look for any zip file with launcher in the name
         for asset in assets:
             name = asset.get('name', '').lower()
             if name.endswith('.zip') and 'launcher' in name:
@@ -248,29 +254,48 @@ class BootstrapGUI:
             
             # Look for main launcher script or executable
             main_script = None
-            for potential_main in ["app.py", "main.py", "launcher.py", "FFTMinecraftLauncher.exe"]:
+            potential_mains = [
+                "app.py",           # Python script
+                "main.py", 
+                "launcher.py",
+                "launcher_main.exe", # Built executable
+                "FFTMinecraftLauncher.exe"
+            ]
+            
+            for potential_main in potential_mains:
                 potential_path = launcher_dir / potential_main
                 if potential_path.exists():
                     main_script = potential_path
                     break
             
             if not main_script:
+                # Try to find any .py or .exe file
+                py_files = list(launcher_dir.glob("*.py"))
+                exe_files = list(launcher_dir.glob("*.exe"))
+                
+                if py_files:
+                    main_script = py_files[0]
+                elif exe_files:
+                    main_script = exe_files[0]
+            
+            if not main_script:
                 messagebox.showerror(
                     "Launch Error", 
-                    "Could not find main launcher application.\n"
-                    "Please reinstall the launcher."
+                    "Could not find main launcher application in the launcher folder.\n"
+                    "Please check the installation or try updating again."
                 )
                 self.root.quit()
                 return
             
             # Launch the main application
             if main_script.suffix == '.py':
-                # Python script
-                subprocess.Popen([sys.executable, str(main_script)], 
+                # Python script - need to find Python executable
+                python_exe = sys.executable
+                subprocess.Popen([python_exe, str(main_script.name)], 
                                cwd=launcher_dir)
             else:
                 # Executable
-                subprocess.Popen([str(main_script)], cwd=launcher_dir)
+                subprocess.Popen([str(main_script.name)], cwd=launcher_dir)
             
             # Close bootstrap
             self.root.quit()
