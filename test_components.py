@@ -17,7 +17,7 @@ class TestApp(ctk.CTk):
         super().__init__()
         
         # Configure window
-        self.title("FFT Minecraft Launcher - Enhanced UI Test")
+        self.title("FFT Launcher - Enhanced UI Test")
         self.geometry("980x700")
         
         # Set theme
@@ -26,6 +26,7 @@ class TestApp(ctk.CTk):
         
         # Configure grid
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(4, weight=2)  # Give more weight to the log section
         self.grid_rowconfigure((0, 1, 2, 3), weight=1)
         
         # Create components
@@ -42,7 +43,7 @@ class TestApp(ctk.CTk):
         # Title
         title_label = ctk.CTkLabel(
             self.header_frame, 
-            text="FFT Minecraft Modpack Launcher", 
+            text="FFT Launcher", 
             font=ctk.CTkFont(size=24, weight="bold")
         )
         title_label.grid(row=0, column=0, sticky="w")
@@ -62,7 +63,7 @@ class TestApp(ctk.CTk):
         
         # Button frame
         self.button_frame = ButtonFrame(self)
-        self.button_frame.grid(row=3, column=0, sticky="ew", padx=20, pady=10)
+        self.button_frame.grid(row=3, column=0, sticky="ew", padx=20, pady=5)
         self.button_frame.set_button_callbacks({'launch': self.on_launch_click})
         
         # Log frame
@@ -76,7 +77,7 @@ class TestApp(ctk.CTk):
     
     def on_launch_click(self):
         """Handle launch button click."""
-        self.log_frame.add_log_message("🚀 Launch button clicked!", "success")
+        self.log_frame.add_log_message("Launch button clicked!", "success")
         
         # Simulate progress updates
         self.progress_frame.update_progress("Launching Minecraft...", 0.5, "loading")

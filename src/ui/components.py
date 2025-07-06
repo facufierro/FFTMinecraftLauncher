@@ -59,7 +59,7 @@ class StatusFrame(ctk.CTkFrame):
             text=icon, 
             font=ctk.CTkFont(size=20)
         )
-        icon_label.pack(pady=(8, 2))
+        icon_label.pack(pady=(10, 4))
         
         # Title
         title_label = ctk.CTkLabel(
@@ -76,7 +76,7 @@ class StatusFrame(ctk.CTkFrame):
             text=value, 
             font=ctk.CTkFont(size=12, weight="bold")
         )
-        value_label.pack(pady=(2, 8))
+        value_label.pack(pady=(1, 10))
         
         # Store reference for updates (using type: ignore to suppress lint warnings)
         card.value_label = value_label  # type: ignore
@@ -205,12 +205,12 @@ class ButtonFrame(ctk.CTkFrame):
         
         # Container for centered button
         self.container = ctk.CTkFrame(self, fg_color="transparent")
-        self.container.pack(expand=True, fill="both", padx=20, pady=15)
+        self.container.pack(expand=True, fill="both", padx=20, pady=5)
         
         # Create enhanced launch button
         self.launch_button = ctk.CTkButton(
             self.container, 
-            text="🚀 Launch", 
+            text="Launch", 
             width=240, 
             height=65, 
             state="normal",
@@ -221,7 +221,7 @@ class ButtonFrame(ctk.CTkFrame):
             border_width=2,
             border_color=("#ffffff", "#cccccc")
         )
-        self.launch_button.pack(expand=True, pady=10)
+        self.launch_button.pack(expand=True, pady=5)
         
         # Add subtle shadow effect (using a second frame)
         self.shadow_frame = ctk.CTkFrame(
@@ -289,9 +289,6 @@ class ButtonFrame(ctk.CTkFrame):
         Args:
             text: Text to display on the button
         """
-        # Add rocket emoji if not present
-        if not text.startswith("🚀"):
-            text = f"🚀 {text}"
         self.launch_button.configure(text=text)
     
     def set_launch_button_color(self, fg_color: str, hover_color: str) -> None:
@@ -328,13 +325,6 @@ class LogFrame(ctk.CTkFrame):
         self.title_frame = ctk.CTkFrame(self.header_frame, fg_color="transparent")
         self.title_frame.grid(row=0, column=0, sticky="w")
         
-        self.log_icon = ctk.CTkLabel(
-            self.title_frame,
-            text="📝",
-            font=ctk.CTkFont(size=16)
-        )
-        self.log_icon.pack(side="left", padx=(0, 8))
-        
         self.log_title = ctk.CTkLabel(
             self.title_frame,
             text="Activity Log",
@@ -345,7 +335,7 @@ class LogFrame(ctk.CTkFrame):
         # Clear button
         self.clear_button = ctk.CTkButton(
             self.header_frame,
-            text="🗑️ Clear",
+            text="Clear",
             width=80,
             height=28,
             font=ctk.CTkFont(size=11),
@@ -359,7 +349,7 @@ class LogFrame(ctk.CTkFrame):
         # Enhanced log text widget with custom styling
         self.log_text = ctk.CTkTextbox(
             self, 
-            height=180,
+            height=280,
             state="disabled",
             corner_radius=8,
             font=ctk.CTkFont(family="Consolas", size=11),
@@ -463,19 +453,11 @@ class ThemeToggleButton(ctk.CTkFrame):
             corner_radius=14
         )
         
-        # Add icons to the slider
-        self.slider_icon = ctk.CTkLabel(
-            self.slider,
-            text="🌙",
-            font=ctk.CTkFont(size=14)
-        )
-        self.slider_icon.place(relx=0.5, rely=0.5, anchor="center")
-        
         # Position elements based on current theme
         self._update_position()
         
         # Bind click events to all components
-        for widget in [self, self.switch_bg, self.slider, self.slider_icon]:
+        for widget in [self, self.switch_bg, self.slider]:
             widget.bind("<Button-1>", self._on_click)
             widget.bind("<Enter>", self._on_enter)
             widget.bind("<Leave>", self._on_leave)
@@ -531,14 +513,11 @@ class ThemeToggleButton(ctk.CTkFrame):
         # Determine target position
         if current == "Dark":
             target_x = 34  # Right position
-            icon = "🌙"
         else:
             target_x = 2   # Left position  
-            icon = "☀️"
         
         # Simple animation (you could enhance this with more frames)
         self.slider.place(x=target_x, y=2)
-        self.slider_icon.configure(text=icon)
         
         # Update colors after a short delay
         self.after(100, self._finish_animation)
@@ -553,13 +532,11 @@ class ThemeToggleButton(ctk.CTkFrame):
         current = ctk.get_appearance_mode()
         
         if current == "Dark":
-            # Dark mode - slider on the right with moon icon
+            # Dark mode - slider on the right
             self.slider.place(x=34, y=2)
-            self.slider_icon.configure(text="🌙")
         else:
-            # Light mode - slider on the left with sun icon
+            # Light mode - slider on the left
             self.slider.place(x=2, y=2)
-            self.slider_icon.configure(text="☀️")
         
         self._update_colors()
     
