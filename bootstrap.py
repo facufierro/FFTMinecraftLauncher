@@ -34,6 +34,12 @@ def check_for_updates():
         print("Checking for updates...")
         url = "https://api.github.com/repos/facufierro/FFTMinecraftLauncher/releases/latest"
         response = requests.get(url, timeout=10)
+        
+        # Handle case where no releases exist yet (404)
+        if response.status_code == 404:
+            print("No releases found on GitHub (first time setup)")
+            return None
+            
         response.raise_for_status()
         
         release_data = response.json()
@@ -73,24 +79,30 @@ def download_and_install_update(update_info):
             
             tmp_file_path = tmp_file.name
         
-        # Backup current launcher if exists
+        # Clean up any existing launcher directory completely
         launcher_dir = Path("launcher")
         backup_dir = Path("launcher_backup")
         
+        # Remove backup from previous runs
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir)
+        
+        # Backup current launcher if exists
         if launcher_dir.exists():
-            if backup_dir.exists():
-                shutil.rmtree(backup_dir)
             shutil.move(str(launcher_dir), str(backup_dir))
         
-        # Extract new launcher
+        # Create fresh launcher directory
         print("Installing update...")
-        launcher_dir.mkdir(exist_ok=True)
+        launcher_dir.mkdir(parents=True, exist_ok=True)
         
+        # Extract new launcher
         with zipfile.ZipFile(tmp_file_path, 'r') as zip_ref:
             zip_ref.extractall(launcher_dir)
         
         # Clean up
         os.unlink(tmp_file_path)
+        
+        # Only remove backup if installation was successful
         if backup_dir.exists():
             shutil.rmtree(backup_dir)
         
@@ -100,11 +112,7 @@ def download_and_install_update(update_info):
     except Exception as e:
         print(f"Update failed: {e}")
         # Restore backup if it exists
-        backup_dir = Path("launcher_backup")
-        launcher_dir = Path("launcher")
-        if backup_dir.exists():
-            if launcher_dir.exists():
-                shutil.rmtree(launcher_dir)
+        if backup_dir.exists() and not launcher_dir.exists():
             shutil.move(str(backup_dir), str(launcher_dir))
         return False
 
@@ -134,14 +142,21 @@ def launch_main_app():
     try:
         print(f"Starting launcher: {main_script.name}")
         
+        # Find Python executable (prioritize virtual environment if available)
+        python_exe = sys.executable
+        venv_python = Path("_env/Scripts/python.exe")
+        if venv_python.exists():
+            python_exe = str(venv_python.absolute())
+        
         # Set up environment
         import os
         env = os.environ.copy()
         env['PYTHONPATH'] = str(launcher_dir.absolute())
         
         # Launch Python script and detach from it (don't wait)
-        subprocess.Popen([sys.executable, str(main_script.name)], 
-                        cwd=launcher_dir, 
+        # Use the launcher directory as working directory
+        subprocess.Popen([python_exe, str(main_script.name)], 
+                        cwd=str(launcher_dir.absolute()), 
                         env=env,
                         creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
         
