@@ -100,31 +100,14 @@ class ButtonFrame(ctk.CTkFrame):
         """
         super().__init__(parent, fg_color="transparent", **kwargs)
         
-        # Create buttons
-        self.check_button = ctk.CTkButton(
-            self, text="Check for Updates", width=120
-        )
-        self.check_button.grid(row=0, column=0, padx=(0, 10))
-        
-        self.update_button = ctk.CTkButton(
-            self, text="Update Files", width=120, state="disabled"
-        )
-        self.update_button.grid(row=0, column=1, padx=(0, 10))
-        
+        # Create launch button only
         self.launch_button = ctk.CTkButton(
-            self, text="Launch", width=100, state="disabled", fg_color="green", hover_color="darkgreen"
+            self, text="Launch", width=120, height=40, state="disabled", 
+            fg_color="#28a745", hover_color="#1e7e34", 
+            font=ctk.CTkFont(size=14, weight="bold"),
+            corner_radius=8
         )
-        self.launch_button.grid(row=0, column=2, padx=(0, 10))
-        
-        self.force_button = ctk.CTkButton(
-            self, text="Force Update", width=120
-        )
-        self.force_button.grid(row=0, column=3, padx=(0, 10))
-        
-        self.settings_button = ctk.CTkButton(
-            self, text="Settings", width=120
-        )
-        self.settings_button.grid(row=0, column=4)
+        self.launch_button.pack(expand=True)
     
     def set_button_callbacks(self, callbacks: dict) -> None:
         """Set callbacks for buttons.
@@ -132,16 +115,8 @@ class ButtonFrame(ctk.CTkFrame):
         Args:
             callbacks: Dictionary mapping button names to callback functions
         """
-        if 'check' in callbacks:
-            self.check_button.configure(command=callbacks['check'])
-        if 'update' in callbacks:
-            self.update_button.configure(command=callbacks['update'])
         if 'launch' in callbacks:
             self.launch_button.configure(command=callbacks['launch'])
-        if 'force' in callbacks:
-            self.force_button.configure(command=callbacks['force'])
-        if 'settings' in callbacks:
-            self.settings_button.configure(command=callbacks['settings'])
     
     def set_button_states(self, states: dict) -> None:
         """Set button states.
@@ -149,16 +124,25 @@ class ButtonFrame(ctk.CTkFrame):
         Args:
             states: Dictionary mapping button names to states ('normal'/'disabled')
         """
-        if 'check' in states:
-            self.check_button.configure(state=states['check'])
-        if 'update' in states:
-            self.update_button.configure(state=states['update'])
         if 'launch' in states:
             self.launch_button.configure(state=states['launch'])
-        if 'force' in states:
-            self.force_button.configure(state=states['force'])
-        if 'settings' in states:
-            self.settings_button.configure(state=states['settings'])
+    
+    def set_launch_button_text(self, text: str) -> None:
+        """Set the text of the launch button.
+        
+        Args:
+            text: Text to display on the button
+        """
+        self.launch_button.configure(text=text)
+    
+    def set_launch_button_color(self, fg_color: str, hover_color: str) -> None:
+        """Set the color of the launch button.
+        
+        Args:
+            fg_color: Primary button color
+            hover_color: Hover button color
+        """
+        self.launch_button.configure(fg_color=fg_color, hover_color=hover_color)
 
 
 class LogFrame(ctk.CTkFrame):

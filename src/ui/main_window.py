@@ -38,9 +38,12 @@ class MainWindow:
         self._setup_event_handlers()
         self._update_ui_from_config()
         
-        # Check for updates on startup if configured
-        if self.launcher_core.config and self.launcher_core.config.check_on_startup:
-            self.root.after(1000, self._check_for_updates)
+        # State tracking
+        self.update_info = None
+        self.needs_update = False
+        
+        # Check for updates on startup to set initial button state
+        self.root.after(1000, self._check_for_updates_on_startup)
     
     def _setup_ui(self) -> None:
         """Setup the user interface."""
@@ -79,13 +82,9 @@ class MainWindow:
         self.button_frame = ButtonFrame(main_frame)
         self.button_frame.grid(row=3, column=0, pady=(0, 10))
         
-        # Setup button callbacks
+        # Setup button callbacks - only launch button now
         self.button_frame.set_button_callbacks({
-            'check': self._check_for_updates,
-            'update': self._update_files,
-            'launch': self._launch_minecraft,
-            'force': self._force_update,
-            'settings': self._open_settings
+            'launch': self._handle_launch_action
         })
         
         # Log frame
@@ -163,18 +162,26 @@ class MainWindow:
         formatted_message = f"[{timestamp}] {message}"
         self.log_frame.add_log_message(formatted_message)
     
-    # Button callbacks
-    def _check_for_updates(self) -> None:
-        """Check for updates."""
+    # Update checking methods
+    def _check_for_updates_on_startup(self) -> None:
+        """Check for updates on startup to set initial button state."""
+        self._add_log("Checking for updates...")
+        self.button_frame.set_button_states({'launch': 'disabled'})
         self.launcher_core.check_for_updates()
     
-    def _update_files(self) -> None:
-        """Update files."""
-        self.launcher_core.perform_update()
-    
-    def _force_update(self) -> None:
-        """Force update files."""
-        self.launcher_core.perform_update(force=True)
+    # Main action handler
+    def _handle_launch_action(self) -> None:
+        """Handle the main launch/update action."""
+        if not self.needs_update:
+            # Check for updates first
+            self._add_log("Checking for updates...")
+            self.button_frame.set_button_states({'launch': 'disabled'})
+            self.launcher_core.check_for_updates()
+        else:
+            # Perform update
+            self._add_log("Starting update...")
+            self.button_frame.set_button_states({'launch': 'disabled'})
+            self.launcher_core.perform_update()
     
     def _launch_minecraft(self) -> None:
         """Launch Minecraft launcher."""
@@ -192,11 +199,6 @@ class MainWindow:
             self.root.after(1000, self.close)  # Wait 1 second then close
         else:
             self._add_log("Failed to open Minecraft launcher")
-    
-    def _open_settings(self) -> None:
-        """Open settings window."""
-        if self.settings_window is None or not self.settings_window.is_open():
-            self.settings_window = SettingsWindow(self.root, self.launcher_core)
     
     def _on_theme_toggle(self) -> None:
         """Handle theme toggle."""
@@ -217,42 +219,39 @@ class MainWindow:
     def _on_update_check_completed(self, update_info: UpdateInfo) -> None:
         """Handle update check completed."""
         self.progress_frame.reset_progress()
-        self.button_frame.set_button_states({
-            'check': 'normal',
-            'update': 'normal' if update_info.updates_available else 'disabled'
-        })
+        self.update_info = update_info
+        self.needs_update = update_info.updates_available
         
         # Update last check time
         self.status_frame.update_last_check(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         
-        # Update progress message
+        # Update button based on update status
         if update_info.updates_available:
+            self.button_frame.set_launch_button_text("Update")
+            self.button_frame.set_launch_button_color("#ffc107", "#d39e00")  # Yellow for update
             self.progress_frame.update_progress(
                 f"New version available: {update_info.latest_version}", 0
             )
         else:
+            self.button_frame.set_launch_button_text("Launch")
+            self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
             self.progress_frame.update_progress(
                 f"Up to date (Version: {update_info.latest_version})", 1.0
             )
+        
+        self.button_frame.set_button_states({'launch': 'normal'})
     
     def _on_update_check_failed(self, error: str) -> None:
         """Handle update check failed."""
         self.progress_frame.reset_progress()
         self.progress_frame.update_progress("Error checking updates", 0)
-        self.button_frame.set_button_states({
-            'check': 'normal',
-            'update': 'disabled'
-        })
+        self.button_frame.set_button_states({'launch': 'normal'})
         UIUtils.show_error_dialog("Update Check Failed", f"Failed to check for updates:\n{error}")
     
     def _on_update_started(self, data=None) -> None:
         """Handle update started."""
         self.progress_frame.update_progress("Starting update...")
-        self.button_frame.set_button_states({
-            'check': 'disabled',
-            'update': 'disabled',
-            'force': 'disabled'
-        })
+        self.button_frame.set_button_states({'launch': 'disabled'})
     
     def _on_update_progress(self, message: str) -> None:
         """Handle update progress."""
@@ -261,27 +260,25 @@ class MainWindow:
     def _on_update_completed(self, data=None) -> None:
         """Handle update completed."""
         self.progress_frame.update_progress("Update completed successfully", 1.0)
-        self.button_frame.set_button_states({
-            'check': 'normal',
-            'update': 'disabled',
-            'force': 'normal'
-        })
         
         # Update version display
         if self.launcher_core.config:
             self.status_frame.update_version(self.launcher_core.config.current_version or "Unknown")
         
-        UIUtils.show_info_dialog("Update Complete", "Files updated successfully!")
+        # Reset button to launch mode and automatically launch
+        self.needs_update = False
+        self.button_frame.set_launch_button_text("Launch")
+        self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
+        
+        # Auto-launch Minecraft after update
+        self._add_log("Launching Minecraft...")
+        self.root.after(1000, self._launch_minecraft)  # Wait 1 second then launch
     
     def _on_update_failed(self, error: str) -> None:
         """Handle update failed."""
         self.progress_frame.reset_progress()
         self.progress_frame.update_progress("Update failed", 0)
-        self.button_frame.set_button_states({
-            'check': 'normal',
-            'update': 'normal',
-            'force': 'normal'
-        })
+        self.button_frame.set_button_states({'launch': 'normal'})
         UIUtils.show_error_dialog("Update Failed", f"Failed to update files:\n{error}")
     
     def _on_minecraft_launch_started(self, data=None) -> None:
