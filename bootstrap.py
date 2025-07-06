@@ -139,12 +139,13 @@ def launch_main_app():
         env = os.environ.copy()
         env['PYTHONPATH'] = str(launcher_dir.absolute())
         
-        # Launch Python script and wait for it to complete
-        result = subprocess.run([sys.executable, str(main_script.name)], 
-                              cwd=launcher_dir, 
-                              env=env)
+        # Launch Python script and detach from it (don't wait)
+        subprocess.Popen([sys.executable, str(main_script.name)], 
+                        cwd=launcher_dir, 
+                        env=env,
+                        creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
         
-        print(f"Launcher exited with code: {result.returncode}")
+        print("Launcher started successfully!")
         return True
         
     except Exception as e:
@@ -178,9 +179,17 @@ def main():
     if not launcher_dir.exists():
         print("Error: No launcher found and download failed!")
         input("Press Enter to exit...")
-        return
+        sys.exit(1)
     
-    launch_main_app()
+    # Launch the main app and exit
+    if launch_main_app():
+        # Give the app a moment to start, then exit
+        import time
+        time.sleep(2)
+        print("Bootstrap completed - exiting.")
+        sys.exit(0)
+    else:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
