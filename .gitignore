@@ -1,18 +1,35 @@
-/_env
-launcher_config.json
-build
-dist
+# Python Environment
+_env/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.vscode
-FFTMinecraftLauncher.spec
-versions
+
+# Build Artifacts
+build/
+dist/
+
+# Runtime Files
+launcher/
+launcher_config.json
 launcher_profiles.json
-logs
-jre
-neoforge-21.1.186-installer.jar.log
-minecraft_instance
-instance
-launcher
+*.log
+
+# Minecraft Instance Data
+instance/
+minecraft_instance/
+logs/
+jre/
+
+# IDE Settings
+.vscode/settings.json
+.vscode/launch.json
+
+# Test Files
+test_*/
+*_test.*
+test.*
+
+# Temporary Files
+temp/
+*.tmp
