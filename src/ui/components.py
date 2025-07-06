@@ -445,7 +445,7 @@ class ThemeToggleButton:
             corner_radius=12,
             border_width=0,
             fg_color=("#cccccc", "#4a4a4a"),  # Track color when OFF
-            progress_color=("#1e3a5f", "#ffd700"),  # Track color when ON (dark mode blue, light mode gold)
+            progress_color=("#ffd700", "#1e3a5f"),  # Track color when ON (light mode gold, dark mode blue)
             button_color=("#ffffff", "#ffffff"),  # Button color
             button_hover_color=("#e0e0e0", "#e0e0e0"),  # Button hover color
             command=self._on_toggle
@@ -454,6 +454,9 @@ class ThemeToggleButton:
         # Set initial state based on current theme
         current_mode = ctk.get_appearance_mode()
         self.switch.select() if current_mode == "Dark" else self.switch.deselect()
+        
+        # Update colors immediately after creation
+        self._update_colors()
     
     def place(self, **kwargs):
         """Place the toggle button."""
@@ -499,13 +502,13 @@ class ThemeToggleButton:
         if current_mode == "Dark":
             # Dark mode - blue progress color
             self.switch.configure(
-                progress_color="#1e3a5f",
+                progress_color=("#ffd700", "#1e3a5f"),  # Light mode gold, dark mode blue
                 fg_color=("#cccccc", "#4a4a4a")
             )
         else:
-            # Light mode - gold progress color
+            # Light mode - gold progress color  
             self.switch.configure(
-                progress_color="#ffd700",
+                progress_color=("#ffd700", "#1e3a5f"),  # Light mode gold, dark mode blue
                 fg_color=("#cccccc", "#4a4a4a")
             )
     
