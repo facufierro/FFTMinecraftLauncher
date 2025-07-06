@@ -117,7 +117,7 @@ class UpdateService:
             return self._sync_files(extracted_folder)
     
     def _sync_files(self, source_path: Path) -> bool:
-        """Sync files from source to Minecraft directory.
+        """Sync files from source to the selected Minecraft instance.
         
         Args:
             source_path: Path to the extracted source files
@@ -125,21 +125,26 @@ class UpdateService:
         Returns:
             True if successful, False otherwise.
         """
-        minecraft_path = self.config.get_minecraft_path()
+        if not self.config.selected_instance:
+            raise UpdateError("No Minecraft instance selected")
+        
+        # Find the selected instance path
+        instance_path = self.config.get_selected_instance_path()
+        if not instance_path:
+            raise UpdateError(f"Instance '{self.config.selected_instance}' not found")
         
         try:
-            # Ensure Minecraft directory exists
-            FileUtils.ensure_directory_exists(minecraft_path)
+            # Ensure instance directory exists
+            FileUtils.ensure_directory_exists(instance_path)
             
-            # Sync all items in the source folder
-            for item in source_path.iterdir():
-                if item.is_dir():
-                    self._sync_directory(item, minecraft_path / item.name)
+            # Only sync the folders that are configured to be synced
+            for folder_name in self.config.folders_to_sync:
+                source_folder = source_path / folder_name
+                if source_folder.exists():
+                    dest_folder = instance_path / folder_name
+                    self._sync_directory(source_folder, dest_folder)
                 else:
-                    self._sync_file(item, minecraft_path / item.name)
-            
-            # Update config with new version from update_info
-            # Note: This will be set by the caller after successful update
+                    self.logger.warning(f"Source folder '{folder_name}' not found in update")
             
             return True
             

@@ -1,14 +1,16 @@
-"""Minecraft service for managing Minecraft operations."""
+"""Minecraft service for managing Minecraft launcher operations."""
 
+import os
 import subprocess
 from pathlib import Path
 from typing import List, Optional
 from ..models.config import LauncherConfig
 from ..utils.logger import get_logger
+from .neoforge_service import NeoForgeService
 
 
 class MinecraftService:
-    """Service for managing Minecraft operations."""
+    """Service for managing Minecraft launcher operations."""
     
     def __init__(self, config: LauncherConfig):
         """Initialize the Minecraft service.
@@ -18,103 +20,137 @@ class MinecraftService:
         """
         self.config = config
         self.logger = get_logger()
+        self.neoforge_service = NeoForgeService(config)
     
     def validate_installation(self) -> bool:
-        """Validate that Minecraft is properly installed.
+        """Validate that Minecraft launcher is available.
         
         Returns:
-            True if Minecraft installation is valid, False otherwise.
+            True if Minecraft launcher is available, False otherwise.
         """
-        minecraft_path = self.config.get_minecraft_path()
+        # Check if Minecraft launcher can be found
+        launcher_path = self._find_minecraft_launcher()
+        if launcher_path:
+            self.logger.info(f"Minecraft launcher found at: {launcher_path}")
+            return True
         
-        if not minecraft_path.exists():
-            self.logger.error(f"Minecraft directory not found: {minecraft_path}")
-            return False
-        
-        if not minecraft_path.is_dir():
-            self.logger.error(f"Minecraft path is not a directory: {minecraft_path}")
-            return False
-        
-        # Check if executable exists
-        executable_path = self.get_executable_path()
-        if not executable_path:
-            self.logger.error("Minecraft executable not found")
-            return False
-        
-        self.logger.info(f"Minecraft installation validated: {minecraft_path}")
-        return True
+        self.logger.warning("Minecraft launcher not found")
+        return False
     
-    def get_executable_path(self) -> Optional[Path]:
-        """Get the path to the Minecraft executable.
+    def _find_minecraft_launcher(self) -> Optional[str]:
+        """Find the Minecraft launcher executable.
         
         Returns:
-            Path to the executable if found, None otherwise.
+            Path to the launcher executable if found, None otherwise.
         """
-        minecraft_path = self.config.get_minecraft_path()
-        
-        # Try the configured executable first
-        configured_exe = Path(self.config.minecraft_executable)
-        
-        # If it's an absolute path, use it directly
-        if configured_exe.is_absolute():
-            if configured_exe.exists():
-                return configured_exe
-        else:
-            # Try relative to Minecraft directory
-            exe_path = minecraft_path / configured_exe
-            if exe_path.exists():
-                return exe_path
-        
-        # Try common Minecraft executable names
-        common_names = [
-            'minecraft.exe',
-            'MinecraftLauncher.exe',
-            'launcher.exe',
-            'ATLauncher.exe',
-            'MultiMC.exe',
-            'PrismLauncher.exe'
+        # Common Minecraft launcher locations (prioritize actual executables over protocol)
+        launcher_candidates = [
+            # Official Minecraft Launcher (standalone) - prioritized
+            os.path.expandvars(r"%ProgramFiles%\Minecraft Launcher\MinecraftLauncher.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\Minecraft Launcher\MinecraftLauncher.exe"),
+            # Legacy launcher
+            os.path.expandvars(r"%ProgramFiles%\Minecraft\MinecraftLauncher.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\Minecraft\MinecraftLauncher.exe"),
+            # User AppData locations
+            os.path.expandvars(r"%LOCALAPPDATA%\Packages\Microsoft.4297127D64EC6_8wekyb3d8bbwe\LocalCache\Local\game\Minecraft Launcher\MinecraftLauncher.exe"),
+            # MultiMC/PolyMC/Prism Launcher
+            os.path.expandvars(r"%ProgramFiles%\MultiMC\MultiMC.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\MultiMC\MultiMC.exe"),
+            os.path.expandvars(r"%ProgramFiles%\PolyMC\PolyMC.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\PolyMC\PolyMC.exe"),
+            os.path.expandvars(r"%ProgramFiles%\PrismLauncher\prismlauncher.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\PrismLauncher\prismlauncher.exe"),
+            # Microsoft Store launcher app ID (Java Edition launcher specifically)
+            "minecraft-launcher:",  # Try this as a specific launcher protocol
+            # Protocol handler as last resort (may open Bedrock Edition)
+            "minecraft:",
         ]
         
-        for name in common_names:
-            exe_path = minecraft_path / name
-            if exe_path.exists():
-                self.logger.info(f"Found Minecraft executable: {exe_path}")
-                return exe_path
+        # Test each candidate
+        for candidate in launcher_candidates:
+            if candidate.endswith(":"):
+                # Protocol handler - we'll assume it's available if this is Windows
+                if os.name == 'nt':
+                    return candidate
+                continue
+            
+            if os.path.exists(candidate):
+                return candidate
         
         return None
     
     def launch(self) -> bool:
-        """Launch Minecraft.
+        """Launch the Minecraft launcher.
         
         Returns:
             True if launch was successful, False otherwise.
         """
-        if not self.validate_installation():
-            return False
-        
-        executable_path = self.get_executable_path()
-        if not executable_path:
-            self.logger.error("Cannot launch: Minecraft executable not found")
-            return False
-        
         try:
-            self.logger.info(f"Launching Minecraft: {executable_path}")
+            self.logger.info("Launching Minecraft launcher...")
             
-            # Launch Minecraft in its own directory
-            minecraft_path = self.config.get_minecraft_path()
+            launcher_path = self._find_minecraft_launcher()
+            if not launcher_path:
+                self.logger.error("Minecraft launcher not found")
+                return False
             
-            subprocess.Popen(
-                [str(executable_path)],
-                cwd=str(minecraft_path),
-                start_new_session=True
-            )
+            # Launch the Minecraft launcher
+            if launcher_path.endswith(":"):
+                if launcher_path == "minecraft-launcher:":
+                    # Try using the specific Minecraft Launcher app ID
+                    self.logger.info("Launching Minecraft Launcher via Microsoft Store app")
+                    subprocess.Popen(["start", "shell:AppsFolder\\Microsoft.4297127D64EC6_8wekyb3d8bbwe!Minecraft"], shell=True)
+                else:
+                    # Protocol handler - avoid using this as it may open Bedrock Edition
+                    self.logger.warning("Using protocol handler - may open wrong Minecraft edition")
+                    subprocess.Popen(["start", launcher_path], shell=True)
+            else:
+                # Direct executable - preferred method
+                cmd = [launcher_path]
+                
+                # Add arguments to launch with specific profile if selected
+                if self.config.selected_instance and self.config.selected_instance != "Default (.minecraft)":
+                    # Try to launch with the selected profile directly
+                    cmd.extend(["--launcherui"])  # Show launcher UI to allow profile selection
+                    
+                self.logger.info(f"Launching: {' '.join(cmd)}")
+                subprocess.Popen(cmd, start_new_session=True)
             
-            self.logger.info("Minecraft launched successfully")
+            self.logger.info("Minecraft launcher started successfully")
             return True
             
-        except (subprocess.SubprocessError, OSError) as e:
-            self.logger.error(f"Failed to launch Minecraft: {e}")
+        except Exception as e:
+            self.logger.error(f"Failed to launch Minecraft launcher: {e}")
             return False
+    
+    def get_available_instances(self) -> List[str]:
+        """Get list of available Minecraft instances.
+        
+        Returns:
+            List of instance names.
+        """
+        return self.neoforge_service.get_available_instances()
+    
+    def install_neoforge_to_instance(self, instance_name: str) -> bool:
+        """Install NeoForge to the specified instance.
+        
+        Args:
+            instance_name: Name of the instance
+            
+        Returns:
+            True if installation was successful, False otherwise.
+        """
+        return self.neoforge_service.install_neoforge_to_instance(instance_name)
+    
+    def is_neoforge_installed(self, instance_name: str) -> bool:
+        """Check if NeoForge is installed in the specified instance.
+        
+        Args:
+            instance_name: Name of the instance
+            
+        Returns:
+            True if NeoForge is installed, False otherwise.
+        """
+        return self.neoforge_service.is_neoforge_installed(instance_name)
     
     def get_installation_info(self) -> dict:
         """Get information about the Minecraft installation.
@@ -122,43 +158,21 @@ class MinecraftService:
         Returns:
             Dictionary containing installation information.
         """
-        minecraft_path = self.config.get_minecraft_path()
-        executable_path = self.get_executable_path()
+        launcher_path = self._find_minecraft_launcher()
+        instances = self.get_available_instances()
         
         info = {
-            'minecraft_directory': str(minecraft_path),
-            'minecraft_exists': minecraft_path.exists(),
-            'minecraft_executable': str(executable_path) if executable_path else None,
-            'executable_exists': executable_path.exists() if executable_path else False,
+            'launcher_found': launcher_path is not None,
+            'launcher_path': launcher_path,
+            'available_instances': instances,
+            'selected_instance': self.config.selected_instance,
             'is_valid': self.validate_installation()
         }
         
-        # Add folder information
-        folders_info = {}
-        for folder in self.config.folders_to_sync:
-            folder_path = minecraft_path / folder
-            folders_info[folder] = {
-                'exists': folder_path.exists(),
-                'path': str(folder_path),
-                'file_count': len(list(folder_path.rglob('*'))) if folder_path.exists() else 0
-            }
-        
-        info['folders'] = folders_info
+        # Add NeoForge status for selected instance
+        if self.config.selected_instance:
+            info['neoforge_installed'] = self.is_neoforge_installed(self.config.selected_instance)
+        else:
+            info['neoforge_installed'] = False
         
         return info
-    
-    def get_missing_folders(self) -> List[str]:
-        """Get list of folders that should exist but don't.
-        
-        Returns:
-            List of missing folder names.
-        """
-        minecraft_path = self.config.get_minecraft_path()
-        missing = []
-        
-        for folder in self.config.folders_to_sync:
-            folder_path = minecraft_path / folder
-            if not folder_path.exists():
-                missing.append(folder)
-        
-        return missing

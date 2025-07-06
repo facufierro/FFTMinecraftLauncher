@@ -3,6 +3,7 @@
 import customtkinter as ctk
 from typing import Optional
 from ..core.launcher import LauncherCore
+from ..core.events import EventType
 from ..utils.ui_utils import UIUtils
 
 
@@ -21,15 +22,15 @@ class SettingsWindow:
         self.window: Optional[ctk.CTkToplevel] = None
         
         # Initialize entry widgets (will be set in _setup_ui)
-        self.minecraft_dir_entry: Optional[ctk.CTkEntry] = None
-        self.minecraft_executable_entry: Optional[ctk.CTkEntry] = None
+        self.instance_combobox: Optional[ctk.CTkComboBox] = None
+        self.install_neoforge_button: Optional[ctk.CTkButton] = None
         
         self._create_window()
     
     def _create_window(self) -> None:
         """Create the settings window."""
         self.window = ctk.CTkToplevel(self.parent)
-        self.window.title("Launcher Settings")
+        self.window.title("Modpack Settings")
         UIUtils.center_window(self.window, 600, 400)
         self.window.transient(self.parent)
         self.window.grab_set()
@@ -62,19 +63,16 @@ class SettingsWindow:
         form_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         form_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
-        # Minecraft Directory
-        self._create_setting_group(
-            form_frame, "Instance Directory", "minecraft_dir", 0
-        )
+        # Instance Selection
+        self._create_instance_selection(form_frame, 0)
         
-        # Minecraft Executable
-        self._create_setting_group(
-            form_frame, "Launcher Executable", "minecraft_executable", 1
-        )
+        # NeoForge Installation
+        self._create_neoforge_section(form_frame, 1)
         
         # Checkboxes
         checkbox_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
         checkbox_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        
         
         # Check on startup
         self.check_startup_var = ctk.BooleanVar()
@@ -116,31 +114,191 @@ class SettingsWindow:
         )
         self.reset_button.pack(side="left")
     
-    def _create_setting_group(self, parent, label_text: str, setting_name: str, row: int) -> None:
-        """Create a setting group with label and entry.
+    def _create_instance_selection(self, parent, row: int) -> None:
+        """Create the instance selection section.
         
         Args:
             parent: Parent widget
-            label_text: Label text
-            setting_name: Setting attribute name
             row: Grid row
         """
         # Label
-        label = ctk.CTkLabel(parent, text=f"{label_text}:")
+        label = ctk.CTkLabel(parent, text="Minecraft Instance:")
         label.grid(row=row, column=0, sticky="w", pady=(0, 10))
         
-        # Entry
-        entry = ctk.CTkEntry(parent, width=250)
-        entry.grid(row=row, column=1, sticky="ew", padx=(10, 0), pady=(0, 10))
+        # Get available instances
+        instances = self.launcher_core.minecraft_service.get_available_instances()
         
-        # Store reference
-        setattr(self, f"{setting_name}_entry", entry)
+        # Instance selection combobox
+        self.instance_combobox = ctk.CTkComboBox(
+            parent, 
+            values=instances if instances else ["No instances found"],
+            width=300,
+            command=self._on_instance_selected
+        )
+        self.instance_combobox.grid(row=row, column=1, sticky="ew", padx=(10, 0), pady=(0, 10))
+        
+        # Refresh button
+        refresh_button = ctk.CTkButton(
+            parent, 
+            text="🔄",
+            width=30,
+            command=self._refresh_instances
+        )
+        refresh_button.grid(row=row, column=2, sticky="w", padx=(5, 0), pady=(0, 10))
         
         # Configure grid
         parent.columnconfigure(1, weight=1)
+    
+    def _create_neoforge_section(self, parent, row: int) -> None:
+        """Create the NeoForge installation section.
         
-        # Bind change event
-        entry.bind('<KeyRelease>', lambda e: self._on_setting_changed(setting_name, entry.get()))
+        Args:
+            parent: Parent widget
+            row: Grid row
+        """
+        # NeoForge status label
+        self.neoforge_status_label = ctk.CTkLabel(parent, text="NeoForge Status:")
+        self.neoforge_status_label.grid(row=row, column=0, sticky="w", pady=(0, 10))
+        
+        # Install/Status frame
+        install_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        install_frame.grid(row=row, column=1, columnspan=2, sticky="ew", padx=(10, 0), pady=(0, 10))
+        
+        # Status display
+        self.neoforge_status_display = ctk.CTkLabel(
+            install_frame, 
+            text="Select an instance first",
+            text_color="gray"
+        )
+        self.neoforge_status_display.pack(side="left", padx=(0, 10))
+        
+        # Install button
+        self.install_neoforge_button = ctk.CTkButton(
+            install_frame,
+            text="Install NeoForge",
+            command=self._install_neoforge,
+            state="disabled"
+        )
+        self.install_neoforge_button.pack(side="right")
+    
+    def _refresh_instances(self) -> None:
+        """Refresh the list of available instances."""
+        instances = self.launcher_core.minecraft_service.get_available_instances()
+        
+        if instances:
+            self.instance_combobox.configure(values=instances)
+            # Keep current selection if it's still valid
+            current = self.instance_combobox.get()
+            if current not in instances:
+                self.instance_combobox.set("")
+        else:
+            self.instance_combobox.configure(values=["No instances found"])
+            self.instance_combobox.set("No instances found")
+        
+        self._update_neoforge_status()
+    
+    def _on_instance_selected(self, instance_name: str) -> None:
+        """Handle instance selection.
+        
+        Args:
+            instance_name: Name of the selected instance
+        """
+        if instance_name and instance_name != "No instances found":
+            self.launcher_core.config.selected_instance = instance_name
+            self.install_neoforge_button.configure(state="normal")
+            # Save config immediately when instance changes
+            self.launcher_core.save_config()
+            # Emit config changed event to update main UI
+            self.launcher_core.events.emit(EventType.CONFIG_CHANGED)
+        else:
+            self.launcher_core.config.selected_instance = ""
+            self.install_neoforge_button.configure(state="disabled")
+            self.launcher_core.save_config()
+            self.launcher_core.events.emit(EventType.CONFIG_CHANGED)
+        
+        self._update_neoforge_status()
+    
+    def _update_neoforge_status(self) -> None:
+        """Update the NeoForge installation status display."""
+        if not self.launcher_core.config.selected_instance:
+            self.neoforge_status_display.configure(
+                text="Select an instance first",
+                text_color="gray"
+            )
+            return
+        
+        instance_name = self.launcher_core.config.selected_instance
+        is_installed = self.launcher_core.minecraft_service.is_neoforge_installed(instance_name)
+        
+        if is_installed:
+            self.neoforge_status_display.configure(
+                text="✓ NeoForge installed",
+                text_color="green"
+            )
+            self.install_neoforge_button.configure(text="Reinstall NeoForge")
+        else:
+            self.neoforge_status_display.configure(
+                text="✗ NeoForge not installed",
+                text_color="red"
+            )
+            self.install_neoforge_button.configure(text="Install NeoForge")
+    
+    def _install_neoforge(self) -> None:
+        """Install NeoForge to the selected instance."""
+        if not self.launcher_core.config.selected_instance:
+            UIUtils.show_error_dialog("No Instance Selected", "Please select a Minecraft instance first.")
+            return
+        
+        instance_name = self.launcher_core.config.selected_instance
+        
+        # Show confirmation dialog
+        if not UIUtils.ask_yes_no(
+            "Install NeoForge",
+            f"Install NeoForge 21.1.186 for Minecraft 1.21.1 to instance '{instance_name}'?\n\n"
+            "This will modify the instance to add NeoForge support."
+        ):
+            return
+        
+        # Disable button during installation
+        self.install_neoforge_button.configure(state="disabled", text="Installing...")
+        self.neoforge_status_display.configure(text="Installing NeoForge...", text_color="orange")
+        
+        # Perform installation in a separate thread
+        import threading
+        
+        def install_thread():
+            try:
+                success = self.launcher_core.minecraft_service.install_neoforge_to_instance(instance_name)
+                
+                # Update UI on main thread
+                self.window.after(0, lambda: self._installation_completed(success))
+                
+            except Exception as e:
+                self.window.after(0, lambda: self._installation_completed(False, str(e)))
+        
+        threading.Thread(target=install_thread, daemon=True).start()
+    
+    def _installation_completed(self, success: bool, error: str = None) -> None:
+        """Handle installation completion.
+        
+        Args:
+            success: Whether installation was successful
+            error: Error message if installation failed
+        """
+        self.install_neoforge_button.configure(state="normal")
+        
+        if success:
+            UIUtils.show_info_dialog(
+                "Installation Complete",
+                "NeoForge has been successfully installed to the selected instance."
+            )
+        else:
+            error_msg = f"NeoForge installation failed"
+            if error:
+                error_msg += f":\n{error}"
+            UIUtils.show_error_dialog("Installation Failed", error_msg)
+        
+        self._update_neoforge_status()
     
     def _load_current_settings(self) -> None:
         """Load current settings into the UI."""
@@ -149,15 +307,17 @@ class SettingsWindow:
         
         config = self.launcher_core.config
         
-        # Load text settings
-        if self.minecraft_dir_entry:
-            self.minecraft_dir_entry.insert(0, config.minecraft_dir)
-        if self.minecraft_executable_entry:
-            self.minecraft_executable_entry.insert(0, config.minecraft_executable)
+        # Load instance selection
+        if self.instance_combobox and config.selected_instance:
+            self.instance_combobox.set(config.selected_instance)
+            self.install_neoforge_button.configure(state="normal")
         
         # Load checkbox settings
         self.check_startup_var.set(config.check_on_startup)
         self.auto_update_var.set(config.auto_update)
+        
+        # Update NeoForge status
+        self._update_neoforge_status()
     
     def _on_setting_changed(self, setting_name: str, value: str) -> None:
         """Handle setting change.
@@ -196,10 +356,7 @@ class SettingsWindow:
             # Save configuration
             self.launcher_core.save_config()
             
-            # Show success message
-            UIUtils.show_info_dialog("Settings Saved", "Settings have been saved successfully.")
-            
-            # Close window
+            # Close window silently
             self.close()
             
         except Exception as e:
@@ -222,18 +379,18 @@ class SettingsWindow:
             for key, value in default_config.__dict__.items():
                 setattr(self.launcher_core.config, key, value)
         
+        # Refresh instances and reload settings
+        self._refresh_instances()
+        
         # Update UI
-        self._clear_entries()
         self._load_current_settings()
         
         UIUtils.show_info_dialog("Reset Complete", "Settings have been reset to defaults.")
     
     def _clear_entries(self) -> None:
         """Clear all entry widgets."""
-        if self.minecraft_dir_entry:
-            self.minecraft_dir_entry.delete(0, 'end')
-        if self.minecraft_executable_entry:
-            self.minecraft_executable_entry.delete(0, 'end')
+        # No longer needed since we don't have text entries
+        pass
     
     def is_open(self) -> bool:
         """Check if the settings window is open.

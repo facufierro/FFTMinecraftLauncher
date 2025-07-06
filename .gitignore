@@ -8,3 +8,9 @@ __pycache__/
 *.pyd
 .vscode
 FFTMinecraftLauncher.spec
+versions
+launcher_profiles.json
+logs
+jre
+neoforge-21.1.186-installer.jar.log
+minecraft_instance

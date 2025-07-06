@@ -29,7 +29,7 @@ class MainWindow:
         
         # Create main window
         self.root = ctk.CTk()
-        self.root.title("FFT Minecraft Launcher")
+        self.root.title("FFT Minecraft Modpack Launcher")
         UIUtils.center_window(self.root, 800, 600)
         self.root.resizable(True, True)
         
@@ -57,7 +57,7 @@ class MainWindow:
         # Title
         title_label = ctk.CTkLabel(
             main_frame,
-            text="FFT Minecraft Launcher",
+            text="FFT Minecraft Modpack Launcher",
             font=ctk.CTkFont(size=20, weight="bold")
         )
         title_label.grid(row=0, column=0, pady=(20, 20))
@@ -128,19 +128,34 @@ class MainWindow:
         config = self.launcher_core.config
         
         # Update status frame
-        self.status_frame.update_directory(str(config.get_minecraft_path()))
+        if config.selected_instance:
+            self.status_frame.update_directory(f"Instance: {config.selected_instance}")
+        else:
+            self.status_frame.update_directory("No instance selected")
+        
         self.status_frame.update_version(config.current_version or "Unknown")
         
-        # Check Minecraft installation and update launch button
+        # Check Minecraft launcher and update launch button
         is_valid = self.launcher_core.validate_minecraft_installation()
         self.button_frame.set_button_states({
             'launch': 'normal' if is_valid else 'disabled'
         })
         
         if is_valid:
-            self._add_log("Minecraft installation validated")
+            self._add_log("Minecraft launcher found")
         else:
-            self._add_log("Warning: Minecraft installation not found or invalid")
+            self._add_log("Warning: Minecraft launcher not found")
+        
+        # Update instance info
+        if config.selected_instance:
+            installation_info = self.launcher_core.get_minecraft_info()
+            neoforge_status = installation_info.get('neoforge_installed', False)
+            if neoforge_status:
+                self._add_log(f"NeoForge is installed in instance: {config.selected_instance}")
+            else:
+                self._add_log(f"NeoForge not installed in instance: {config.selected_instance}")
+        else:
+            self._add_log("Please select a Minecraft instance in settings")
     
     def _add_log(self, message: str) -> None:
         """Add a log message to the UI.
@@ -166,18 +181,20 @@ class MainWindow:
         self.launcher_core.perform_update(force=True)
     
     def _launch_minecraft(self) -> None:
-        """Launch Minecraft."""
+        """Launch Minecraft launcher."""
         self.launcher_core.launch_minecraft(self._on_minecraft_launched)
     
     def _on_minecraft_launched(self, success: bool) -> None:
-        """Handle Minecraft launch result.
+        """Handle Minecraft launcher result.
         
         Args:
             success: Whether launch was successful
         """
         if success:
-            # Close launcher after successful launch
-            self.root.after(2000, self.close)  # Wait 2 seconds then close
+            # Don't close the launcher - let the user manage both
+            self._add_log("Minecraft launcher opened successfully")
+        else:
+            self._add_log("Failed to open Minecraft launcher")
     
     def _open_settings(self) -> None:
         """Open settings window."""
@@ -271,17 +288,17 @@ class MainWindow:
         UIUtils.show_error_dialog("Update Failed", f"Failed to update files:\n{error}")
     
     def _on_minecraft_launch_started(self, data=None) -> None:
-        """Handle Minecraft launch started."""
-        self.progress_frame.update_progress("Launching Minecraft...")
+        """Handle Minecraft launcher started."""
+        self.progress_frame.update_progress("Opening Minecraft launcher...")
     
     def _on_minecraft_launch_completed(self, data=None) -> None:
-        """Handle Minecraft launch completed."""
-        self.progress_frame.update_progress("Minecraft launched successfully", 1.0)
+        """Handle Minecraft launcher completed."""
+        self.progress_frame.update_progress("Minecraft launcher opened successfully", 1.0)
     
     def _on_minecraft_launch_failed(self, error: str) -> None:
-        """Handle Minecraft launch failed."""
+        """Handle Minecraft launcher failed."""
         self.progress_frame.reset_progress()
-        UIUtils.show_error_dialog("Launch Failed", f"Failed to launch Minecraft:\n{error}")
+        UIUtils.show_error_dialog("Launch Failed", f"Failed to open Minecraft launcher:\n{error}")
     
     def _on_config_changed(self, data=None) -> None:
         """Handle configuration changed."""

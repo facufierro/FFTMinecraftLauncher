@@ -12,9 +12,8 @@ from ..constants import GITHUB_REPO, DEFAULT_SYNC_FOLDERS
 class LauncherConfig:
     """Configuration settings for the Minecraft launcher."""
     
-    # Local paths
-    minecraft_dir: str = "../FFTClientMinecraft1211"
-    minecraft_executable: str = "minecraft.exe"
+    # Instance settings
+    selected_instance: str = ""  # Selected Minecraft launcher instance name
     
     # Sync settings
     folders_to_sync: List[str] = field(default_factory=lambda: DEFAULT_SYNC_FOLDERS)
@@ -53,11 +52,19 @@ class LauncherConfig:
                     continue
                 if hasattr(config, key):
                     setattr(config, key, value)
+            
+            # Migrate legacy settings
+            config._migrate_legacy_settings()
                     
             return config
             
         except (json.JSONDecodeError, IOError) as e:
             raise ConfigurationError(f"Failed to load configuration: {e}")
+    
+    def _migrate_legacy_settings(self) -> None:
+        """Migrate legacy settings to new format."""
+        # Clear any legacy fields after migration
+        pass
     
     def save_to_file(self, config_path: str) -> None:
         """Save configuration to JSON file."""
@@ -65,7 +72,7 @@ class LauncherConfig:
             # Convert to dict, excluding None values and github_repo (constant)
             data = {
                 key: value for key, value in self.__dict__.items()
-                if value is not None and key != 'github_repo'
+                if value is not None and key not in ['github_repo']
             }
             
             with open(config_path, 'w', encoding='utf-8') as f:
@@ -75,23 +82,108 @@ class LauncherConfig:
             raise ConfigurationError(f"Failed to save configuration: {e}")
     
     def get_minecraft_path(self) -> Path:
-        """Get the Minecraft directory as a Path object."""
-        return Path(self.minecraft_dir).resolve()
+        """Get the Minecraft instances directory as a Path object."""
+        return Path(os.environ['APPDATA']) / ".minecraft" / "instances"
     
-    def get_minecraft_executable_path(self) -> Path:
-        """Get the full path to the Minecraft executable."""
-        minecraft_path = self.get_minecraft_path()
-        return minecraft_path / self.minecraft_executable
+    def get_selected_instance_path(self) -> Optional[Path]:
+        """Get the path to the selected instance."""
+        if not self.selected_instance:
+            return None
+        
+        # Use the same logic as NeoForgeService to find instance paths
+        return self._find_instance_path(self.selected_instance)
+    
+    def _find_instance_path(self, instance_name: str) -> Optional[Path]:
+        """Find the path to a Minecraft launcher instance.
+        
+        Args:
+            instance_name: Name of the instance
+            
+        Returns:
+            Path to the instance directory, or None if not found.
+        """
+        minecraft_dir = Path(os.environ['APPDATA']) / ".minecraft"
+        
+        # Handle default Minecraft installation
+        if instance_name == "Default (.minecraft)":
+            if minecraft_dir.exists():
+                return minecraft_dir
+            return None
+        
+        # Handle launcher profiles (using direct profile names)
+        launcher_profiles = minecraft_dir / "launcher_profiles.json"
+        if launcher_profiles.exists():
+            try:
+                with open(launcher_profiles, 'r', encoding='utf-8') as f:
+                    profiles = json.load(f)
+                
+                for profile_id, profile_data in profiles.get("profiles", {}).items():
+                    profile_name = profile_data.get("name", profile_id)
+                    
+                    # Handle "last release" name for unnamed/default profiles
+                    if instance_name == "last release" and (not profile_name or profile_name.lower() in ["default", ""]):
+                        # Return the custom gameDir if specified, otherwise default .minecraft
+                        if "gameDir" in profile_data:
+                            return Path(profile_data["gameDir"])
+                        else:
+                            return minecraft_dir
+                    elif profile_name == instance_name:
+                        # Return the custom gameDir if specified, otherwise default .minecraft
+                        if "gameDir" in profile_data:
+                            return Path(profile_data["gameDir"])
+                        else:
+                            return minecraft_dir
+            except Exception:
+                pass  # Fall through to other methods
+        
+        # Handle third-party launcher instances
+        for launcher_name in ["PrismLauncher", "PolyMC", "MultiMC"]:
+            if instance_name.endswith(f" ({launcher_name})"):
+                base_instance_name = instance_name[:-len(f" ({launcher_name})")]
+                launcher_dir = Path(os.environ['APPDATA']) / launcher_name / "instances"
+                
+                if launcher_dir.exists():
+                    instance_dir = launcher_dir / base_instance_name
+                    if instance_dir.exists():
+                        # Check for .minecraft subdirectory (most common)
+                        minecraft_subdir = instance_dir / ".minecraft"
+                        if minecraft_subdir.exists():
+                            return minecraft_subdir
+                        # Check for minecraft subdirectory (alternative)
+                        minecraft_subdir = instance_dir / "minecraft"
+                        if minecraft_subdir.exists():
+                            return minecraft_subdir
+                        # Return the instance path itself as fallback
+                        return instance_dir
+        
+        # Fallback: check for instances in .minecraft/instances (some launchers)
+        instances_dir = minecraft_dir / "instances"
+        if instances_dir.exists():
+            # Extract base name if it has a launcher suffix
+            base_name = instance_name
+            for suffix in [" (PrismLauncher)", " (PolyMC)", " (MultiMC)", " (instances)"]:
+                if instance_name.endswith(suffix):
+                    base_name = instance_name[:-len(suffix)]
+                    break
+            
+            instance_path = instances_dir / base_name
+            if instance_path.exists():
+                # Check for subdirectories
+                for subdir_name in [".minecraft", "minecraft"]:
+                    subdir = instance_path / subdir_name
+                    if subdir.exists():
+                        return subdir
+                return instance_path
+        
+        return None
     
     def validate(self) -> List[str]:
         """Validate the configuration and return a list of errors."""
         errors = []
         
-        if not self.minecraft_dir:
-            errors.append("Minecraft directory must be specified")
-            
-        if not self.minecraft_executable:
-            errors.append("Minecraft executable must be specified")
+        # Don't require instance selection during initialization - user can set it in settings
+        # if not self.selected_instance:
+        #     errors.append("A Minecraft instance must be selected")
             
         if not self.folders_to_sync:
             errors.append("At least one folder to sync must be specified")
