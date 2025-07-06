@@ -36,8 +36,9 @@ def check_for_updates():
         # Try using GitHub CLI first (authenticated)
         try:
             import subprocess
+            gh_path = r"C:\Program Files\GitHub CLI\gh.exe"
             result = subprocess.run([
-                "gh", "release", "list", "--repo", "facufierro/FFTMinecraftLauncher", 
+                gh_path, "release", "list", "--repo", "facufierro/FFTMinecraftLauncher", 
                 "--limit", "1", "--json", "tagName,assets"
             ], capture_output=True, text=True, timeout=10)
             
@@ -108,26 +109,36 @@ def download_and_install_update(update_info):
         # Try using GitHub CLI for authenticated download first
         try:
             import subprocess
-            # Create temp file path
+            # Create temp directory for gh CLI download
             import tempfile
-            tmp_file_path = tempfile.mktemp(suffix='.zip')
+            tmp_dir = tempfile.mkdtemp()
             
-            # Try to download using gh CLI
+            # Try to download using gh CLI (gh downloads to current directory by default)
+            gh_path = r"C:\Program Files\GitHub CLI\gh.exe"
             result = subprocess.run([
-                "gh", "release", "download", f"v{update_info['version']}", 
+                gh_path, "release", "download", f"v{update_info['version']}", 
                 "--repo", "facufierro/FFTMinecraftLauncher",
-                "--pattern", "launcher_package.zip",
-                "--output", tmp_file_path
-            ], capture_output=True, text=True, timeout=30)
+                "--pattern", "launcher_package.zip"
+            ], cwd=tmp_dir, capture_output=True, text=True, timeout=30)
             
-            if result.returncode == 0 and Path(tmp_file_path).exists():
+            tmp_file_path = Path(tmp_dir) / "launcher_package.zip"
+            if result.returncode == 0 and tmp_file_path.exists():
                 print("Downloaded using GitHub CLI (authenticated)")
+                tmp_file_path = str(tmp_file_path)
             else:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
                 raise Exception("GitHub CLI download failed")
                 
         except Exception as gh_error:
             print(f"GitHub CLI download failed: {gh_error}")
             print("Falling back to direct download...")
+            
+            # Clean up temp dir if it exists
+            try:
+                if 'tmp_dir' in locals():
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+            except:
+                pass
             
             # Fallback to direct download
             with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
@@ -156,12 +167,45 @@ def download_and_install_update(update_info):
         print("Installing update...")
         launcher_dir.mkdir(parents=True, exist_ok=True)
         
-        # Extract new launcher
+        # Extract new launcher with proper handling of nested directories
         with zipfile.ZipFile(tmp_file_path, 'r') as zip_ref:
-            zip_ref.extractall(launcher_dir)
+            # Extract everything to a temporary location first
+            temp_extract_dir = Path(tempfile.mkdtemp())
+            zip_ref.extractall(temp_extract_dir)
+            
+            # Find the actual content to move
+            extracted_items = list(temp_extract_dir.iterdir())
+            
+            if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                # If there's only one directory, move its contents
+                source_dir = extracted_items[0]
+                for item in source_dir.iterdir():
+                    dest = launcher_dir / item.name
+                    if item.is_dir():
+                        shutil.copytree(item, dest, dirs_exist_ok=True)
+                    else:
+                        shutil.copy2(item, dest)
+            else:
+                # Move all items directly
+                for item in extracted_items:
+                    dest = launcher_dir / item.name
+                    if item.is_dir():
+                        shutil.copytree(item, dest, dirs_exist_ok=True)
+                    else:
+                        shutil.copy2(item, dest)
+            
+            # Clean up temp extract directory
+            shutil.rmtree(temp_extract_dir, ignore_errors=True)
         
         # Clean up
         os.unlink(tmp_file_path)
+        
+        # Clean up temp dir from gh CLI if it exists
+        try:
+            if 'tmp_dir' in locals():
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+        except:
+            pass
         
         # Only remove backup if installation was successful
         if backup_dir.exists():
@@ -256,8 +300,35 @@ def main():
                     print("Using local launcher package as fallback...")
                     try:
                         launcher_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Extract with proper directory handling
+                        temp_extract_dir = Path(tempfile.mkdtemp())
                         with zipfile.ZipFile(local_package, 'r') as zip_ref:
-                            zip_ref.extractall(launcher_dir)
+                            zip_ref.extractall(temp_extract_dir)
+                        
+                        # Find the actual content to move
+                        extracted_items = list(temp_extract_dir.iterdir())
+                        
+                        if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                            # If there's only one directory, move its contents
+                            source_dir = extracted_items[0]
+                            for item in source_dir.iterdir():
+                                dest = launcher_dir / item.name
+                                if item.is_dir():
+                                    shutil.copytree(item, dest, dirs_exist_ok=True)
+                                else:
+                                    shutil.copy2(item, dest)
+                        else:
+                            # Move all items directly
+                            for item in extracted_items:
+                                dest = launcher_dir / item.name
+                                if item.is_dir():
+                                    shutil.copytree(item, dest, dirs_exist_ok=True)
+                                else:
+                                    shutil.copy2(item, dest)
+                        
+                        # Clean up temp extract directory
+                        shutil.rmtree(temp_extract_dir, ignore_errors=True)
                         print("Local package extracted successfully!")
                     except Exception as e:
                         print(f"Failed to extract local package: {e}")
@@ -269,8 +340,35 @@ def main():
                 print("Using local launcher package as fallback...")
                 try:
                     launcher_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # Extract with proper directory handling
+                    temp_extract_dir = Path(tempfile.mkdtemp())
                     with zipfile.ZipFile(local_package, 'r') as zip_ref:
-                        zip_ref.extractall(launcher_dir)
+                        zip_ref.extractall(temp_extract_dir)
+                    
+                    # Find the actual content to move
+                    extracted_items = list(temp_extract_dir.iterdir())
+                    
+                    if len(extracted_items) == 1 and extracted_items[0].is_dir():
+                        # If there's only one directory, move its contents
+                        source_dir = extracted_items[0]
+                        for item in source_dir.iterdir():
+                            dest = launcher_dir / item.name
+                            if item.is_dir():
+                                shutil.copytree(item, dest, dirs_exist_ok=True)
+                            else:
+                                shutil.copy2(item, dest)
+                    else:
+                        # Move all items directly
+                        for item in extracted_items:
+                            dest = launcher_dir / item.name
+                            if item.is_dir():
+                                shutil.copytree(item, dest, dirs_exist_ok=True)
+                            else:
+                                shutil.copy2(item, dest)
+                    
+                    # Clean up temp extract directory
+                    shutil.rmtree(temp_extract_dir, ignore_errors=True)
                     print("Local package extracted successfully!")
                 except Exception as e:
                     print(f"Failed to extract local package: {e}")
