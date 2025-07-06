@@ -205,7 +205,7 @@ class ButtonFrame(ctk.CTkFrame):
         
         # Container for centered button
         self.container = ctk.CTkFrame(self, fg_color="transparent")
-        self.container.pack(expand=True, fill="both", padx=20, pady=5)
+        self.container.pack(expand=True, fill="both", padx=10, pady=2)
         
         # Create enhanced launch button
         self.launch_button = ctk.CTkButton(
@@ -221,7 +221,7 @@ class ButtonFrame(ctk.CTkFrame):
             border_width=2,
             border_color=("#ffffff", "#cccccc")
         )
-        self.launch_button.pack(expand=True, pady=5)
+        self.launch_button.pack(expand=True, pady=2)
         
         # Add subtle shadow effect (using a second frame)
         self.shadow_frame = ctk.CTkFrame(
@@ -318,7 +318,7 @@ class LogFrame(ctk.CTkFrame):
         
         # Header with title and controls
         self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(15, 5))
+        self.header_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 3))
         self.header_frame.columnconfigure(0, weight=1)
         
         # Title with icon
@@ -349,14 +349,14 @@ class LogFrame(ctk.CTkFrame):
         # Enhanced log text widget with custom styling
         self.log_text = ctk.CTkTextbox(
             self, 
-            height=280,
+            height=320,
             state="disabled",
             corner_radius=8,
             font=ctk.CTkFont(family="Consolas", size=11),
             scrollbar_button_color=("#cccccc", "#555555"),
             scrollbar_button_hover_color=("#aaaaaa", "#777777")
         )
-        self.log_text.grid(row=1, column=0, sticky="nsew", padx=15, pady=(0, 15))
+        self.log_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
         
         # Add initial welcome message
         self._add_initial_logs()
@@ -371,7 +371,7 @@ class LogFrame(ctk.CTkFrame):
             "[18:42:27] [18:42:27] Checking instance setup...",
             "[18:42:27] [18:42:27] Fetching latest release from: https://api.github.com/repos/facufierro/FFTClientMinecraft1211/releases/latest",
             "[18:42:27] [18:42:27] Found release: 1.1.3",
-            "[18:42:27] [18:42:27] Checking if files have changed...",
+            "[18:42:27] [18:42:27] Checking for changes...",
             "[18:42:27] [18:42:27] Downloading from: https://api.github.com/repos/facufierro/FFTClientMinecraft1211/zipball/1.1.3",
             "[18:42:33] [18:42:33] Download completed: C:\\Users\\fierr\\AppData\\Local\\Temp\\tmpcSh2yt_c\\check.zip",
             "[18:42:34] [18:42:34] All files match - no update needed",

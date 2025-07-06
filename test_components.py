@@ -63,7 +63,7 @@ class TestApp(ctk.CTk):
         
         # Button frame
         self.button_frame = ButtonFrame(self)
-        self.button_frame.grid(row=3, column=0, sticky="ew", padx=20, pady=5)
+        self.button_frame.grid(row=3, column=0, sticky="ew", padx=20, pady=2)
         self.button_frame.set_button_callbacks({'launch': self.on_launch_click})
         
         # Log frame
