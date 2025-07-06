@@ -130,6 +130,94 @@ class MinecraftService:
         """
         return self.neoforge_service.get_available_instances()
     
+    def create_neoforge_installation(self, installation_name: str, installation_dir: Optional[str] = None) -> bool:
+        """Create a new NeoForge installation with a custom name and directory.
+        
+        Args:
+            installation_name: Name for the new installation
+            installation_dir: Optional custom directory path
+            
+        Returns:
+            True if installation was successful, False otherwise.
+        """
+        try:
+            import json
+            import os
+            from pathlib import Path
+            
+            self.logger.info(f"Creating new NeoForge installation: {installation_name}")
+            
+            # Determine installation directory
+            if installation_dir:
+                instance_path = Path(installation_dir)
+                # Create the directory if it doesn't exist
+                instance_path.mkdir(parents=True, exist_ok=True)
+            else:
+                # Use default .minecraft directory
+                instance_path = Path(os.environ['APPDATA']) / ".minecraft"
+            
+            # Create necessary subdirectories
+            subdirs = ['mods', 'config', 'resourcepacks', 'kubejs', 'defaultconfigs', 'versions']
+            for subdir in subdirs:
+                (instance_path / subdir).mkdir(exist_ok=True)
+            
+            # Install NeoForge to the instance
+            if not self.neoforge_service.install_neoforge_to_instance_path(instance_path):
+                self.logger.error("Failed to install NeoForge")
+                return False
+            
+            # Create/update launcher profile
+            minecraft_dir = Path(os.environ['APPDATA']) / ".minecraft"
+            launcher_profiles_path = minecraft_dir / "launcher_profiles.json"
+            
+            # Load existing profiles or create new structure
+            if launcher_profiles_path.exists():
+                with open(launcher_profiles_path, 'r', encoding='utf-8') as f:
+                    profiles_data = json.load(f)
+            else:
+                profiles_data = {
+                    "profiles": {},
+                    "settings": {
+                        "enableHistorical": False,
+                        "enableSnapshots": False,
+                        "enableAdvanced": False
+                    }
+                }
+            
+            # Generate a unique profile ID
+            import uuid
+            profile_id = str(uuid.uuid4()).replace('-', '')
+            
+            # Create the new profile
+            new_profile = {
+                "name": installation_name,
+                "type": "custom",
+                "created": "2024-01-01T00:00:00.000Z",
+                "lastUsed": "2024-01-01T00:00:00.000Z",
+                "icon": "Furnace"
+            }
+            
+            # Add gameDir only if using custom directory
+            if installation_dir and Path(installation_dir).resolve() != minecraft_dir.resolve():
+                new_profile["gameDir"] = str(instance_path)
+            
+            # Add the profile to the profiles data
+            profiles_data["profiles"][profile_id] = new_profile
+            
+            # Save the updated profiles
+            with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
+                json.dump(profiles_data, f, indent=2)
+            
+            # Update config to select the new installation
+            self.config.selected_instance = installation_name
+            
+            self.logger.info(f"Successfully created NeoForge installation: {installation_name}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to create NeoForge installation: {e}")
+            return False
+
     def install_neoforge_to_instance(self, instance_name: str) -> bool:
         """Install NeoForge to the specified instance.
         

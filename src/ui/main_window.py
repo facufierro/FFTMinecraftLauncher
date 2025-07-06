@@ -127,11 +127,12 @@ class MainWindow:
         
         config = self.launcher_core.config
         
-        # Update status frame
-        if config.selected_instance:
-            self.status_frame.update_directory(f"Instance: {config.selected_instance}")
+        # Update status frame with instance info
+        instance_path = config.get_selected_instance_path()
+        if instance_path:
+            self.status_frame.update_directory("Instance: FFTClient")
         else:
-            self.status_frame.update_directory("No instance selected")
+            self.status_frame.update_directory("Instance: Not found")
         
         self.status_frame.update_version(config.current_version or "Unknown")
         
@@ -146,16 +147,11 @@ class MainWindow:
         else:
             self._add_log("Warning: Minecraft launcher not found")
         
-        # Update instance info
-        if config.selected_instance:
-            installation_info = self.launcher_core.get_minecraft_info()
-            neoforge_status = installation_info.get('neoforge_installed', False)
-            if neoforge_status:
-                self._add_log(f"NeoForge is installed in instance: {config.selected_instance}")
-            else:
-                self._add_log(f"NeoForge not installed in instance: {config.selected_instance}")
+        # Log instance info
+        if instance_path and instance_path.exists():
+            self._add_log(f"Using instance directory: {instance_path}")
         else:
-            self._add_log("Please select a Minecraft instance in settings")
+            self._add_log("Instance directory will be created automatically")
     
     def _add_log(self, message: str) -> None:
         """Add a log message to the UI.

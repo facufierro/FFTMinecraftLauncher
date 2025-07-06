@@ -43,12 +43,15 @@ class UpdateService:
             self.progress_callback(message)
     
     def check_for_updates(self) -> UpdateInfo:
-        """Check for available updates.
+        """Check for available updates and ensure instance is properly set up.
         
         Returns:
             UpdateInfo object containing update information.
         """
         self._update_progress("Checking for updates...")
+        
+        # First, ensure the instance is properly set up
+        self._ensure_instance_setup()
         
         update_info = self.github_service.create_update_info(
             self.config.current_version
@@ -60,6 +63,153 @@ class UpdateService:
             self._update_progress("Up to date")
         
         return update_info
+    
+    def _ensure_instance_setup(self) -> None:
+        """Ensure the instance is properly set up with NeoForge and launcher profile."""
+        self._update_progress("Checking instance setup...")
+        
+        instance_path = self.config.get_selected_instance_path()
+        if not instance_path:
+            raise UpdateError("Instance path could not be determined")
+        
+        # Create the instance directory if it doesn't exist
+        if not instance_path.exists():
+            self._update_progress("Creating instance directory...")
+            instance_path.mkdir(parents=True, exist_ok=True)
+            
+            # Create necessary subdirectories
+            subdirs = ['mods', 'config', 'resourcepacks', 'kubejs', 'defaultconfigs', 'versions']
+            for subdir in subdirs:
+                (instance_path / subdir).mkdir(exist_ok=True)
+        
+        # Create launcher profile BEFORE installing NeoForge
+        self._ensure_launcher_profile(instance_path)
+        
+        # Check if NeoForge is installed
+        if not self._is_neoforge_installed(instance_path):
+            self._update_progress("Installing NeoForge...")
+            self._install_neoforge(instance_path)
+    
+    def _is_neoforge_installed(self, instance_path: Path) -> bool:
+        """Check if NeoForge is installed in the instance."""
+        versions_dir = instance_path / "versions"
+        if not versions_dir.exists():
+            return False
+        
+        # Look for NeoForge version directories
+        for version_dir in versions_dir.iterdir():
+            if version_dir.is_dir() and "neoforge" in version_dir.name.lower():
+                version_json = version_dir / f"{version_dir.name}.json"
+                if version_json.exists():
+                    return True
+        
+        return False
+    
+    def _install_neoforge(self, instance_path: Path) -> None:
+        """Install NeoForge to the instance."""
+        try:
+            # Import here to avoid circular imports
+            from ..services.neoforge_service import NeoForgeService
+            
+            neoforge_service = NeoForgeService(self.config)
+            success = neoforge_service.install_neoforge_to_instance_path(instance_path)
+            
+            if not success:
+                raise UpdateError("Failed to install NeoForge")
+                
+        except Exception as e:
+            raise UpdateError(f"NeoForge installation failed: {e}")
+    
+    def _ensure_launcher_profile(self, instance_path: Path) -> None:
+        """Ensure a Minecraft launcher profile exists for this instance."""
+        try:
+            import json
+            import os
+            import uuid
+            from pathlib import Path
+            
+            # Create a minimal launcher_profiles.json in the instance directory itself
+            instance_profiles_path = instance_path / "launcher_profiles.json"
+            
+            if not instance_profiles_path.exists():
+                # Create minimal launcher profile structure for NeoForge installer
+                minimal_profile = {
+                    "profiles": {
+                        "default": {
+                            "name": "FFT Launcher Instance",
+                            "type": "latest-release",
+                            "created": "2024-01-01T00:00:00.000Z",
+                            "lastUsed": "2024-01-01T00:00:00.000Z"
+                        }
+                    },
+                    "settings": {
+                        "enableHistorical": False,
+                        "enableSnapshots": False,
+                        "enableAdvanced": False
+                    }
+                }
+                
+                with open(instance_profiles_path, 'w', encoding='utf-8') as f:
+                    json.dump(minimal_profile, f, indent=2)
+            
+            # Also ensure the main .minecraft launcher knows about this instance
+            minecraft_dir = Path(os.environ['APPDATA']) / ".minecraft"
+            launcher_profiles_path = minecraft_dir / "launcher_profiles.json"
+            
+            # Load existing profiles or create new structure
+            if launcher_profiles_path.exists():
+                with open(launcher_profiles_path, 'r', encoding='utf-8') as f:
+                    profiles_data = json.load(f)
+            else:
+                profiles_data = {
+                    "profiles": {},
+                    "settings": {
+                        "enableHistorical": False,
+                        "enableSnapshots": False,
+                        "enableAdvanced": False
+                    }
+                }
+            
+            # Check if profile already exists for this instance
+            profile_name = "FFTClient"
+            profile_exists = False
+            
+            for profile_id, profile_data in profiles_data.get("profiles", {}).items():
+                # Check by name OR by gameDir (to update existing instances)
+                if (profile_data.get("name") == profile_name or 
+                    profile_data.get("gameDir") == str(instance_path)):
+                    # Update the profile with correct name, gameDir and version
+                    profile_data["name"] = profile_name
+                    profile_data["gameDir"] = str(instance_path)
+                    profile_data["lastVersionId"] = "neoforge-21.1.186"
+                    profile_data["type"] = "custom"
+                    profile_data["icon"] = "Furnace"
+                    profile_exists = True
+                    break
+            
+            if not profile_exists:
+                # Create new profile
+                profile_id = str(uuid.uuid4()).replace('-', '')
+                
+                new_profile = {
+                    "name": profile_name,
+                    "type": "custom",
+                    "created": "2024-01-01T00:00:00.000Z",
+                    "lastUsed": "2024-01-01T00:00:00.000Z",
+                    "lastVersionId": "neoforge-21.1.186",
+                    "icon": "Furnace",
+                    "gameDir": str(instance_path)
+                }
+                
+                profiles_data["profiles"][profile_id] = new_profile
+            
+            # Save the updated profiles
+            with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
+                json.dump(profiles_data, f, indent=2)
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to create launcher profile: {e}")
+            # Don't raise error - this is not critical for functionality
     
     def perform_update(self, update_info: UpdateInfo, force: bool = False) -> bool:
         """Perform the update process.
@@ -117,7 +267,7 @@ class UpdateService:
             return self._sync_files(extracted_folder)
     
     def _sync_files(self, source_path: Path) -> bool:
-        """Sync files from source to the selected Minecraft instance.
+        """Sync files from source to the launcher's instance directory.
         
         Args:
             source_path: Path to the extracted source files
@@ -125,16 +275,13 @@ class UpdateService:
         Returns:
             True if successful, False otherwise.
         """
-        if not self.config.selected_instance:
-            raise UpdateError("No Minecraft instance selected")
-        
-        # Find the selected instance path
+        # Get the launcher's instance path (will be created if it doesn't exist)
         instance_path = self.config.get_selected_instance_path()
         if not instance_path:
-            raise UpdateError(f"Instance '{self.config.selected_instance}' not found")
+            raise UpdateError("Could not determine instance path")
         
         try:
-            # Ensure instance directory exists
+            # Ensure instance directory exists (it should be created automatically)
             FileUtils.ensure_directory_exists(instance_path)
             
             # Only sync the folders that are configured to be synced

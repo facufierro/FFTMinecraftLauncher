@@ -93,6 +93,60 @@ class NeoForgeService:
         
         return sorted(instances)
     
+    def install_neoforge_to_instance_path(self, instance_path: Path) -> bool:
+        """Install NeoForge to a specific instance path.
+        
+        Args:
+            instance_path: Path to the instance directory
+            
+        Returns:
+            True if installation was successful, False otherwise.
+        """
+        try:
+            self.logger.info(f"Installing NeoForge {self.neoforge_version} to path: {instance_path}")
+            
+            # Download NeoForge installer
+            installer_path = self._download_neoforge_installer()
+            if not installer_path:
+                return False
+            
+            # Find Java executable
+            java_exe = self._find_java_executable()
+            if not java_exe:
+                self.logger.error("Java executable not found")
+                return False
+            
+            # Run NeoForge installer on the instance
+            self.logger.info("Running NeoForge installer...")
+            install_cmd = [
+                java_exe,
+                "-jar", str(installer_path),
+                "--installClient", str(instance_path)
+            ]
+            
+            result = subprocess.run(install_cmd, capture_output=True, text=True, cwd=str(instance_path))
+            
+            if result.stdout:
+                self.logger.info(f"NeoForge installer stdout: {result.stdout}")
+            if result.stderr:
+                self.logger.info(f"NeoForge installer stderr: {result.stderr}")
+            
+            if result.returncode != 0:
+                self.logger.error(f"NeoForge installation failed with return code {result.returncode}")
+                return False
+            
+            # Verify installation
+            if self._verify_neoforge_installation(instance_path):
+                self.logger.info("NeoForge installation completed successfully")
+                return True
+            else:
+                self.logger.error("NeoForge installation verification failed")
+                return False
+            
+        except Exception as e:
+            self.logger.error(f"Failed to install NeoForge to path: {e}")
+            return False
+
     def install_neoforge_to_instance(self, instance_name: str) -> bool:
         """Install NeoForge to the specified Minecraft launcher instance.
         
