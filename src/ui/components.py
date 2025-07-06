@@ -556,3 +556,148 @@ class ThemeToggleButton(ctk.CTkFrame):
     def update_icon(self) -> None:
         """Update position based on current appearance mode."""
         self._update_position()
+
+
+class SelfUpdateFrame(ctk.CTkFrame):
+    """Frame for handling launcher self-updates."""
+    
+    def __init__(self, parent, **kwargs):
+        """Initialize the self-update frame.
+        
+        Args:
+            parent: Parent widget
+            **kwargs: Additional keyword arguments for CTkFrame
+        """
+        super().__init__(parent, corner_radius=12, **kwargs)
+        
+        self.columnconfigure(0, weight=1)
+        self.update_available = False
+        self.update_info = None
+        
+        # Container with padding
+        self.container = ctk.CTkFrame(self, fg_color="transparent")
+        self.container.pack(fill="both", expand=True, padx=15, pady=10)
+        self.container.columnconfigure(1, weight=1)
+        
+        # Update icon
+        self.update_icon = ctk.CTkLabel(
+            self.container,
+            text="🔄",
+            font=ctk.CTkFont(size=16)
+        )
+        self.update_icon.grid(row=0, column=0, padx=(0, 10))
+        
+        # Update message
+        self.update_label = ctk.CTkLabel(
+            self.container,
+            text="Checking for launcher updates...",
+            font=ctk.CTkFont(size=13)
+        )
+        self.update_label.grid(row=0, column=1, sticky="w")
+        
+        # Update button (initially hidden)
+        self.update_button = ctk.CTkButton(
+            self.container,
+            text="Update Launcher",
+            width=120,
+            height=28,
+            font=ctk.CTkFont(size=11),
+            fg_color="#007acc",
+            hover_color="#005a9e",
+            command=self.on_update_click
+        )
+        # Don't grid initially - will be shown when update is available
+        
+        self.update_callback: Optional[Callable] = None
+        
+        # Hide frame initially - don't grid it yet
+        # It will be shown when needed
+    
+    def set_update_callback(self, callback: Callable) -> None:
+        """Set callback for update button clicks.
+        
+        Args:
+            callback: Function to call when update is requested
+        """
+        self.update_callback = callback
+    
+    def show_checking(self) -> None:
+        """Show checking for updates state."""
+        self.update_icon.configure(text="🔄")
+        self.update_label.configure(text="Checking for launcher updates...")
+        self.update_button.grid_remove()
+        self.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+    
+    def show_up_to_date(self) -> None:
+        """Show up to date state briefly, then hide."""
+        self.update_icon.configure(text="✅")
+        self.update_label.configure(text="Launcher is up to date")
+        self.update_button.grid_remove()
+        self.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+        
+        # Hide after 3 seconds
+        self.after(3000, self.grid_remove)
+    
+    def show_update_available(self, version: str, update_info: dict) -> None:
+        """Show update available state.
+        
+        Args:
+            version: New version string
+            update_info: Update information dictionary
+        """
+        self.update_available = True
+        self.update_info = update_info
+        
+        self.update_icon.configure(text="⬆️")
+        self.update_label.configure(text=f"Launcher update available: v{version}")
+        self.update_button.grid(row=0, column=2, padx=(10, 0))
+        self.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+    
+    def show_error(self, error_message: str = "Could not check for updates") -> None:
+        """Show error state.
+        
+        Args:
+            error_message: Error message to display
+        """
+        self.update_icon.configure(text="⚠️")
+        self.update_label.configure(text=error_message)
+        self.update_button.grid_remove()
+        self.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+        
+        # Hide after 5 seconds
+        self.after(5000, self.grid_remove)
+    
+    def show_downloading(self, progress: float = 0.0) -> None:
+        """Show downloading state.
+        
+        Args:
+            progress: Download progress (0.0 to 1.0)
+        """
+        self.update_icon.configure(text="⬇️")
+        progress_percent = int(progress * 100)
+        self.update_label.configure(text=f"Downloading update... {progress_percent}%")
+        self.update_button.configure(state="disabled", text="Downloading...")
+        self.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+    
+    def show_installing(self) -> None:
+        """Show installing state."""
+        self.update_icon.configure(text="🔧")
+        self.update_label.configure(text="Installing update... Please wait.")
+        self.update_button.configure(state="disabled", text="Installing...")
+        self.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+    
+    def show_restart_required(self) -> None:
+        """Show restart required state."""
+        self.update_icon.configure(text="🔄")
+        self.update_label.configure(text="Update downloaded. Launcher will restart shortly.")
+        self.update_button.configure(state="disabled", text="Restarting...")
+        self.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 10))
+    
+    def on_update_click(self) -> None:
+        """Handle update button click."""
+        if self.update_callback and self.update_info:
+            self.update_callback(self.update_info)
+    
+    def hide(self) -> None:
+        """Hide the update frame."""
+        self.grid_remove()

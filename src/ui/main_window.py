@@ -6,6 +6,7 @@ from typing import Optional, Callable
 from ..core.launcher import LauncherCore
 from ..core.events import EventType
 from ..models.update_info import UpdateInfo
+from ..services.self_update_service import SelfUpdateService
 from ..utils.ui_utils import UIUtils
 from .components import StatusFrame, ProgressFrame, ButtonFrame, LogFrame, ThemeToggleButton
 from .settings_window import SettingsWindow
@@ -22,6 +23,13 @@ class MainWindow:
         """
         self.launcher_core = launcher_core
         self.settings_window: Optional[SettingsWindow] = None
+        
+        # Self-update service (console only - no UI)
+        if launcher_core.config:
+            self.self_update_service = SelfUpdateService(launcher_core.config)
+            # No progress callback - only console logging
+        else:
+            self.self_update_service = None
         
         # Setup appearance
         ctk.set_appearance_mode("System")
@@ -55,7 +63,7 @@ class MainWindow:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(4, weight=1)
+        main_frame.rowconfigure(4, weight=1)  # Log frame is back to row 4
         
         # Title
         title_label = ctk.CTkLabel(
@@ -168,6 +176,29 @@ class MainWindow:
         self._add_log("Checking for updates...")
         self.button_frame.set_button_states({'launch': 'disabled'})
         self.launcher_core.check_for_updates()
+        
+        # Also check for launcher self-updates (console only)
+        if self.self_update_service:
+            self.root.after(2000, self._check_for_launcher_updates_silent)
+    
+    def _check_for_launcher_updates_silent(self) -> None:
+        """Check for launcher self-updates silently (console logging only)."""
+        if not self.self_update_service:
+            return
+        
+        def check_async():
+            if self.self_update_service:  # Type guard for mypy
+                update_info = self.self_update_service.check_for_launcher_update()
+                # Just log the result - no UI updates
+                if update_info:
+                    version = update_info.get('version', 'Unknown')
+                    self.root.after(0, lambda: self._add_log(f"Launcher update available: v{version} (console only)"))
+                else:
+                    self.root.after(0, lambda: self._add_log("Launcher is up to date"))
+        
+        # Run in a separate thread to avoid blocking UI
+        import threading
+        threading.Thread(target=check_async, daemon=True).start()
     
     # Main action handler
     def _handle_launch_action(self) -> None:

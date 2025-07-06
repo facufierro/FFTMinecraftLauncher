@@ -16,3 +16,4 @@ DEFAULT_SYNC_FOLDERS = [
 # Application Information
 APP_NAME = "FFT Minecraft Launcher"
 APP_VERSION = "1.0.0"
+LAUNCHER_VERSION = "1.1.4"  # Current launcher version for self-updates
