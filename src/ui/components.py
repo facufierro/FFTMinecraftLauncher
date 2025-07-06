@@ -421,46 +421,51 @@ class LogFrame(ctk.CTkFrame):
         self.log_text.configure(state='disabled')
 
 
-class ThemeToggleButton(ctk.CTkFrame):
-    """Enhanced iOS-style theme toggle with smooth animations."""
+class ThemeToggleButton:
+    """Professional theme toggle using CustomTkinter's built-in switch."""
     
     def __init__(self, parent, **kwargs):
         """Initialize the theme toggle button.
         
         Args:
             parent: Parent widget
-            **kwargs: Additional keyword arguments for CTkFrame
+            **kwargs: Additional keyword arguments
         """
-        super().__init__(parent, corner_radius=18, height=36, width=68, **kwargs)
-        
+        self.parent = parent
         self.callback: Optional[Callable[[], None]] = None
-        self._animation_running = False
         
-        # Create the toggle switch background with gradient effect
-        self.switch_bg = ctk.CTkFrame(
-            self,
-            corner_radius=16,
-            height=32,
-            width=64
+        # Use CTkSwitch for a clean, professional toggle
+        self.switch = ctk.CTkSwitch(
+            parent,
+            text="",
+            width=50,
+            height=24,
+            switch_width=50,
+            switch_height=24,
+            corner_radius=12,
+            border_width=0,
+            fg_color=("#cccccc", "#4a4a4a"),  # Track color when OFF
+            progress_color=("#1e3a5f", "#ffd700"),  # Track color when ON (dark mode blue, light mode gold)
+            button_color=("#ffffff", "#ffffff"),  # Button color
+            button_hover_color=("#e0e0e0", "#e0e0e0"),  # Button hover color
+            command=self._on_toggle
         )
-        self.switch_bg.pack(expand=True, fill="both", padx=2, pady=2)
         
-        # Create the sliding circle with enhanced styling
-        self.slider = ctk.CTkFrame(
-            self.switch_bg,
-            width=28,
-            height=28,
-            corner_radius=14
-        )
-        
-        # Position elements based on current theme
-        self._update_position()
-        
-        # Bind click events to all components
-        for widget in [self, self.switch_bg, self.slider]:
-            widget.bind("<Button-1>", self._on_click)
-            widget.bind("<Enter>", self._on_enter)
-            widget.bind("<Leave>", self._on_leave)
+        # Set initial state based on current theme
+        current_mode = ctk.get_appearance_mode()
+        self.switch.select() if current_mode == "Dark" else self.switch.deselect()
+    
+    def place(self, **kwargs):
+        """Place the toggle button."""
+        self.switch.place(**kwargs)
+    
+    def grid(self, **kwargs):
+        """Grid the toggle button."""
+        self.switch.grid(**kwargs)
+    
+    def pack(self, **kwargs):
+        """Pack the toggle button."""
+        self.switch.pack(**kwargs)
     
     def set_callback(self, callback: Callable[[], None]) -> None:
         """Set the callback for theme toggle.
@@ -470,92 +475,51 @@ class ThemeToggleButton(ctk.CTkFrame):
         """
         self.callback = callback
     
-    def _on_enter(self, event=None) -> None:
-        """Handle mouse enter for enhanced hover effect."""
-        if not self._animation_running:
-            current = ctk.get_appearance_mode()
-            if current == "Dark":
-                self.switch_bg.configure(fg_color="#3a3a3a")
-                self.slider.configure(fg_color="#f0f0f0")
-            else:
-                self.switch_bg.configure(fg_color="#d0d0d0")
-                self.slider.configure(fg_color="#ffffff")
-    
-    def _on_leave(self, event=None) -> None:
-        """Handle mouse leave for hover effect."""
-        if not self._animation_running:
-            self._update_colors()
-    
-    def _on_click(self, event=None) -> None:
-        """Handle button click with animation."""
-        if not self._animation_running:
-            self._toggle_appearance()
-            if self.callback:
-                self.callback()
-    
-    def _toggle_appearance(self) -> None:
-        """Toggle between light and dark appearance with smooth animation."""
-        current = ctk.get_appearance_mode()
-        
-        if current == "Dark":
-            ctk.set_appearance_mode("Light")
-        else:
+    def _on_toggle(self) -> None:
+        """Handle toggle switch state change."""
+        # Get switch state and toggle appearance mode
+        if self.switch.get():
+            # Switch is ON - set to Dark mode
             ctk.set_appearance_mode("Dark")
-        
-        # Animate the position change
-        self._animate_position()
-    
-    def _animate_position(self) -> None:
-        """Animate slider position change."""
-        self._animation_running = True
-        current = ctk.get_appearance_mode()
-        
-        # Determine target position
-        if current == "Dark":
-            target_x = 34  # Right position
         else:
-            target_x = 2   # Left position  
+            # Switch is OFF - set to Light mode
+            ctk.set_appearance_mode("Light")
         
-        # Simple animation (you could enhance this with more frames)
-        self.slider.place(x=target_x, y=2)
-        
-        # Update colors after a short delay
-        self.after(100, self._finish_animation)
-    
-    def _finish_animation(self) -> None:
-        """Finish animation and update colors."""
+        # Update colors after theme change
         self._update_colors()
-        self._animation_running = False
-    
-    def _update_position(self) -> None:
-        """Update slider position based on current theme."""
-        current = ctk.get_appearance_mode()
         
-        if current == "Dark":
-            # Dark mode - slider on the right
-            self.slider.place(x=34, y=2)
-        else:
-            # Light mode - slider on the left
-            self.slider.place(x=2, y=2)
-        
-        self._update_colors()
+        # Call user callback if set
+        if self.callback:
+            self.callback()
     
     def _update_colors(self) -> None:
-        """Update colors based on current theme with enhanced styling."""
-        current = ctk.get_appearance_mode()
+        """Update switch colors based on current theme."""
+        current_mode = ctk.get_appearance_mode()
         
-        if current == "Dark":
-            # Dark mode colors with blue accent
-            self.switch_bg.configure(fg_color="#1e3a5f")
-            self.slider.configure(fg_color="#ffffff")
+        if current_mode == "Dark":
+            # Dark mode - blue progress color
+            self.switch.configure(
+                progress_color="#1e3a5f",
+                fg_color=("#cccccc", "#4a4a4a")
+            )
         else:
-            # Light mode colors with orange accent  
-            self.switch_bg.configure(fg_color="#ffd700")
-            self.slider.configure(fg_color="#ffffff")
+            # Light mode - gold progress color
+            self.switch.configure(
+                progress_color="#ffd700",
+                fg_color=("#cccccc", "#4a4a4a")
+            )
     
     def update_icon(self) -> None:
-        """Update position based on current appearance mode."""
-        self._update_position()
+        """Update switch state based on current appearance mode."""
+        current_mode = ctk.get_appearance_mode()
+        
+        # Update switch state without triggering callback
+        if current_mode == "Dark" and not self.switch.get():
+            self.switch.select()
+        elif current_mode == "Light" and self.switch.get():
+            self.switch.deselect()
+        
+        self._update_colors()
 
 
 class SelfUpdateFrame(ctk.CTkFrame):
