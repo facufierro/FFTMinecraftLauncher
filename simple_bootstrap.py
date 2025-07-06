@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Simple Bootstrap for FFT Minecraft Launcher
+
 Downloads and launches the main launcher application.
 """
 
@@ -115,7 +116,7 @@ def launch_main_app():
     
     # Look for main script
     main_script = None
-    for script_name in ["app.py", "main.py"]:
+    for script_name in ["app.py", "main.py", "launcher_main.exe"]:
         script_path = launcher_dir / script_name
         if script_path.exists():
             main_script = script_path
@@ -128,8 +129,12 @@ def launch_main_app():
     
     try:
         print("Starting launcher...")
-        # Python script
-        subprocess.run([sys.executable, str(main_script.name)], cwd=launcher_dir)
+        if main_script.suffix == '.py':
+            # Python script
+            subprocess.run([sys.executable, str(main_script.name)], cwd=launcher_dir)
+        else:
+            # Executable
+            subprocess.run([str(main_script.name)], cwd=launcher_dir)
         return True
     except Exception as e:
         print(f"Failed to start launcher: {e}")
