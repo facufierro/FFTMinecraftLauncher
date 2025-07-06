@@ -1,6 +1,6 @@
 """UI utility functions for the FFT Minecraft Launcher."""
 
-from typing import Tuple
+from typing import Tuple, Optional
 import customtkinter as ctk
 
 
@@ -21,24 +21,38 @@ class UIUtils:
     
     @staticmethod
     def get_theme_colors() -> dict:
-        """Get theme colors based on current appearance mode."""
+        """Get enhanced theme colors based on current appearance mode."""
         appearance_mode = ctk.get_appearance_mode()
         
         if appearance_mode == "Dark":
             return {
-                'bg_color': '#212121',
+                'bg_color': '#1a1a1a',
                 'fg_color': '#2b2b2b',
+                'card_color': '#333333',
                 'text_color': '#ffffff',
-                'button_color': '#1f538d',
-                'button_hover_color': '#14375e'
+                'text_secondary': '#cccccc',
+                'button_color': '#28a745',
+                'button_hover_color': '#1e7e34',
+                'accent_color': '#3b8ed0',
+                'success_color': '#28a745',
+                'warning_color': '#ffc107',
+                'error_color': '#dc3545',
+                'info_color': '#17a2b8'
             }
         else:
             return {
-                'bg_color': '#f0f0f0',
+                'bg_color': '#f8f9fa',
                 'fg_color': '#ffffff',
+                'card_color': '#f8f9fa',
                 'text_color': '#000000',
-                'button_color': '#3b8ed0',
-                'button_hover_color': '#36719f'
+                'text_secondary': '#666666',
+                'button_color': '#28a745',
+                'button_hover_color': '#1e7e34',
+                'accent_color': '#3b8ed0',
+                'success_color': '#28a745',
+                'warning_color': '#ffc107',
+                'error_color': '#dc3545',
+                'info_color': '#17a2b8'
             }
     
     @staticmethod
@@ -83,3 +97,95 @@ class UIUtils:
         """Show a yes/no dialog and return the result."""
         from tkinter import messagebox
         return messagebox.askyesno(title, message)
+    
+    @staticmethod
+    def create_modern_card(parent, title: str, value: str, icon: str = "", width: Optional[int] = None) -> ctk.CTkFrame:
+        """Create a modern card with title, value, and optional icon.
+        
+        Args:
+            parent: Parent widget
+            title: Card title
+            value: Card value
+            icon: Optional unicode icon
+            width: Optional card width
+            
+        Returns:
+            The created card frame
+        """
+        card = ctk.CTkFrame(parent, corner_radius=8, height=80)
+        if width:
+            card.configure(width=width)
+        card.grid_propagate(False)
+        
+        # Icon (if provided)
+        if icon:
+            icon_label = ctk.CTkLabel(card, text=icon, font=ctk.CTkFont(size=20))
+            icon_label.pack(pady=(8, 2))
+        
+        # Title
+        title_label = ctk.CTkLabel(
+            card, 
+            text=title, 
+            font=ctk.CTkFont(size=11, weight="normal"),
+            text_color=("gray60", "gray40")
+        )
+        title_label.pack()
+        
+        # Value
+        value_label = ctk.CTkLabel(
+            card, 
+            text=value, 
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        value_label.pack(pady=(2, 8))
+        
+        return card
+    
+    @staticmethod
+    def animate_widget_opacity(widget, target_alpha: float, duration: int = 300, steps: int = 20):
+        """Animate widget opacity (simplified version for customtkinter).
+        
+        Args:
+            widget: Widget to animate
+            target_alpha: Target opacity (0.0 to 1.0)
+            duration: Animation duration in milliseconds
+            steps: Number of animation steps
+        """
+        # Note: CustomTkinter doesn't support true opacity animations
+        # This is a placeholder for potential future enhancements
+        pass
+    
+    @staticmethod
+    def create_tooltip(widget, text: str):
+        """Create a tooltip for a widget.
+        
+        Args:
+            widget: Widget to add tooltip to
+            text: Tooltip text
+        """
+        def on_enter(event):
+            tooltip = ctk.CTkToplevel(widget)
+            tooltip.wm_overrideredirect(True)
+            tooltip.configure(fg_color=("black", "white"))
+            
+            label = ctk.CTkLabel(
+                tooltip, 
+                text=text, 
+                font=ctk.CTkFont(size=10),
+                text_color=("white", "black")
+            )
+            label.pack(padx=5, pady=2)
+            
+            x = widget.winfo_rootx() + 25
+            y = widget.winfo_rooty() + 25
+            tooltip.geometry(f"+{x}+{y}")
+            
+            widget.tooltip = tooltip
+        
+        def on_leave(event):
+            if hasattr(widget, 'tooltip'):
+                widget.tooltip.destroy()
+                delattr(widget, 'tooltip')
+        
+        widget.bind("<Enter>", on_enter)
+        widget.bind("<Leave>", on_leave)
