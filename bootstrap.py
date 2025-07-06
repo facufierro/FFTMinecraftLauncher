@@ -32,12 +32,49 @@ def check_for_updates():
     """Check for launcher updates on GitHub."""
     try:
         print("Checking for updates...")
+        
+        # Try using GitHub CLI first (authenticated)
+        try:
+            import subprocess
+            result = subprocess.run([
+                "gh", "release", "list", "--repo", "facufierro/FFTMinecraftLauncher", 
+                "--limit", "1", "--json", "tagName,assets"
+            ], capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0:
+                import json
+                releases = json.loads(result.stdout)
+                if releases:
+                    release = releases[0]
+                    latest_version = release.get('tagName', '').lstrip('v')
+                    current_version = get_current_version()
+                    
+                    print(f"Current: {current_version}, Latest: {latest_version}")
+                    
+                    if latest_version != current_version:
+                        # Find launcher_package.zip download URL
+                        for asset in release.get('assets', []):
+                            if asset.get('name') == 'launcher_package.zip':
+                                return {
+                                    'version': latest_version,
+                                    'download_url': asset.get('url')
+                                }
+                    return None
+        except Exception as e:
+            print(f"GitHub CLI failed: {e}")
+            # Fall back to direct API call
+            pass
+        
+        # Fallback to direct API call (unauthenticated)
         url = "https://api.github.com/repos/facufierro/FFTMinecraftLauncher/releases/latest"
         response = requests.get(url, timeout=10)
         
         # Handle case where no releases exist yet (404)
         if response.status_code == 404:
             print("No releases found on GitHub (first time setup)")
+            return None
+        elif response.status_code == 403:
+            print("GitHub API rate limit reached")
             return None
             
         response.raise_for_status()
@@ -68,16 +105,40 @@ def download_and_install_update(update_info):
         print("Downloading update...")
         download_url = update_info['download_url']
         
-        # Download to temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
-            response = requests.get(download_url, stream=True)
-            response.raise_for_status()
+        # Try using GitHub CLI for authenticated download first
+        try:
+            import subprocess
+            # Create temp file path
+            import tempfile
+            tmp_file_path = tempfile.mktemp(suffix='.zip')
             
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    tmp_file.write(chunk)
+            # Try to download using gh CLI
+            result = subprocess.run([
+                "gh", "release", "download", f"v{update_info['version']}", 
+                "--repo", "facufierro/FFTMinecraftLauncher",
+                "--pattern", "launcher_package.zip",
+                "--output", tmp_file_path
+            ], capture_output=True, text=True, timeout=30)
             
-            tmp_file_path = tmp_file.name
+            if result.returncode == 0 and Path(tmp_file_path).exists():
+                print("Downloaded using GitHub CLI (authenticated)")
+            else:
+                raise Exception("GitHub CLI download failed")
+                
+        except Exception as gh_error:
+            print(f"GitHub CLI download failed: {gh_error}")
+            print("Falling back to direct download...")
+            
+            # Fallback to direct download
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+                response = requests.get(download_url, stream=True, timeout=30)
+                response.raise_for_status()
+                
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        tmp_file.write(chunk)
+                
+                tmp_file_path = tmp_file.name
         
         # Clean up any existing launcher directory completely
         launcher_dir = Path("launcher")
