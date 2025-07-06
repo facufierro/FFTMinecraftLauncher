@@ -97,13 +97,16 @@ class MainWindow:
         })
         
         # Launch after update checkbox
-        self.launch_after_update_var = ctk.BooleanVar(value=True)
+        self.launch_after_update_var = ctk.BooleanVar(value=False)
         self.launch_after_update_cb = ctk.CTkCheckBox(
             main_frame,
             text="Launch After Update",
-            variable=self.launch_after_update_var
+            variable=self.launch_after_update_var,
+            font=ctk.CTkFont(size=12),
+            checkbox_width=16,
+            checkbox_height=16
         )
-        self.launch_after_update_cb.grid(row=3, column=0, sticky="e", padx=(0, 20), pady=(40, 0))
+        self.launch_after_update_cb.grid(row=3, column=0, sticky="e", padx=(0, 30), pady=(35, 0))
         
         # Log frame
         self.log_frame = LogFrame(main_frame)
