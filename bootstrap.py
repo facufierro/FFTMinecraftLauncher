@@ -123,14 +123,30 @@ def launch_main_app():
     
     if not main_script:
         print("Error: Could not find main launcher application!")
+        print(f"Looking in: {launcher_dir.absolute()}")
+        print("Files found:")
+        if launcher_dir.exists():
+            for file in launcher_dir.iterdir():
+                print(f"  - {file.name}")
         input("Press Enter to exit...")
         return False
     
     try:
-        print("Starting launcher...")
-        # Python script
-        subprocess.run([sys.executable, str(main_script.name)], cwd=launcher_dir)
+        print(f"Starting launcher: {main_script.name}")
+        
+        # Set up environment
+        import os
+        env = os.environ.copy()
+        env['PYTHONPATH'] = str(launcher_dir.absolute())
+        
+        # Launch Python script and wait for it to complete
+        result = subprocess.run([sys.executable, str(main_script.name)], 
+                              cwd=launcher_dir, 
+                              env=env)
+        
+        print(f"Launcher exited with code: {result.returncode}")
         return True
+        
     except Exception as e:
         print(f"Failed to start launcher: {e}")
         input("Press Enter to exit...")
