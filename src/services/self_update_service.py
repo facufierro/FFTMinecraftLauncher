@@ -5,6 +5,7 @@ import sys
 import shutil
 import tempfile
 import subprocess
+import zipfile
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any, Union
 import requests
@@ -121,17 +122,23 @@ class SelfUpdateService:
             release_data: GitHub release data
             
         Returns:
-            Download URL for the executable or None if not found.
+            Download URL for the zip file or executable.
         """
         assets = release_data.get('assets', [])
         
-        # Look for Windows executable
+        # First, look for zip files (preferred)
+        for asset in assets:
+            name = asset.get('name', '').lower()
+            if name.endswith('.zip') and 'fft' in name and 'launcher' in name:
+                return asset.get('browser_download_url')
+        
+        # Fallback: look for Windows executable
         for asset in assets:
             name = asset.get('name', '').lower()
             if name.endswith('.exe') and 'fft' in name and 'launcher' in name:
                 return asset.get('browser_download_url')
         
-        # Fallback: look for any .exe file
+        # Last resort: look for any .exe file
         for asset in assets:
             name = asset.get('name', '').lower()
             if name.endswith('.exe'):
@@ -183,11 +190,27 @@ class SelfUpdateService:
             # Create temporary directory for download
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
-                new_executable = temp_path / "FFTLauncher_new.exe"
                 
-                # Download the new executable
-                if not self._download_file(download_url, new_executable):
+                # Determine if we're downloading a zip or exe
+                is_zip = download_url.lower().endswith('.zip')
+                download_file = temp_path / ("update.zip" if is_zip else "FFTLauncher_new.exe")
+                
+                # Download the file
+                if not self._download_file(download_url, download_file):
                     return False
+                
+                # Handle zip extraction
+                if is_zip:
+                    if not self._extract_update_files(download_file, temp_path):
+                        return False
+                    
+                    # Find the main launcher executable in extracted files
+                    new_executable = self._find_launcher_executable(temp_path)
+                    if not new_executable:
+                        self._update_progress("Could not find launcher executable in zip", None, "error")
+                        return False
+                else:
+                    new_executable = download_file
                 
                 # Verify the download
                 if not new_executable.exists() or new_executable.stat().st_size == 0:
@@ -196,7 +219,15 @@ class SelfUpdateService:
                 
                 # Move the new executable to final location
                 final_new_exe = Path.cwd() / "FFTLauncher_new.exe"
-                shutil.move(str(new_executable), str(final_new_exe))
+                shutil.copy2(str(new_executable), str(final_new_exe))
+                
+                # If we extracted from zip, also copy the updater if present
+                if is_zip:
+                    updater_file = self._find_updater_executable(temp_path)
+                    if updater_file and updater_file.exists():
+                        final_updater = Path.cwd() / "FFTLauncherUpdater_new.exe"
+                        shutil.copy2(str(updater_file), str(final_updater))
+                        self.logger.info("Updated updater executable found and staged")
                 
                 # Launch updater and exit
                 return self._launch_updater_and_exit(final_new_exe, update_info['version'])
@@ -246,6 +277,64 @@ class SelfUpdateService:
             self.logger.error(f"Download failed: {e}")
             self._update_progress("Download failed", None, "error")
             return False
+    
+    def _extract_update_files(self, zip_path: Path, extract_to: Path) -> bool:
+        """Extract update files from zip.
+        
+        Args:
+            zip_path: Path to the zip file
+            extract_to: Directory to extract to
+            
+        Returns:
+            True if successful, False otherwise.
+        """
+        try:
+            self._update_progress("Extracting update files...", None, "loading")
+            
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(extract_to)
+            
+            self._update_progress("Extraction completed", None, "success")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to extract zip: {e}")
+            self._update_progress("Failed to extract update files", None, "error")
+            return False
+    
+    def _find_launcher_executable(self, directory: Path) -> Optional[Path]:
+        """Find the main launcher executable in a directory.
+        
+        Args:
+            directory: Directory to search in
+            
+        Returns:
+            Path to launcher executable or None if not found.
+        """
+        # Look for the main launcher executable
+        for exe_file in directory.rglob("*.exe"):
+            name = exe_file.name.lower()
+            if 'fftminecraftlauncher' in name or (name.startswith('fft') and 'launcher' in name and 'updater' not in name):
+                return exe_file
+        
+        return None
+    
+    def _find_updater_executable(self, directory: Path) -> Optional[Path]:
+        """Find the updater executable in a directory.
+        
+        Args:
+            directory: Directory to search in
+            
+        Returns:
+            Path to updater executable or None if not found.
+        """
+        # Look for the updater executable
+        for exe_file in directory.rglob("*.exe"):
+            name = exe_file.name.lower()
+            if 'updater' in name and ('fft' in name or 'launcher' in name):
+                return exe_file
+        
+        return None
     
     def get_launcher_version_info(self) -> Dict[str, Union[str, bool]]:
         """Get current launcher version information.
