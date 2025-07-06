@@ -57,6 +57,16 @@ class UpdateService:
             self.config.current_version
         )
         
+        # If version is the same, also check if files are different
+        if not update_info.updates_available:
+            self._update_progress("Checking if files have changed...")
+            files_need_update = self._check_files_need_update(update_info)
+            if files_need_update:
+                # Override the update availability if files are different
+                update_info.updates_available = True
+                self._update_progress("Files have changed - update available")
+                return update_info
+        
         if update_info.updates_available:
             self._update_progress(f"New version available: {update_info.latest_version}")
         else:
@@ -64,6 +74,137 @@ class UpdateService:
         
         return update_info
     
+    def _check_files_need_update(self, update_info: UpdateInfo) -> bool:
+        """Check if local files need updating by comparing with remote release.
+        
+        Args:
+            update_info: Information about the latest release
+            
+        Returns:
+            True if files need updating, False otherwise.
+        """
+        try:
+            import tempfile
+            import zipfile
+            import hashlib
+            from pathlib import Path
+            
+            download_url = update_info.get_download_url()
+            if not download_url:
+                return False
+            
+            instance_path = self.config.get_selected_instance_path()
+            if not instance_path or not instance_path.exists():
+                return True  # If instance doesn't exist, we need to update
+            
+            # Create temporary directory to download and check files
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                zip_path = temp_path / "check.zip"
+                extract_path = temp_path / "extract"
+                
+                # Download the release
+                if not self.github_service.download_file(download_url, str(zip_path)):
+                    self.logger.warning("Could not download release for comparison")
+                    return False
+                
+                # Extract the ZIP file
+                with zipfile.ZipFile(zip_path, 'r') as zip_file:
+                    zip_file.extractall(extract_path)
+                
+                # Compare files in folders_to_sync
+                for folder in self.config.folders_to_sync:
+                    remote_folder = extract_path / folder
+                    local_folder = instance_path / folder
+                    
+                    if not remote_folder.exists():
+                        continue  # Skip if folder doesn't exist in release
+                    
+                    if not local_folder.exists():
+                        self.logger.info(f"Local folder {folder} missing - update needed")
+                        return True  # Local folder missing, need update
+                    
+                    # Compare all files in this folder
+                    if self._compare_folder_contents(remote_folder, local_folder):
+                        self.logger.info(f"Files in {folder} have changed - update needed")
+                        return True  # Files are different, need update
+                
+                self.logger.info("All files match - no update needed")
+                return False  # All files match
+                
+        except Exception as e:
+            self.logger.warning(f"Error checking file differences: {e}")
+            return False  # Don't force update on error
+    
+    def _compare_folder_contents(self, remote_folder: Path, local_folder: Path) -> bool:
+        """Compare contents of two folders recursively.
+        
+        Args:
+            remote_folder: Path to remote folder
+            local_folder: Path to local folder
+            
+        Returns:
+            True if folders are different, False if they match.
+        """
+        import hashlib
+        
+        # Get all files in both folders
+        remote_files = set()
+        local_files = set()
+        
+        if remote_folder.exists():
+            for file_path in remote_folder.rglob('*'):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(remote_folder)
+                    remote_files.add(rel_path)
+        
+        if local_folder.exists():
+            for file_path in local_folder.rglob('*'):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(local_folder)
+                    local_files.add(rel_path)
+        
+        # Check if file lists are different
+        if remote_files != local_files:
+            return True
+        
+        # Compare file contents for matching files
+        for rel_path in remote_files:
+            remote_file = remote_folder / rel_path
+            local_file = local_folder / rel_path
+            
+            if not local_file.exists():
+                return True
+            
+            # Compare file hashes
+            try:
+                remote_hash = self._get_file_hash(remote_file)
+                local_hash = self._get_file_hash(local_file)
+                
+                if remote_hash != local_hash:
+                    return True
+            except Exception:
+                return True  # Error reading file, assume different
+        
+        return False  # All files match
+    
+    def _get_file_hash(self, file_path: Path) -> str:
+        """Get SHA256 hash of a file.
+        
+        Args:
+            file_path: Path to the file
+            
+        Returns:
+            SHA256 hash as hex string.
+        """
+        import hashlib
+        
+        hash_sha256 = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_sha256.update(chunk)
+        return hash_sha256.hexdigest()
+
     def _ensure_instance_setup(self) -> None:
         """Ensure the instance is properly set up with NeoForge and launcher profile."""
         self._update_progress("Checking instance setup...")
