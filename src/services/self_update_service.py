@@ -166,13 +166,13 @@ class SelfUpdateService:
             return latest != current
     
     def download_and_install_update(self, update_info: Dict[str, Any]) -> bool:
-        """Download and install the launcher update.
+        """Download and install the launcher update using external updater.
         
         Args:
             update_info: Update information dictionary
             
         Returns:
-            True if successful, False otherwise.
+            True if update process started successfully, False otherwise.
         """
         download_url = update_info.get('download_url')
         if not download_url:
@@ -194,8 +194,12 @@ class SelfUpdateService:
                     self._update_progress("Downloaded file is invalid", None, "error")
                     return False
                 
-                # Prepare update script
-                return self._prepare_and_execute_update(new_executable, update_info['version'])
+                # Move the new executable to final location
+                final_new_exe = Path.cwd() / "FFTLauncher_new.exe"
+                shutil.move(str(new_executable), str(final_new_exe))
+                
+                # Launch updater and exit
+                return self._launch_updater_and_exit(final_new_exe, update_info['version'])
                 
         except Exception as e:
             self.logger.error(f"Error during launcher update: {e}")
@@ -243,179 +247,6 @@ class SelfUpdateService:
             self._update_progress("Download failed", None, "error")
             return False
     
-    def _prepare_and_execute_update(self, new_executable: Path, new_version: str) -> bool:
-        """Prepare and execute the update process.
-        
-        Args:
-            new_executable: Path to the new executable
-            new_version: New version string
-            
-        Returns:
-            True if update process started successfully.
-        """
-        try:
-            # Create update script
-            update_script = self._create_update_script(new_executable, new_version)
-            if not update_script:
-                return False
-            
-            self._update_progress("Starting update process...", None, "loading")
-            
-            # Execute update script
-            if os.name == 'nt':  # Windows
-                subprocess.Popen([
-                    'cmd', '/c', 'start', '/min', 'cmd', '/c', str(update_script)
-                ], shell=True)
-            else:  # Unix-like
-                subprocess.Popen(['bash', str(update_script)])
-            
-            self._update_progress("Update will complete after restart", None, "success")
-            
-            # Give the script a moment to start
-            import time
-            time.sleep(1)
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Failed to execute update: {e}")
-            self._update_progress("Failed to execute update", None, "error")
-            return False
-    
-    def _create_update_script(self, new_executable: Path, new_version: str) -> Optional[Path]:
-        """Create a script to handle the update process.
-        
-        Args:
-            new_executable: Path to the new executable
-            new_version: New version string
-            
-        Returns:
-            Path to the update script or None if failed.
-        """
-        try:
-            script_dir = Path.cwd()
-            backup_name = f"FFTLauncher_backup_{LAUNCHER_VERSION}.exe"
-            
-            if os.name == 'nt':  # Windows
-                script_path = script_dir / "update_launcher.bat"
-                script_content = f'''@echo off
-echo Updating FFT Launcher to version {new_version}...
-
-REM Wait for the current process to exit
-timeout /t 3 /nobreak >nul
-
-REM Kill any remaining launcher processes
-taskkill /f /im FFTMinecraftLauncher.exe >nul 2>&1
-taskkill /f /im FFTLauncher.exe >nul 2>&1
-
-REM Wait a bit more
-timeout /t 2 /nobreak >nul
-
-REM Create backup of current executable
-if exist "{self.current_executable}" (
-    echo Creating backup...
-    copy "{self.current_executable}" "{script_dir / backup_name}" >nul
-    if errorlevel 1 (
-        echo Warning: Could not create backup
-    )
-)
-
-REM Copy new executable
-echo Installing new version...
-copy "{new_executable}" "{self.current_executable}" >nul
-if errorlevel 1 (
-    echo Error: Failed to copy new executable
-    pause
-    exit /b 1
-)
-
-REM Verify the new executable exists and has content
-if not exist "{self.current_executable}" (
-    echo Error: New executable not found after copy
-    pause
-    exit /b 1
-)
-
-REM Update version in config if needed
-echo Updating configuration...
-
-REM Start the new launcher
-echo Starting updated launcher...
-start "" "{self.current_executable}"
-
-REM Wait a moment to ensure it started
-timeout /t 3 /nobreak >nul
-
-REM Clean up
-del "{new_executable}" >nul 2>&1
-del "%~f0" >nul 2>&1
-'''
-            else:  # Unix-like
-                script_path = script_dir / "update_launcher.sh"
-                script_content = f'''#!/bin/bash
-echo "Updating FFT Launcher to version {new_version}..."
-
-# Wait for the current process to exit
-sleep 3
-
-# Kill any remaining launcher processes
-pkill -f FFTMinecraftLauncher 2>/dev/null || true
-pkill -f FFTLauncher 2>/dev/null || true
-
-# Wait a bit more
-sleep 2
-
-# Create backup of current executable
-if [ -f "{self.current_executable}" ]; then
-    echo "Creating backup..."
-    cp "{self.current_executable}" "{script_dir / backup_name}"
-    if [ $? -ne 0 ]; then
-        echo "Warning: Could not create backup"
-    fi
-fi
-
-# Copy new executable
-echo "Installing new version..."
-cp "{new_executable}" "{self.current_executable}"
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to copy new executable"
-    exit 1
-fi
-
-# Verify the new executable exists
-if [ ! -f "{self.current_executable}" ]; then
-    echo "Error: New executable not found after copy"
-    exit 1
-fi
-
-chmod +x "{self.current_executable}"
-
-# Start the new launcher
-echo "Starting updated launcher..."
-"{self.current_executable}" &
-
-# Wait a moment to ensure it started
-sleep 3
-
-# Clean up
-rm -f "{new_executable}" 2>/dev/null || true
-rm -f "$0" 2>/dev/null || true
-'''
-            
-            # Write script file
-            with open(script_path, 'w', encoding='utf-8') as f:
-                f.write(script_content)
-            
-            # Make executable on Unix-like systems
-            if os.name != 'nt':
-                os.chmod(script_path, 0o755)
-            
-            return script_path
-            
-        except Exception as e:
-            self.logger.error(f"Failed to create update script: {e}")
-            return None
-    
     def get_launcher_version_info(self) -> Dict[str, Union[str, bool]]:
         """Get current launcher version information.
         
@@ -436,6 +267,48 @@ rm -f "$0" 2>/dev/null || true
             Update info if available, None otherwise.
         """
         return self.check_for_launcher_update()
+    
+    def _launch_updater_and_exit(self, new_exe_path: Path, new_version: str) -> bool:
+        """Launch the updater and exit the current launcher.
+        
+        Args:
+            new_exe_path: Path to the new executable
+            new_version: New version string
+            
+        Returns:
+            True if updater launched successfully.
+        """
+        try:
+            # Check if updater exists
+            updater_path = Path.cwd() / "FFTLauncherUpdater.exe"
+            if not updater_path.exists():
+                self.logger.error("Updater not found - please ensure FFTLauncherUpdater.exe is in the launcher directory")
+                self._update_progress("Updater not found", None, "error")
+                return False
+            
+            self._update_progress("Starting updater...", None, "loading")
+            
+            # Prepare arguments for updater
+            old_exe_path = self.current_executable
+            launcher_args = "None"  # Could pass command line args if needed
+            
+            # Launch updater with arguments
+            subprocess.Popen([
+                str(updater_path),
+                str(old_exe_path),
+                str(new_exe_path),
+                launcher_args
+            ], creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
+            
+            self._update_progress("Updater started - launcher will restart", 1.0, "success")
+            
+            # Signal that we should exit
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to launch updater: {e}")
+            self._update_progress("Failed to launch updater", None, "error")
+            return False
 
 
 class SelfUpdateError(Exception):
