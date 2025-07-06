@@ -3,8 +3,12 @@ echo Building Simple Bootstrap Launcher...
 
 call _env\Scripts\activate.bat
 
+echo Cleaning build cache...
+if exist build rmdir /S /Q build
+if exist dist rmdir /S /Q dist
+
 echo Building bootstrap...
-_env\Scripts\python.exe -m PyInstaller bootstrap.spec --noconfirm
+_env\Scripts\python.exe -m PyInstaller bootstrap.spec --noconfirm --clean
 
 echo Creating launcher package...
 if exist launcher_package.zip del launcher_package.zip

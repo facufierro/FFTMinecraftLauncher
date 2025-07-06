@@ -176,19 +176,54 @@ def main():
     
     # Check if launcher exists
     launcher_dir = Path("launcher")
+    
+    # If no launcher exists, try to get updates
     if not launcher_dir.exists():
         print("First time setup - downloading launcher...")
-    
-    # Check for updates
-    update_info = check_for_updates()
-    if update_info:
-        print(f"Update available: v{update_info['version']}")
-        if download_and_install_update(update_info):
-            print("Update completed!")
+        
+        # Check for updates
+        update_info = check_for_updates()
+        if update_info:
+            print(f"Update available: v{update_info['version']}")
+            if download_and_install_update(update_info):
+                print("Update completed!")
+            else:
+                print("Update failed!")
+                # Try to use local launcher_package.zip as fallback
+                local_package = Path("launcher_package.zip")
+                if local_package.exists():
+                    print("Using local launcher package as fallback...")
+                    try:
+                        launcher_dir.mkdir(parents=True, exist_ok=True)
+                        with zipfile.ZipFile(local_package, 'r') as zip_ref:
+                            zip_ref.extractall(launcher_dir)
+                        print("Local package extracted successfully!")
+                    except Exception as e:
+                        print(f"Failed to extract local package: {e}")
         else:
-            print("Update failed, using current version...")
+            print("No updates available or update check failed.")
+            # Try to use local launcher_package.zip as fallback
+            local_package = Path("launcher_package.zip")
+            if local_package.exists():
+                print("Using local launcher package as fallback...")
+                try:
+                    launcher_dir.mkdir(parents=True, exist_ok=True)
+                    with zipfile.ZipFile(local_package, 'r') as zip_ref:
+                        zip_ref.extractall(launcher_dir)
+                    print("Local package extracted successfully!")
+                except Exception as e:
+                    print(f"Failed to extract local package: {e}")
     else:
-        print("Launcher is up to date!")
+        # Launcher exists, check for updates
+        update_info = check_for_updates()
+        if update_info:
+            print(f"Update available: v{update_info['version']}")
+            if download_and_install_update(update_info):
+                print("Update completed!")
+            else:
+                print("Update failed, using current version...")
+        else:
+            print("Launcher is up to date!")
     
     # Launch main app
     if not launcher_dir.exists():
