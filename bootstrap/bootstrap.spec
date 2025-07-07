@@ -4,6 +4,10 @@ import os
 # Get absolute path to icon
 ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(SPEC))), 'assets', 'minecraft_icon.ico')
 
+# Debug: Print icon path
+print(f"Icon path: {ICON_PATH}")
+print(f"Icon exists: {os.path.exists(ICON_PATH)}")
+
 a = Analysis(
     ['bootstrap.py'],
     pathex=[],
@@ -29,7 +33,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
