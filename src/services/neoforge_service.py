@@ -159,6 +159,16 @@ class NeoForgeService:
             # Verify installation
             if self._verify_neoforge_installation(instance_path):
                 self.logger.info("NeoForge installation completed successfully")
+                
+                # Configure default resource pack if it exists
+                resourcepacks_dir = instance_path / "resourcepacks"
+                if resourcepacks_dir.exists():
+                    for pack_file in resourcepacks_dir.iterdir():
+                        if pack_file.name.startswith("fft-resourcepack"):
+                            pack_name = pack_file.stem if pack_file.suffix == '.zip' else pack_file.name
+                            self.configure_default_resource_pack(instance_path, pack_name)
+                            break
+                
                 return True
             else:
                 self.logger.error("NeoForge installation verification failed")
@@ -230,6 +240,16 @@ class NeoForgeService:
             # Verify installation
             if self._verify_neoforge_installation(instance_path):
                 self.logger.info("NeoForge installation completed successfully")
+                
+                # Configure default resource pack if it exists
+                resourcepacks_dir = instance_path / "resourcepacks"
+                if resourcepacks_dir.exists():
+                    for pack_file in resourcepacks_dir.iterdir():
+                        if pack_file.name.startswith("fft-resourcepack"):
+                            pack_name = pack_file.stem if pack_file.suffix == '.zip' else pack_file.name
+                            self.configure_default_resource_pack(instance_path, pack_name)
+                            break
+                
                 return True
             else:
                 self.logger.error("NeoForge installation verification failed")
@@ -439,3 +459,105 @@ class NeoForgeService:
             return False
         
         return self._verify_neoforge_installation(instance_path)
+    
+    def enable_resource_pack_for_instance(self, instance_name: str, resource_pack_name: str = "fft-resourcepack") -> bool:
+        """Enable a resource pack for a specific instance.
+        
+        Args:
+            instance_name: Name of the instance
+            resource_pack_name: Name of the resource pack to enable
+            
+        Returns:
+            True if configuration was successful, False otherwise.
+        """
+        instance_path = self._find_instance_path(instance_name)
+        if not instance_path:
+            self.logger.error(f"Instance '{instance_name}' not found")
+            return False
+        
+        return self.configure_default_resource_pack(instance_path, resource_pack_name)
+    
+    def configure_default_resource_pack(self, instance_path: Path, resource_pack_name: str = "fft-resourcepack") -> bool:
+        """Configure default resource pack for an instance without overriding player settings.
+        
+        Args:
+            instance_path: Path to the instance directory
+            resource_pack_name: Name of the resource pack to enable
+            
+        Returns:
+            True if configuration was successful, False otherwise.
+        """
+        try:
+            options_file = instance_path / "options.txt"
+            resource_pack_file = f"file/{resource_pack_name}"
+            
+            # If options.txt doesn't exist, create it with minimal settings
+            if not options_file.exists():
+                self.logger.info(f"Creating new options.txt with default resource pack: {resource_pack_name}")
+                options_content = f"resourcePacks:[\"vanilla\",\"{resource_pack_file}\"]\n"
+                options_content += f"incompatibleResourcePacks:[]\n"
+                
+                with open(options_file, 'w', encoding='utf-8') as f:
+                    f.write(options_content)
+                return True
+            
+            # Read existing options.txt
+            with open(options_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            # Check if resource pack is already enabled
+            for line in lines:
+                if line.startswith('resourcePacks:') and resource_pack_file in line:
+                    self.logger.info(f"Resource pack {resource_pack_name} already enabled in options.txt")
+                    return True
+            
+            # Modify existing options.txt to add the resource pack
+            modified_lines = []
+            resource_pack_added = False
+            
+            for line in lines:
+                if line.startswith('resourcePacks:'):
+                    # Parse existing resource packs
+                    if line.strip().endswith('[]'):
+                        # Empty resource packs list
+                        new_line = f'resourcePacks:[\"vanilla\",\"{resource_pack_file}\"]\n'
+                    elif '\"vanilla\"' in line and resource_pack_file not in line:
+                        # Add our pack after vanilla
+                        new_line = line.rstrip()
+                        if new_line.endswith(']'):
+                            new_line = new_line[:-1] + f',\"{resource_pack_file}\"]\n'
+                        else:
+                            new_line = line.rstrip() + f',\"{resource_pack_file}\"]\n'
+                    else:
+                        new_line = line
+                    
+                    modified_lines.append(new_line)
+                    resource_pack_added = True
+                elif line.startswith('incompatibleResourcePacks:') and resource_pack_added:
+                    # Ensure our pack is not in incompatible list
+                    if resource_pack_file in line:
+                        # Remove our pack from incompatible list
+                        new_line = line.replace(f',\"{resource_pack_file}\"', '').replace(f'\"{resource_pack_file}\",', '').replace(f'\"{resource_pack_file}\"', '')
+                        if new_line.strip().endswith('[,]') or new_line.strip().endswith('[, ]'):
+                            new_line = new_line.replace('[,]', '[]').replace('[, ]', '[]')
+                        modified_lines.append(new_line)
+                    else:
+                        modified_lines.append(line)
+                else:
+                    modified_lines.append(line)
+            
+            # If resourcePacks line wasn't found, add it
+            if not resource_pack_added:
+                modified_lines.append(f'resourcePacks:[\"vanilla\",\"{resource_pack_file}\"]\n')
+                modified_lines.append(f'incompatibleResourcePacks:[]\n')
+            
+            # Write back the modified options.txt
+            with open(options_file, 'w', encoding='utf-8') as f:
+                f.writelines(modified_lines)
+            
+            self.logger.info(f"Successfully enabled resource pack {resource_pack_name} in options.txt")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to configure default resource pack: {e}")
+            return False
