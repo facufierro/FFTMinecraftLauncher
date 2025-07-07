@@ -1,9 +1,10 @@
 """GitHub service for handling repository operations."""
 
-import requests
+from pathlib import Path
 from typing import Dict, Any, Optional, List
 from ..models.update_info import UpdateInfo
 from ..utils.logger import get_logger
+from ..utils.github_utils import get_github_client
 
 
 class GitHubService:
@@ -14,12 +15,11 @@ class GitHubService:
         
         Args:
             repo: Repository in format 'owner/repo'
-            timeout: Request timeout in seconds
+            timeout: Request timeout in seconds (kept for compatibility)
         """
         self.repo = repo
-        self.timeout = timeout
-        self.base_url = "https://api.github.com"
         self.logger = get_logger()
+        self.github_client = get_github_client()
     
     def get_latest_release(self) -> Optional[Dict[str, Any]]:
         """Get the latest release information from GitHub.
@@ -27,21 +27,7 @@ class GitHubService:
         Returns:
             Dictionary containing release information or None if failed.
         """
-        try:
-            url = f"{self.base_url}/repos/{self.repo}/releases/latest"
-            self.logger.info(f"Fetching latest release from: {url}")
-            
-            response = requests.get(url, timeout=self.timeout)
-            response.raise_for_status()
-            
-            release_data = response.json()
-            self.logger.info(f"Found release: {release_data.get('tag_name', 'Unknown')}")
-            
-            return release_data
-            
-        except requests.RequestException as e:
-            self.logger.error(f"Failed to fetch release information: {e}")
-            return None
+        return self.github_client.get_latest_release(self.repo)
     
     def get_releases(self, per_page: int = 10) -> List[Dict[str, Any]]:
         """Get list of releases from GitHub.
@@ -52,18 +38,10 @@ class GitHubService:
         Returns:
             List of release dictionaries.
         """
-        try:
-            url = f"{self.base_url}/repos/{self.repo}/releases"
-            params = {'per_page': per_page}
-            
-            response = requests.get(url, params=params, timeout=self.timeout)
-            response.raise_for_status()
-            
-            return response.json()
-            
-        except requests.RequestException as e:
-            self.logger.error(f"Failed to fetch releases: {e}")
-            return []
+        # This could be implemented in github_utils if needed
+        # For now, delegate to get_latest_release
+        latest = self.get_latest_release()
+        return [latest] if latest else []
     
     def get_repository_info(self) -> Optional[Dict[str, Any]]:
         """Get repository information.
@@ -71,17 +49,16 @@ class GitHubService:
         Returns:
             Dictionary containing repository information or None if failed.
         """
-        try:
-            url = f"{self.base_url}/repos/{self.repo}"
-            
-            response = requests.get(url, timeout=self.timeout)
-            response.raise_for_status()
-            
-            return response.json()
-            
-        except requests.RequestException as e:
-            self.logger.error(f"Failed to fetch repository information: {e}")
-            return None
+        # This could be implemented in github_utils if needed
+        # For now, return basic info
+        latest = self.get_latest_release()
+        if latest:
+            return {
+                'name': self.repo.split('/')[-1],
+                'full_name': self.repo,
+                'latest_release': latest
+            }
+        return None
     
     def download_file(self, url: str, output_path: str) -> bool:
         """Download a file from the given URL.
@@ -93,23 +70,7 @@ class GitHubService:
         Returns:
             True if download was successful, False otherwise.
         """
-        try:
-            self.logger.info(f"Downloading from: {url}")
-            
-            response = requests.get(url, timeout=self.timeout, stream=True)
-            response.raise_for_status()
-            
-            with open(output_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            
-            self.logger.info(f"Download completed: {output_path}")
-            return True
-            
-        except (requests.RequestException, IOError) as e:
-            self.logger.error(f"Download failed: {e}")
-            return False
+        return self.github_client.download_file_from_url(url, Path(output_path))
     
     def create_update_info(self, current_version: Optional[str] = None) -> UpdateInfo:
         """Create an UpdateInfo object with the latest release data.
@@ -129,7 +90,7 @@ class GitHubService:
                 updates_available=False
             )
         
-        latest_version = release_data.get('tag_name', 'Unknown')
+        latest_version = release_data.get('tag_name', 'Unknown').lstrip('v')
         updates_available = current_version != latest_version
         
         return UpdateInfo(

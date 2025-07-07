@@ -6,7 +6,7 @@ from typing import List, Optional, Callable
 from ..models.config import LauncherConfig
 from ..models.update_info import UpdateInfo
 from ..services.github_service import GitHubService
-from ..utils.file_utils import FileUtils, FileOperationError
+from ..utils.file_ops import get_file_ops
 from ..utils.logger import get_logger
 
 
@@ -21,6 +21,7 @@ class UpdateService:
         """
         self.config = config
         self.github_service = GitHubService(config.github_repo)
+        self.file_ops = get_file_ops()
         self.logger = get_logger()
         self.progress_callback: Optional[Callable[[str], None]] = None
     
@@ -547,8 +548,10 @@ class UpdateService:
             # Extract the ZIP file
             self._update_progress("Extracting files...")
             try:
-                extracted_folder = FileUtils.extract_zip(zip_path, extract_path)
-            except FileOperationError as e:
+                extracted_folder = self.file_ops.extract_zip(zip_path, extract_path)
+                if not extracted_folder:
+                    raise Exception("Failed to extract ZIP file")
+            except Exception as e:
                 raise UpdateError(f"Failed to extract update: {e}")
             
             # Sync files to Minecraft directory
@@ -571,7 +574,7 @@ class UpdateService:
         
         try:
             # Ensure instance directory exists (it should be created automatically)
-            FileUtils.ensure_directory_exists(instance_path)
+            instance_path.mkdir(parents=True, exist_ok=True)
             
             # Only sync the folders that are configured to be synced
             for folder_name in self.config.folders_to_sync:
@@ -587,7 +590,7 @@ class UpdateService:
             
             return True
             
-        except FileOperationError as e:
+        except Exception as e:
             raise UpdateError(f"Failed to sync files: {e}")
     
     def _sync_directory(self, source: Path, destination: Path) -> None:
@@ -605,9 +608,11 @@ class UpdateService:
             return
         
         try:
-            FileUtils.safe_copy_tree(source, destination, overwrite=True)
-            self.logger.info(f"Successfully synced directory: {source.name}")
-        except FileOperationError as e:
+            if self.file_ops.sync_directories(source, destination):
+                self.logger.info(f"Successfully synced directory: {source.name}")
+            else:
+                raise Exception(f"Failed to sync directory {source.name}")
+        except Exception as e:
             self.logger.error(f"Failed to sync directory {source.name}: {e}")
             raise
     
@@ -621,8 +626,9 @@ class UpdateService:
         self._update_progress(f"Syncing file: {source.name}")
         
         try:
-            FileUtils.safe_copy_file(source, destination)
-        except FileOperationError as e:
+            if not self.file_ops.safe_copy(source, destination):
+                raise Exception(f"Failed to copy file {source.name}")
+        except Exception as e:
             self.logger.error(f"Failed to sync file {source.name}: {e}")
             raise
     

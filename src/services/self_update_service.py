@@ -2,16 +2,15 @@
 
 import os
 import sys
-import shutil
-import tempfile
 import subprocess
-import zipfile
+import tempfile
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any, Union
-import requests
 from ..models.config import LauncherConfig
 from ..utils.version_utils import get_launcher_version, is_newer_version
 from ..utils.logger import get_logger
+from ..utils.github_utils import get_github_client
+from ..utils.file_ops import get_file_ops
 
 
 class SelfUpdateService:
@@ -28,9 +27,9 @@ class SelfUpdateService:
         self.progress_callback: Optional[Callable[[str, Optional[float], str], None]] = None
         
         # GitHub repository for launcher releases
-        self.launcher_repo = "facufierro/FFTMinecraftLauncher"  # Update this to your launcher repo
-        self.base_url = "https://api.github.com"
-        self.timeout = 30
+        self.launcher_repo = "facufierro/FFTMinecraftLauncher"
+        self.github_client = get_github_client()
+        self.file_ops = get_file_ops()
         
         # Current executable info
         self.current_executable = Path(sys.executable)
@@ -143,15 +142,8 @@ class SelfUpdateService:
             Release data dictionary or None if failed.
         """
         try:
-            url = f"{self.base_url}/repos/{self.launcher_repo}/releases/latest"
-            self.logger.info(f"Fetching launcher release from: {url}")
-            
-            response = requests.get(url, timeout=self.timeout)
-            response.raise_for_status()
-            
-            return response.json()
-            
-        except requests.RequestException as e:
+            return self.github_client.get_latest_release(self.launcher_repo)
+        except Exception as e:
             self.logger.error(f"Failed to fetch launcher release: {e}")
             return None
     
@@ -286,19 +278,23 @@ class SelfUpdateService:
                 # Create backup of current bootstrap
                 backup_path = target_bootstrap.with_suffix('.exe.backup')
                 if target_bootstrap.exists():
-                    shutil.copy2(str(target_bootstrap), str(backup_path))
-                    self.logger.info(f"Created bootstrap backup: {backup_path}")
+                    if self.file_ops.safe_copy(target_bootstrap, backup_path):
+                        self.logger.info(f"Created bootstrap backup: {backup_path}")
+                    else:
+                        self.logger.warning("Failed to create bootstrap backup")
                 
                 try:
                     # Install new bootstrap
-                    shutil.copy2(str(download_file), str(target_bootstrap))
-                    self._update_progress("Bootstrap update completed successfully", 1.0, "success")
-                    
-                    # Remove backup if successful
-                    if backup_path.exists():
-                        backup_path.unlink()
-                    
-                    return True
+                    if self.file_ops.safe_copy(download_file, target_bootstrap):
+                        self._update_progress("Bootstrap update completed successfully", 1.0, "success")
+                        
+                        # Remove backup if successful
+                        if backup_path.exists():
+                            backup_path.unlink()
+                        
+                        return True
+                    else:
+                        raise Exception("Failed to copy bootstrap file")
                     
                 except Exception as e:
                     self.logger.error(f"Failed to install bootstrap: {e}")
@@ -306,8 +302,10 @@ class SelfUpdateService:
                     
                     # Restore backup if installation failed
                     if backup_path.exists() and not target_bootstrap.exists():
-                        shutil.copy2(str(backup_path), str(target_bootstrap))
-                        self.logger.info("Restored bootstrap from backup")
+                        if self.file_ops.safe_copy(backup_path, target_bootstrap):
+                            self.logger.info("Restored bootstrap from backup")
+                        else:
+                            self.logger.error("Failed to restore bootstrap backup")
                     
                     return False
                 
@@ -363,15 +361,19 @@ class SelfUpdateService:
                 
                 # Move the new executable to final location
                 final_new_exe = Path.cwd() / "FFTLauncher_new.exe"
-                shutil.copy2(str(new_executable), str(final_new_exe))
+                if not self.file_ops.safe_copy(new_executable, final_new_exe):
+                    self._update_progress("Failed to copy new executable", None, "error")
+                    return False
                 
                 # If we extracted from zip, also copy the updater if present
                 if is_zip:
                     updater_file = self._find_updater_executable(temp_path)
                     if updater_file and updater_file.exists():
                         final_updater = Path.cwd() / "FFTLauncherUpdater_new.exe"
-                        shutil.copy2(str(updater_file), str(final_updater))
-                        self.logger.info("Updated updater executable found and staged")
+                        if self.file_ops.safe_copy(updater_file, final_updater):
+                            self.logger.info("Updated updater executable found and staged")
+                        else:
+                            self.logger.warning("Failed to copy updater executable")
                 
                 # Launch updater and exit
                 return self._launch_updater_and_exit(final_new_exe, update_info['version'])
@@ -394,35 +396,22 @@ class SelfUpdateService:
         try:
             self._update_progress("Downloading launcher update...", 0.0, "loading")
             
-            response = requests.get(url, stream=True, timeout=self.timeout)
-            response.raise_for_status()
+            def progress_callback(message: str, progress: Optional[float]) -> None:
+                if progress is not None:
+                    self._update_progress(message, progress, "loading")
+                else:
+                    self._update_progress(message, None, "info")
             
-            total_size = int(response.headers.get('content-length', 0))
-            downloaded = 0
-            last_progress_update = 0
-            progress_update_threshold = 0.05  # Update every 5%
+            success = self.github_client.download_file_from_url(url, destination, progress_callback)
             
-            with open(destination, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        
-                        if total_size > 0:
-                            progress = downloaded / total_size
-                            # Only update progress every 5% to avoid spam and improve performance
-                            if progress - last_progress_update >= progress_update_threshold or progress >= 1.0:
-                                self._update_progress(
-                                    f"Downloading... {downloaded // 1024}KB / {total_size // 1024}KB",
-                                    progress,
-                                    "loading"
-                                )
-                                last_progress_update = progress
+            if success:
+                self._update_progress("Download completed", 1.0, "success")
+            else:
+                self._update_progress("Download failed", None, "error")
             
-            self._update_progress("Download completed", 1.0, "success")
-            return True
+            return success
             
-        except requests.RequestException as e:
+        except Exception as e:
             self.logger.error(f"Download failed: {e}")
             self._update_progress("Download failed", None, "error")
             return False
@@ -440,11 +429,15 @@ class SelfUpdateService:
         try:
             self._update_progress("Extracting update files...", None, "loading")
             
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(extract_to)
+            result = self.file_ops.extract_zip(zip_path, extract_to)
+            success = result is not None
             
-            self._update_progress("Extraction completed", None, "success")
-            return True
+            if success:
+                self._update_progress("Extraction completed", None, "success")
+            else:
+                self._update_progress("Failed to extract update files", None, "error")
+            
+            return success
             
         except Exception as e:
             self.logger.error(f"Failed to extract zip: {e}")

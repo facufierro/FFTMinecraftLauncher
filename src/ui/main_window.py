@@ -8,6 +8,7 @@ from ..core.events import EventType
 from ..models.update_info import UpdateInfo
 from ..services.self_update_service import SelfUpdateService
 from ..utils.ui_utils import UIUtils
+from ..utils.process_utils import get_process_manager
 from .components import StatusFrame, ProgressFrame, ButtonFrame, LogFrame, ThemeToggleButton
 from .settings_window import SettingsWindow
 
@@ -372,43 +373,24 @@ class MainWindow:
     
     def _close_bootstrap_if_running(self) -> None:
         """Check if bootstrap is running and close it gracefully."""
-        import subprocess
-        import os
-        import time
-        from pathlib import Path
+        process_manager = get_process_manager()
         
         try:
-            # Use Windows tasklist to find bootstrap processes
+            # Try to close bootstrap processes gracefully
             bootstrap_names = ['FFTMinecraftLauncher.exe', 'bootstrap.exe']
-            current_pid = os.getpid()
             
             for bootstrap_name in bootstrap_names:
-                try:
-                    # Check if the process is running
-                    result = subprocess.run(['tasklist', '/FI', f'IMAGENAME eq {bootstrap_name}'], 
-                                          capture_output=True, text=True, timeout=5)
+                if process_manager.is_process_running(bootstrap_name):
+                    self._add_log(f"Found running bootstrap: {bootstrap_name}")
                     
-                    if bootstrap_name in result.stdout and 'No tasks are running' not in result.stdout:
-                        self._add_log(f"Found running bootstrap: {bootstrap_name}")
-                        
-                        # Try to close it gracefully first
-                        close_result = subprocess.run(['taskkill', '/IM', bootstrap_name, '/T'], 
-                                                    capture_output=True, text=True, timeout=5)
-                        
-                        if close_result.returncode == 0:
-                            self._add_log("Bootstrap process closed successfully")
-                            # Wait a moment for the process to fully close
-                            time.sleep(1)
-                        else:
-                            self._add_log("Bootstrap may have already closed")
+                    if process_manager.kill_process(bootstrap_name):
+                        self._add_log("Bootstrap process closed successfully")
                         break
-                        
-                except subprocess.TimeoutExpired:
-                    self._add_log("Timeout checking for bootstrap process")
-                except Exception as e:
-                    self._add_log(f"Error checking bootstrap process {bootstrap_name}: {e}")
+                    else:
+                        self._add_log("Failed to close bootstrap process")
             
             # Additional wait to ensure file handles are released
+            import time
             time.sleep(0.5)
                     
         except Exception as e:
