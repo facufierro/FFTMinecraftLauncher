@@ -1,4 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+
+# Get absolute path to icon
+ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(SPEC))), 'assets', 'minecraft_icon.ico')
 
 a = Analysis(
     ['bootstrap.py'],
@@ -34,5 +38,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='../assets/minecraft_icon.ico',
+    icon=ICON_PATH,
 )
