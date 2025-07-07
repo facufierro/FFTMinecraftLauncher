@@ -159,15 +159,42 @@ def get_current_version():
     version_file = bootstrap_dir / "launcher" / "version.json"
     if version_file.exists():
         try:
-            with open(version_file, 'r') as f:
-                data = json.load(f)
+            # Check if file is empty first
+            if version_file.stat().st_size == 0:
+                safe_log('warning', "Version file is empty")
+                return "0.0.0"
+            
+            with open(version_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:
+                    safe_log('warning', "Version file contains no content")
+                    return "0.0.0"
+                
+                data = json.loads(content)
                 version = data.get('version', '0.0.0')
+                
+                # Handle the case where version is "dynamic" (development file)
+                if version == "dynamic":
+                    safe_log('warning', "Found development version file with 'dynamic' version")
+                    return "0.0.0"
+                
                 safe_log('debug', f"Current version from file: {version}")
                 return version
+        except json.JSONDecodeError as e:
+            safe_log('warning', f"Invalid JSON in version file: {e}")
+            safe_log('debug', f"Version file path: {version_file}")
+            # Delete corrupted version file so it gets re-downloaded
+            try:
+                version_file.unlink()
+                safe_log('info', "Removed corrupted version file")
+            except:
+                pass
         except Exception as e:
             safe_log('warning', f"Failed to read version file: {e}")
+    else:
+        safe_log('debug', "Version file does not exist")
     
-    safe_log('debug', "No version file found, returning default version")
+    safe_log('debug', "No valid version found, returning default version")
     return "0.0.0"
 
 
@@ -633,9 +660,42 @@ def main():
     # Change to bootstrap directory to ensure consistent paths
     os.chdir(bootstrap_dir)
     
-    # Check if launcher exists
+    # Check if launcher exists and is valid
     launcher_dir = bootstrap_dir / "launcher"
     logger.debug(f"Looking for launcher at: {launcher_dir}")
+    
+    # Determine if installation is needed
+    needs_install = not launcher_dir.exists()
+    
+    # Additional check: if launcher directory exists but essential files are missing
+    if launcher_dir.exists():
+        essential_files = ['app.py', 'version.json']
+        missing_files = [f for f in essential_files if not (launcher_dir / f).exists()]
+        if missing_files:
+            logger.warning(f"Launcher directory exists but is incomplete (missing: {missing_files})")
+            needs_install = True
+        else:
+            # Check if version.json is valid
+            version_file = launcher_dir / "version.json"
+            try:
+                if version_file.stat().st_size == 0:
+                    logger.warning("Version file is empty - launcher installation is corrupted")
+                    needs_install = True
+                else:
+                    with open(version_file, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if not content:
+                            logger.warning("Version file contains no content - launcher installation is corrupted")
+                            needs_install = True
+                        else:
+                            data = json.loads(content)
+                            version = data.get('version', '')
+                            if version == "dynamic" or not version:
+                                logger.warning("Version file contains invalid version - launcher installation is corrupted")
+                                needs_install = True
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"Version file is corrupted ({e}) - launcher installation is corrupted")
+                needs_install = True
     
     # Single update check and installation logic
     needs_install = not launcher_dir.exists()
