@@ -103,8 +103,6 @@ class SelfUpdateService:
             Dictionary with update info if available, None otherwise.
         """
         try:
-            self._update_progress("Checking for bootstrap updates...", None, "loading")
-            
             # Get latest release from GitHub
             latest_release = self._get_latest_launcher_release()
             if not latest_release:
@@ -136,7 +134,6 @@ class SelfUpdateService:
                 
         except Exception as e:
             self.logger.error(f"Error checking for bootstrap updates: {e}")
-            self._update_progress("Error checking for bootstrap updates", None, "error")
             return None
     
     def _get_latest_launcher_release(self) -> Optional[Dict[str, Any]]:

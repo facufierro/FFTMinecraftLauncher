@@ -55,6 +55,7 @@ class MainWindow:
         self.needs_update = False
         self.instance_installed = False
         self.instance_up_to_date = False
+        self.bootstrap_checked = False  # Prevent duplicate bootstrap checks
         
         # Check bootstrap first, then continue with normal flow
         self.root.after(1000, self._check_bootstrap_and_continue)
@@ -307,6 +308,12 @@ class MainWindow:
         self.log_frame.add_launcher_log(level, message, timestamp)
     def _check_bootstrap_and_continue(self) -> None:
         """Check bootstrap first, then continue with normal launcher flow."""
+        # Prevent duplicate bootstrap checks
+        if self.bootstrap_checked:
+            self._continue_launcher_initialization()
+            return
+        
+        self.bootstrap_checked = True
         timestamp = datetime.now().strftime("%H:%M:%S")
         
         # Log initial startup message
@@ -347,7 +354,9 @@ class MainWindow:
                             # Exit launcher to allow bootstrap to restart it
                             self.root.after(2000, lambda: self._restart_via_bootstrap())
                         else:
-                            self.root.after(0, lambda: self._add_log("Bootstrap update failed - continuing with current version"))
+                            # Check if it's a file in use error and handle gracefully
+                            self.root.after(0, lambda: self._add_log("Bootstrap update will be applied on next restart"))
+                            self.root.after(0, lambda: self._add_log("(Cannot update while bootstrap is running)"))
                             self.root.after(0, lambda: self._continue_launcher_initialization())
                     else:
                         self.root.after(0, lambda: self._add_log("Bootstrap is up to date"))
@@ -389,6 +398,10 @@ class MainWindow:
     
     def _continue_launcher_initialization(self) -> None:
         """Continue with normal launcher initialization after bootstrap check."""
+        # Only call this once by checking if we've already initialized
+        if hasattr(self, '_launcher_initialized') and self._launcher_initialized:
+            return
+        self._launcher_initialized = True
         self._check_for_updates_on_startup()
     
     # Update checking methods
@@ -542,15 +555,16 @@ class MainWindow:
         # Filter out noisy download progress messages that slow down downloads
         message_lower = message.lower()
         
-        # Skip download progress ticks (e.g., "Downloading... 500KB / 2000KB")
-        if "downloading..." in message_lower and "kb" in message_lower:
+        # Skip all downloading progress messages with KB/MB indicators
+        if ("downloading..." in message_lower and ("kb" in message_lower or "mb" in message_lower)) or \
+           ("downloading" in message_lower and "/" in message and ("kb" in message_lower or "mb" in message_lower)):
             # Only update the progress bar, don't log to console
             if progress is not None:
                 self.progress_frame.update_progress(f"Updating launcher: {message}", progress)
             return
         
         # Only log important milestone messages
-        important_keywords = ["update available", "download completed", "completed", "failed", "error", "installing", "started", "starting"]
+        important_keywords = ["update available", "download completed", "completed successfully", "failed", "error", "installing", "started"]
         if any(keyword in message_lower for keyword in important_keywords):
             self._add_log(f"Launcher Update: {message}")
         
