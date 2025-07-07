@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from ..constants import GITHUB_REPO, DEFAULT_SYNC_FOLDERS
+from ..utils.version_utils import get_cached_client_version
 
 
 @dataclass
@@ -23,6 +24,12 @@ class LauncherConfig:
     # State
     current_version: Optional[str] = None
     last_check: Optional[str] = None
+    
+    def __post_init__(self):
+        """Initialize dynamic fields after object creation."""
+        if self.current_version is None:
+            # Get the current client version dynamically
+            self.current_version = get_cached_client_version()
     
     @property
     def github_repo(self) -> str:

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, Callable, Dict, Any, Union
 import requests
 from ..models.config import LauncherConfig
-from ..constants import LAUNCHER_VERSION
+from ..utils.version_utils import get_launcher_version, is_newer_version
 from ..utils.logger import get_logger
 
 
@@ -74,12 +74,12 @@ class SelfUpdateService:
                 return None
             
             latest_version = latest_release.get('tag_name', '').lstrip('v')
-            current_version = LAUNCHER_VERSION.lstrip('v')
+            current_version = get_launcher_version().lstrip('v')
             
-            self.logger.info(f"Current launcher version: {current_version}")
-            self.logger.info(f"Latest launcher version: {latest_version}")
+            self.logger.info(f"Current launcher application version: {current_version}")
+            self.logger.info(f"Latest launcher application version: {latest_version}")
             
-            if self._is_newer_version(latest_version, current_version):
+            if is_newer_version(latest_version, current_version):
                 self._update_progress(f"Launcher update available: v{latest_version}", None, "info")
                 return {
                     'version': latest_version,
@@ -145,32 +145,6 @@ class SelfUpdateService:
                 return asset.get('browser_download_url')
         
         return None
-    
-    def _is_newer_version(self, latest: str, current: str) -> bool:
-        """Compare version strings to determine if latest is newer.
-        
-        Args:
-            latest: Latest version string
-            current: Current version string
-            
-        Returns:
-            True if latest is newer than current.
-        """
-        try:
-            # Simple version comparison for semantic versioning (e.g., 1.2.3)
-            latest_parts = [int(x) for x in latest.split('.')]
-            current_parts = [int(x) for x in current.split('.')]
-            
-            # Pad with zeros to make same length
-            max_len = max(len(latest_parts), len(current_parts))
-            latest_parts.extend([0] * (max_len - len(latest_parts)))
-            current_parts.extend([0] * (max_len - len(current_parts)))
-            
-            return latest_parts > current_parts
-            
-        except (ValueError, AttributeError):
-            # Fallback to string comparison if version parsing fails
-            return latest != current
     
     def download_and_install_update(self, update_info: Dict[str, Any]) -> bool:
         """Download and install the launcher update using external updater.
@@ -343,7 +317,7 @@ class SelfUpdateService:
             Dictionary with version information.
         """
         return {
-            'current_version': LAUNCHER_VERSION,
+            'current_version': get_launcher_version(),
             'executable_path': str(self.current_executable),
             'is_frozen': str(getattr(sys, 'frozen', False)),
             'launcher_repo': self.launcher_repo

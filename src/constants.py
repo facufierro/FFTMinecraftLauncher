@@ -15,5 +15,8 @@ DEFAULT_SYNC_FOLDERS = [
 
 # Application Information
 APP_NAME = "FFT Minecraft Launcher"
-APP_VERSION = "1.0.0"
-LAUNCHER_VERSION = "1.1.4"  # Current launcher version for self-updates
+
+# Note: Versions are now dynamic!
+# - Launcher version: Read from version.json (generated during build)
+# - Client version: Fetched from GitHub API (FFTClientMinecraft1211 repo)
+# Use src.utils.version_utils for dynamic version management
