@@ -331,7 +331,7 @@ class MainWindow:
             self._continue_launcher_initialization()
     
     def _check_for_bootstrap_updates_with_restart(self) -> None:
-        """Check for bootstrap updates and restart if update is found."""
+        """Check for bootstrap updates and update if needed (bootstrap should be closed by now)."""
         if not self.self_update_service:
             self._continue_launcher_initialization()
             return
@@ -343,20 +343,20 @@ class MainWindow:
                     if update_info:
                         version = update_info.get('version', 'Unknown')
                         self.root.after(0, lambda: self._add_log(f"Bootstrap update available: v{version}"))
+                        
+                        # Check if bootstrap is still running and close it if needed
+                        self.root.after(0, lambda: self._close_bootstrap_if_running())
+                        
                         self.root.after(0, lambda: self._add_log("Updating bootstrap..."))
                         
-                        # Download and install bootstrap update
+                        # Download and install bootstrap update (should work now that bootstrap is closed)
                         success = self.self_update_service.download_and_install_bootstrap_update(update_info)
                         
                         if success:
                             self.root.after(0, lambda: self._add_log("Bootstrap updated successfully"))
-                            self.root.after(0, lambda: self._add_log("Restarting launcher to use updated bootstrap..."))
-                            # Exit launcher to allow bootstrap to restart it
-                            self.root.after(2000, lambda: self._restart_via_bootstrap())
+                            self.root.after(0, lambda: self._continue_launcher_initialization())
                         else:
-                            # Check if it's a file in use error and handle gracefully
-                            self.root.after(0, lambda: self._add_log("Bootstrap update will be applied on next restart"))
-                            self.root.after(0, lambda: self._add_log("(Cannot update while bootstrap is running)"))
+                            self.root.after(0, lambda: self._add_log("Bootstrap update failed - continuing with current version"))
                             self.root.after(0, lambda: self._continue_launcher_initialization())
                     else:
                         self.root.after(0, lambda: self._add_log("Bootstrap is up to date"))
@@ -370,31 +370,44 @@ class MainWindow:
         import threading
         threading.Thread(target=check_async, daemon=True).start()
     
-    def _restart_via_bootstrap(self) -> None:
-        """Exit launcher to allow bootstrap to restart it."""
-        import sys
+    def _close_bootstrap_if_running(self) -> None:
+        """Check if bootstrap is running and close it gracefully."""
+        import subprocess
         import os
         from pathlib import Path
         
-        # Try to find and restart via bootstrap
-        bootstrap_paths = [
-            Path.cwd().parent / "FFTMinecraftLauncher.exe",
-            Path.cwd().parent / "bootstrap.exe"
-        ]
-        
-        for bootstrap_path in bootstrap_paths:
-            if bootstrap_path.exists():
+        try:
+            # Use Windows tasklist to find bootstrap processes
+            bootstrap_names = ['FFTMinecraftLauncher.exe', 'bootstrap.exe']
+            current_pid = os.getpid()
+            
+            for bootstrap_name in bootstrap_names:
                 try:
-                    import subprocess
-                    # Start bootstrap which will restart the launcher
-                    subprocess.Popen([str(bootstrap_path)], 
-                                   creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
-                    break
+                    # Check if the process is running
+                    result = subprocess.run(['tasklist', '/FI', f'IMAGENAME eq {bootstrap_name}'], 
+                                          capture_output=True, text=True, timeout=5)
+                    
+                    if bootstrap_name in result.stdout:
+                        self._add_log(f"Found running bootstrap: {bootstrap_name}")
+                        
+                        # Try to close it gracefully first
+                        close_result = subprocess.run(['taskkill', '/IM', bootstrap_name, '/T'], 
+                                                    capture_output=True, text=True, timeout=5)
+                        
+                        if close_result.returncode == 0:
+                            self._add_log("Bootstrap process closed successfully")
+                        else:
+                            self._add_log("Bootstrap may have already closed")
+                        break
+                        
+                except subprocess.TimeoutExpired:
+                    self._add_log("Timeout checking for bootstrap process")
                 except Exception as e:
-                    self._add_log(f"Failed to restart via bootstrap: {e}")
-        
-        # Exit current launcher
-        sys.exit(0)
+                    self._add_log(f"Error checking bootstrap process {bootstrap_name}: {e}")
+                    
+        except Exception as e:
+            self._add_log(f"Could not check/close bootstrap: {e}")
+            # Continue anyway - maybe bootstrap already closed
     
     def _continue_launcher_initialization(self) -> None:
         """Continue with normal launcher initialization after bootstrap check."""
