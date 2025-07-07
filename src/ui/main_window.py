@@ -122,13 +122,6 @@ class MainWindow:
         self._add_launcher_log("info", "Unified Console initialized", timestamp)
         self._add_launcher_log("info", "All bootstrap and launcher activity will appear here", timestamp)
         self._add_launcher_log("info", "Format: [TIME] [LEVEL] message", timestamp)
-        
-        # Test different log levels for color verification
-        self._add_launcher_log("info", "This is an INFO message (should be blue)", timestamp)
-        self._add_launcher_log("warning", "This is a WARN message (should be yellow)", timestamp)
-        self._add_launcher_log("error", "This is an ERROR message (should be red)", timestamp)
-        self._add_launcher_log("success", "This is a SUCCESS message (should be green)", timestamp)
-        self._add_launcher_log("debug", "This is a DEBUG message (should be gray)", timestamp)
     
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for launcher events."""

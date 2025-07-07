@@ -391,8 +391,8 @@ class LogFrame(ctk.CTkFrame):
             self.log_text._textbox.tag_configure("bootstrap", foreground="#4fc3f7")
             # Launcher messages (green)
             self.log_text._textbox.tag_configure("launcher", foreground="#66bb6a")
-            # Info messages (blue)
-            self.log_text._textbox.tag_configure("info", foreground="#4fc3f7")
+            # Info messages (light blue) - also used for timestamp content
+            self.log_text._textbox.tag_configure("info", foreground="#81d4fa")
             # Warning messages (yellow)
             self.log_text._textbox.tag_configure("warning", foreground="#ffc107")
             # Error messages (red)
@@ -401,10 +401,14 @@ class LogFrame(ctk.CTkFrame):
             self.log_text._textbox.tag_configure("success", foreground="#4caf50")
             # Debug messages (gray)
             self.log_text._textbox.tag_configure("debug", foreground="#9e9e9e")
-            # Timestamp (white)
+            # Timestamp brackets (white) - highest priority
             self.log_text._textbox.tag_configure("timestamp", foreground="#ffffff")
-        except Exception:
-            # If tag configuration fails, continue without colors
+            
+            # Set tag priorities to ensure timestamp brackets appear correctly
+            self.log_text._textbox.tag_raise("timestamp")
+            
+        except Exception as e:
+            print(f"Failed to configure tags: {e}")
             pass
     
     def add_bootstrap_log(self, level: str, message: str, timestamp: str) -> None:
@@ -486,22 +490,48 @@ class LogFrame(ctk.CTkFrame):
             
             # Apply color tags
             try:
-                # Calculate positions for each part
+                # Calculate positions for each part more precisely
                 line_start = f"{start_pos.split('.')[0]}.0"
-                timestamp_start = f"{line_start}+1c"
-                timestamp_end = f"{timestamp_start}+{len(timestamp)+1}c"
-                level_start = f"{timestamp_end}+2c"
-                level_end = f"{level_start}+{len(level_prefix)}c"
-                message_start = f"{level_end}+1c"
-                message_end = f"{line_start} lineend"
+                
+                # Timestamp brackets and content: [HH:MM:SS]
+                timestamp_bracket_start = line_start  # Opening bracket [
+                timestamp_bracket_end = f"{line_start}+1c"  # Just the opening bracket
+                
+                timestamp_content_start = f"{line_start}+1c"  # The time content
+                timestamp_content_end = f"{line_start}+{len(timestamp)+1}c"  # Time content only
+                
+                timestamp_bracket2_start = f"{line_start}+{len(timestamp)+1}c"  # Closing bracket ]
+                timestamp_bracket2_end = f"{line_start}+{len(timestamp)+2}c"  # Just the closing bracket
+                
+                # Level with brackets: [LEVEL]
+                level_bracket_start = f"{timestamp_bracket2_end}+1c"  # Opening bracket [
+                level_bracket_end = f"{level_bracket_start}+1c"  # Just the opening bracket
+                
+                level_content_start = f"{level_bracket_start}+1c"  # The level content
+                level_content_end = f"{level_bracket_start}+{len(level_prefix)-1}c"  # Level content only (excluding closing bracket)
+                
+                level_bracket2_start = f"{level_bracket_start}+{len(level_prefix)-1}c"  # Closing bracket ]
+                level_bracket2_end = f"{level_bracket_start}+{len(level_prefix)}c"  # Just the closing bracket
+                
+                # Message: everything after level and space
+                message_start = f"{level_bracket2_end}+1c"  # Skip space after level
+                message_end = f"{line_start} lineend-1c"  # Exclude newline
                 
                 # Apply tags with correct colors
-                self.log_text._textbox.tag_add("timestamp", timestamp_start, timestamp_end)
-                self.log_text._textbox.tag_add(level_tag, level_start, level_end)  # Color level prefix by level type
-                self.log_text._textbox.tag_add(level_tag, message_start, message_end)  # Color message by level type
+                # White brackets around timestamp
+                self.log_text._textbox.tag_add("timestamp", timestamp_bracket_start, timestamp_bracket_end)
+                self.log_text._textbox.tag_add("timestamp", timestamp_bracket2_start, timestamp_bracket2_end)
+                # Light blue timestamp content
+                self.log_text._textbox.tag_add("info", timestamp_content_start, timestamp_content_end)
                 
-                # Debug output to see what tags are being applied
-                print(f"DEBUG: Applied tags - level_tag='{level_tag}' for level='{level}' on line {line_start}")
+                # White brackets around level
+                self.log_text._textbox.tag_add("timestamp", level_bracket_start, level_bracket_end)
+                self.log_text._textbox.tag_add("timestamp", level_bracket2_start, level_bracket2_end)
+                # Level content coloring
+                self.log_text._textbox.tag_add(level_tag, level_content_start, level_content_end)
+                
+                # Message coloring
+                self.log_text._textbox.tag_add(level_tag, message_start, message_end)  # Color message by level type
                 
             except Exception as e:
                 print(f"Failed to apply tags: {e}")
