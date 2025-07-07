@@ -226,7 +226,7 @@ class UpdateService:
         has_neoforge = self._is_neoforge_installed(instance_path)
         
         if not has_neoforge:
-            self.logger.info("NeoForge not installed in instance")
+            self.logger.warning("NeoForge not installed in instance")
             return False
         
         self.logger.info("Instance exists and has NeoForge - checking resource pack configuration...")

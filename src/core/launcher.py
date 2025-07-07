@@ -143,7 +143,6 @@ class LauncherCore:
         
         def check_thread():
             try:
-                self.logger.info("Checking for updates...")
                 if not self.update_service:
                     raise LauncherError("Update service not initialized")
                 
