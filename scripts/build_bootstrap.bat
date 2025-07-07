@@ -46,8 +46,16 @@ taskkill /F /IM pythonw.exe 2>nul
 timeout /t 2 /nobreak >nul
 
 mkdir temp_launcher 2>nul
+
+echo Creating temporary virtual environment for dependency bundling...
+%PYTHON_EXE% -m venv temp_launcher\_runtime_env
+
+echo Installing dependencies in virtual environment...
+temp_launcher\_runtime_env\Scripts\python.exe -m pip install --upgrade pip
+temp_launcher\_runtime_env\Scripts\python.exe -m pip install -r requirements.txt
+
+echo Copying application files...
 copy app.py temp_launcher\
-copy requirements.txt temp_launcher\
 
 echo Creating dynamic version.json...
 echo { > temp_launcher\version.json
@@ -58,6 +66,14 @@ echo } >> temp_launcher\version.json
 
 echo Copying source files (excluding cache)...
 robocopy src temp_launcher\src /E /XD __pycache__ .pytest_cache /XF *.pyc *.pyo *.pyd
+
+echo Copying bundled Python runtime and dependencies...
+robocopy temp_launcher\_runtime_env temp_launcher\_runtime_env /E /XD __pycache__ .pytest_cache /XF *.pyc *.pyo *.pyd
+
+echo Creating launcher startup script...
+echo @echo off > temp_launcher\launch.bat
+echo cd /d "%%~dp0" >> temp_launcher\launch.bat
+echo _runtime_env\Scripts\python.exe app.py >> temp_launcher\launch.bat
 
 echo Creating zip package...
 powershell -Command "Start-Sleep -Seconds 1; Compress-Archive -Path './temp_launcher/*' -DestinationPath './launcher_package.zip' -Force"

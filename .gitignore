@@ -16,6 +16,7 @@ launcher_package.zip
 launcher/
 launcher_config.json
 launcher_profiles.json
+temp_launcher
 *.log
 
 # Minecraft Instance Data
