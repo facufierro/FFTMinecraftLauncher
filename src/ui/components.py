@@ -59,7 +59,7 @@ class StatusFrame(ctk.CTkFrame):
             text=icon, 
             font=ctk.CTkFont(size=20)
         )
-        icon_label.pack(pady=(10, 4))
+        icon_label.pack(pady=(10, 4), anchor="center")
         
         # Title
         title_label = ctk.CTkLabel(
@@ -68,7 +68,7 @@ class StatusFrame(ctk.CTkFrame):
             font=ctk.CTkFont(size=11, weight="normal"),
             text_color=("gray60", "gray40")
         )
-        title_label.pack()
+        title_label.pack(anchor="center")
         
         # Value
         value_label = ctk.CTkLabel(
@@ -76,7 +76,7 @@ class StatusFrame(ctk.CTkFrame):
             text=value, 
             font=ctk.CTkFont(size=12, weight="bold")
         )
-        value_label.pack(pady=(1, 10))
+        value_label.pack(pady=(1, 10), anchor="center")
         
         # Store reference for updates (using type: ignore to suppress lint warnings)
         card.value_label = value_label  # type: ignore
