@@ -17,9 +17,12 @@ import logging
 def main():
     """Main entry point for the application."""
     try:
-        # Setup logging
+        # Setup logging - check if we're running unified with bootstrap
         log_file = "launcher.log"
-        setup_logger(logging.INFO, log_file)
+        # If this script is imported (unified mode), we don't want console output
+        # If this script is run directly, we do want console output
+        console_output = __name__ == "__main__"
+        setup_logger(logging.INFO, log_file, console_output)
         
         # Initialize launcher core
         launcher_core = LauncherCore()

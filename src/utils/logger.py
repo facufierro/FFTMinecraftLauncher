@@ -14,7 +14,7 @@ class LauncherLogger:
         self.logger = logging.getLogger(name)
         self.ui_callback = None
         
-    def setup(self, log_level: int = logging.INFO, log_file: Optional[str] = None):
+    def setup(self, log_level: int = logging.INFO, log_file: Optional[str] = None, console_output: bool = True):
         """Setup the logger with file and console handlers."""
         self.logger.setLevel(log_level)
         
@@ -27,10 +27,11 @@ class LauncherLogger:
             datefmt='%H:%M:%S'
         )
         
-        # Console handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(formatter)
-        self.logger.addHandler(console_handler)
+        # Console handler (optional - may be disabled in unified mode)
+        if console_output:
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            self.logger.addHandler(console_handler)
         
         # File handler (optional)
         if log_file:
@@ -80,14 +81,14 @@ class LauncherLogger:
 _logger_instance: Optional[LauncherLogger] = None
 
 
-def setup_logger(log_level: int = logging.INFO, log_file: Optional[str] = None) -> LauncherLogger:
+def setup_logger(log_level: int = logging.INFO, log_file: Optional[str] = None, console_output: bool = True) -> LauncherLogger:
     """Setup and return the global logger instance."""
     global _logger_instance
     
     if _logger_instance is None:
         _logger_instance = LauncherLogger()
     
-    _logger_instance.setup(log_level, log_file)
+    _logger_instance.setup(log_level, log_file, console_output)
     return _logger_instance
 
 

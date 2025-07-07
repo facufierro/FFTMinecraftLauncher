@@ -42,8 +42,9 @@ class LauncherCore:
     def _initialize(self) -> None:
         """Initialize the launcher components."""
         try:
-            # Setup logging
-            setup_logger()
+            # Setup logging only if not already initialized
+            if not self.logger.logger.handlers:
+                setup_logger()
             self.logger.info("Initializing FFT Minecraft Launcher...")
             
             # Load configuration

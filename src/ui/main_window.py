@@ -177,8 +177,15 @@ class MainWindow:
         Args:
             message: Message to add
         """
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        formatted_message = f"[{timestamp}] {message}"
+        # Check if message already has a timestamp prefix from unified logging
+        if message.startswith("[") and "] " in message[:12]:
+            # Message already has timestamp, use as-is
+            formatted_message = message
+        else:
+            # Add timestamp to message
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            formatted_message = f"[{timestamp}] {message}"
+        
         self.log_frame.add_log_message(formatted_message)
     
     # Update checking methods

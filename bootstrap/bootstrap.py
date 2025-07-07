@@ -427,7 +427,7 @@ def download_and_install_update(update_info):
 
 
 def launch_main_app():
-    """Launch the main launcher application."""
+    """Launch the main launcher application directly in the same process."""
     # Get the directory where the bootstrap exe is located
     if getattr(sys, 'frozen', False):
         bootstrap_dir = Path(sys.executable).parent
@@ -456,127 +456,81 @@ def launch_main_app():
         return False
     
     try:
-        safe_log('info', f"Starting launcher: {main_script.name}")
+        safe_log('info', f"Loading launcher: {main_script.name}")
         
-        # Find Python executable (prioritize bundled runtime)
-        python_exe = None
+        # Add launcher directory to Python path
+        launcher_dir_str = str(launcher_dir.absolute())
+        if launcher_dir_str not in sys.path:
+            sys.path.insert(0, launcher_dir_str)
         
-        # First, try bundled Python runtime
-        bundled_python = launcher_dir / "_runtime_env" / "Scripts" / "python.exe"
-        if bundled_python.exists():
-            python_exe = str(bundled_python.absolute())
-            safe_log('debug', f"Using bundled Python runtime: {python_exe}")
-        else:
-            # Second, try .venv virtual environment in the main project directory
-            project_venv_python = bootstrap_dir.parent / ".venv" / "Scripts" / "python.exe"
-            if project_venv_python.exists():
-                python_exe = str(project_venv_python.absolute())
-                safe_log('debug', f"Using project .venv virtual environment Python: {python_exe}")
-            else:
-                # Third, try _env virtual environment in the main project directory
-                project_env_python = bootstrap_dir.parent / "_env" / "Scripts" / "python.exe"
-                if project_env_python.exists():
-                    python_exe = str(project_env_python.absolute())
-                    safe_log('debug', f"Using project _env virtual environment Python: {python_exe}")
-                else:
-                    # Fourth, try virtual environment in bootstrap directory
-                    local_venv_python = bootstrap_dir / "_env" / "Scripts" / "python.exe"
-                    if local_venv_python.exists():
-                        python_exe = str(local_venv_python.absolute())
-                        safe_log('debug', f"Using local virtual environment Python: {python_exe}")
-                    else:
-                        # If running from frozen executable, find system Python
-                        if getattr(sys, 'frozen', False):
-                            # Try common Python installation paths
-                            potential_paths = [
-                                "python.exe",  # Try PATH first
-                                "py.exe",      # Python Launcher
-                                "C:\\Python\\python.exe",
-                                "C:\\Program Files\\Python\\python.exe",
-                                "C:\\Program Files (x86)\\Python\\python.exe"
-                            ]
-                            
-                            for path in potential_paths:
-                                try:
-                                    # Test if this python executable works
-                                    result = subprocess.run([path, "--version"], 
-                                                          capture_output=True, 
-                                                          text=True, 
-                                                          timeout=5)
-                                    if result.returncode == 0:
-                                        python_exe = path
-                                        safe_log('debug', f"Found system Python executable: {python_exe}")
-                                        break
-                                except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
-                                    continue
-                            
-                            if not python_exe:
-                                safe_log('error', "Could not find Python executable!")
-                                safe_log('error', "The launcher package may be incomplete - missing bundled Python runtime.")
-                                safe_log('error', "Please ensure Python is installed on your system, or contact support.")
-                                return False
-                        else:
-                            # Running from script, use current Python
-                            python_exe = sys.executable
-                            safe_log('debug', f"Using current Python: {python_exe}")
+        # Add src directory to path for imports
+        src_path = launcher_dir / "src"
+        src_path_str = str(src_path.absolute())
+        if src_path_str not in sys.path:
+            sys.path.insert(0, src_path_str)
         
-        # Set up environment
-        env = os.environ.copy()
-        env['PYTHONPATH'] = str(launcher_dir.absolute())
+        # Change working directory to launcher directory
+        original_cwd = os.getcwd()
+        os.chdir(launcher_dir)
         
-        # Launch Python script and detach from it completely
-        # Use DETACHED_PROCESS to avoid console inheritance
-        creation_flags = 0
-        if os.name == 'nt':
-            creation_flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        safe_log('info', "Starting unified launcher...")
+        safe_log('info', "=" * 40)
         
-        safe_log('debug', f"Launching: {python_exe} {main_script.name}")
-        safe_log('debug', f"Working directory: {launcher_dir.absolute()}")
-        
-        # For debugging purposes, capture stderr when launcher fails
-        process = subprocess.Popen([python_exe, str(main_script.name)], 
-                                 cwd=str(launcher_dir.absolute()), 
-                                 env=env,
-                                 stdin=subprocess.DEVNULL,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,
-                                 creationflags=creation_flags,
-                                 text=True)
-        
-        # Wait a moment to see if the process starts successfully
-        time.sleep(2)
-        
-        # Check if process is still running
-        poll_result = process.poll()
-        if poll_result is None:
-            safe_log('info', f"Launcher started successfully! (PID: {process.pid})")
-            # Close pipes since we don't need them anymore for a successful launch
-            try:
-                if process.stdout:
-                    process.stdout.close()
-                if process.stderr:
-                    process.stderr.close()
-            except:
-                pass
-            return True
-        else:
-            # Process exited, capture error output
-            try:
-                stdout, stderr = process.communicate(timeout=5)
-                if stderr:
-                    safe_log('error', f"Launcher stderr: {stderr.strip()}")
-                if stdout:
-                    safe_log('error', f"Launcher stdout: {stdout.strip()}")
-            except subprocess.TimeoutExpired:
-                safe_log('error', "Timeout waiting for launcher error output")
-            except Exception as e:
-                safe_log('error', f"Failed to capture launcher error output: {e}")
+        try:
+            # Import and run the launcher in the same process
+            from src.core.launcher import LauncherCore, LauncherError
+            from src.ui.main_window import MainWindow
+            from src.utils.logger import setup_logger
+            import logging
             
-            safe_log('error', f"Launcher process exited immediately with code: {poll_result}")
+            # Setup logging for the main launcher (reuse the bootstrap console)
+            log_file = "launcher.log"
+            setup_logger(logging.INFO, log_file, console_output=False)
+            
+            # Create a unified logger callback that uses our bootstrap logger
+            def unified_log_callback(message):
+                # Extract just the message part (remove timestamp if present)
+                if message.startswith('[') and '] ' in message:
+                    # Remove the timestamp prefix since we'll add our own
+                    msg_part = message.split('] ', 1)[-1]
+                else:
+                    msg_part = message
+                safe_log('info', f"Launcher: {msg_part}")
+            
+            # Initialize launcher core
+            launcher_core = LauncherCore()
+            
+            # Set up the unified logging callback
+            launcher_core.logger.set_ui_callback(unified_log_callback)
+            
+            # Create and run UI
+            main_window = MainWindow(launcher_core)
+            
+            safe_log('info', "Launcher GUI initialized successfully")
+            safe_log('info', "Starting main event loop...")
+            
+            # Run the main window (this will block until the window is closed)
+            main_window.run()
+            
+            safe_log('info', "Launcher GUI closed")
+            return True
+            
+        except LauncherError as e:
+            safe_log('error', f"Launcher error: {e}")
             return False
+        except Exception as e:
+            safe_log('error', f"Unexpected launcher error: {e}")
+            import traceback
+            safe_log('error', f"Traceback: {traceback.format_exc()}")
+            return False
+        finally:
+            # Restore original working directory
+            os.chdir(original_cwd)
         
     except Exception as e:
-        safe_log('error', f"Failed to start launcher: {e}")
+        safe_log('error', f"Failed to load launcher: {e}")
+        import traceback
+        safe_log('error', f"Traceback: {traceback.format_exc()}")
         return False
 
 
@@ -736,12 +690,10 @@ def main():
     time.sleep(2)
     
     # Launch main app
-    logger.info("Starting launcher...")
+    logger.info("Starting unified launcher...")
+    logger.info("=" * 40)
     if launch_main_app():
-        # Give the app more time to start properly
-        logger.info("Waiting for launcher to initialize...")
-        time.sleep(3)
-        logger.info("Bootstrap completed successfully - exiting.")
+        logger.info("Launcher session completed successfully")
         sys.exit(0)
     else:
         logger.error("Failed to start launcher!")
