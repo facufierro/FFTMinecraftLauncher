@@ -314,6 +314,8 @@ class MainWindow:
         # Also check for launcher self-updates (console only)
         if self.self_update_service:
             self.root.after(2000, self._check_for_launcher_updates_silent)
+            # Check for bootstrap updates too
+            self.root.after(3000, self._check_for_bootstrap_updates_silent)
     
     def _check_instance_status(self) -> None:
         """Check if the instance is installed and up to date."""
@@ -360,6 +362,58 @@ class MainWindow:
         # Run in a separate thread to avoid blocking UI
         import threading
         threading.Thread(target=check_async, daemon=True).start()
+    
+    def _check_for_bootstrap_updates_silent(self) -> None:
+        """Check for bootstrap updates silently (console logging only)."""
+        if not self.self_update_service:
+            return
+        
+        def check_async():
+            if self.self_update_service:  # Type guard for mypy
+                update_info = self.self_update_service.check_for_bootstrap_update()
+                # Just log the result - no UI updates
+                if update_info:
+                    version = update_info.get('version', 'Unknown')
+                    self.root.after(0, lambda: self._add_log(f"Bootstrap update available: v{version}"))
+                    
+                    # Check if auto-update is enabled for bootstrap updates
+                    if self.launcher_core.config and self.launcher_core.config.auto_update:
+                        self.root.after(0, lambda: self._add_log("Auto-update enabled - updating bootstrap automatically..."))
+                        self.root.after(0, lambda: self._start_bootstrap_auto_update(update_info))
+                    else:
+                        self.root.after(0, lambda: self._add_log("Auto-update disabled - bootstrap update available but not installing automatically"))
+                else:
+                    self.root.after(0, lambda: self._add_log("Bootstrap is up to date"))
+        
+        # Run in a separate thread to avoid blocking UI
+        import threading
+        threading.Thread(target=check_async, daemon=True).start()
+    
+    def _start_bootstrap_auto_update(self, update_info) -> None:
+        """Start automatic bootstrap update process."""
+        if not self.self_update_service:
+            return
+            
+        self._add_log("Auto-updating bootstrap...")
+        self.progress_frame.update_progress("Updating bootstrap...", None, "loading")
+        
+        def update_async():
+            if self.self_update_service:  # Type guard for mypy
+                try:
+                    success = self.self_update_service.download_and_install_bootstrap_update(update_info)
+                    if success:
+                        self.root.after(0, lambda: self._add_log("Bootstrap updated successfully - restart launcher to use new bootstrap"))
+                        self.root.after(0, lambda: self.progress_frame.update_progress("Bootstrap updated", 1.0, "success"))
+                    else:
+                        self.root.after(0, lambda: self._add_log("Bootstrap update failed"))
+                        self.root.after(0, lambda: self.progress_frame.update_progress("Bootstrap update failed", 0, "error"))
+                except Exception as e:
+                    self.root.after(0, lambda: self._add_log(f"Bootstrap update error: {e}"))
+                    self.root.after(0, lambda: self.progress_frame.update_progress("Bootstrap update error", 0, "error"))
+        
+        # Run in a separate thread to avoid blocking UI
+        import threading
+        threading.Thread(target=update_async, daemon=True).start()
     
     def _start_launcher_auto_update(self, update_info) -> None:
         """Start automatic launcher self-update process."""

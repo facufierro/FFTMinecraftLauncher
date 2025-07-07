@@ -96,6 +96,49 @@ class SelfUpdateService:
             self._update_progress("Error checking for launcher updates", None, "error")
             return None
     
+    def check_for_bootstrap_update(self) -> Optional[Dict[str, Any]]:
+        """Check if a new version of the bootstrap is available.
+        
+        Returns:
+            Dictionary with update info if available, None otherwise.
+        """
+        try:
+            self._update_progress("Checking for bootstrap updates...", None, "loading")
+            
+            # Get latest release from GitHub
+            latest_release = self._get_latest_launcher_release()
+            if not latest_release:
+                self._update_progress("Could not check for bootstrap updates", None, "warning")
+                return None
+            
+            latest_version = latest_release.get('tag_name', '').lstrip('v')
+            current_bootstrap_version = self._get_current_bootstrap_version()
+            
+            self.logger.info(f"Current bootstrap version: {current_bootstrap_version}")
+            self.logger.info(f"Latest available version: {latest_version}")
+            
+            if is_newer_version(latest_version, current_bootstrap_version):
+                bootstrap_url = self._get_bootstrap_download_url(latest_release)
+                if bootstrap_url:
+                    self._update_progress(f"Bootstrap update available: v{latest_version}", None, "info")
+                    return {
+                        'version': latest_version,
+                        'download_url': bootstrap_url,
+                        'release_notes': latest_release.get('body', ''),
+                        'release_data': latest_release
+                    }
+                else:
+                    self._update_progress("No bootstrap found in latest release", None, "warning")
+                    return None
+            else:
+                self._update_progress("Bootstrap is up to date", None, "success")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error checking for bootstrap updates: {e}")
+            self._update_progress("Error checking for bootstrap updates", None, "error")
+            return None
+    
     def _get_latest_launcher_release(self) -> Optional[Dict[str, Any]]:
         """Get the latest launcher release from GitHub.
         
@@ -145,6 +188,178 @@ class SelfUpdateService:
                 return asset.get('browser_download_url')
         
         return None
+    
+    def _get_current_bootstrap_version(self) -> str:
+        """Get the current bootstrap version.
+        
+        Returns:
+            Current bootstrap version or "0.0.0" if not found.
+        """
+        try:
+            # Look for bootstrap executable in parent directory or current directory
+            bootstrap_paths = [
+                Path.cwd().parent / "FFTMinecraftLauncher.exe",  # If launched from launcher subdirectory
+                Path.cwd().parent / "bootstrap.exe", 
+                Path.cwd() / "FFTMinecraftLauncher.exe",  # If launched from main directory
+                Path.cwd() / "bootstrap.exe"
+            ]
+            
+            # Also check for version file that bootstrap might maintain
+            version_files = [
+                Path.cwd().parent / "bootstrap_version.json",
+                Path.cwd() / "bootstrap_version.json"
+            ]
+            
+            # First try to read version from bootstrap version file
+            for version_file in version_files:
+                if version_file.exists():
+                    try:
+                        import json
+                        with open(version_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                            version = data.get('version', '0.0.0')
+                            if version != "dynamic":
+                                return version
+                    except Exception as e:
+                        self.logger.debug(f"Could not read bootstrap version from {version_file}: {e}")
+            
+            # If no version file, assume it needs updating
+            self.logger.debug("No bootstrap version file found, assuming update needed")
+            return "0.0.0"
+            
+        except Exception as e:
+            self.logger.debug(f"Error getting bootstrap version: {e}")
+            return "0.0.0"
+    
+    def _get_bootstrap_download_url(self, release_data: Dict[str, Any]) -> Optional[str]:
+        """Get the download URL for the bootstrap executable from release assets.
+        
+        Args:
+            release_data: GitHub release data
+            
+        Returns:
+            Download URL for the bootstrap executable or None if not found.
+        """
+        assets = release_data.get('assets', [])
+        
+        # Look for bootstrap executable (prioritize specific names)
+        bootstrap_names = [
+            'FFTMinecraftLauncher.exe',  # Main bootstrap name
+            'bootstrap.exe',             # Alternative name
+            'FFTLauncher.exe'           # Another alternative
+        ]
+        
+        for asset in assets:
+            asset_name = asset.get('name', '')
+            if asset_name in bootstrap_names:
+                return asset.get('browser_download_url')
+        
+        # Fallback: look for any exe that might be the bootstrap
+        for asset in assets:
+            name = asset.get('name', '').lower()
+            if name.endswith('.exe') and ('bootstrap' in name or 'launcher' in name):
+                return asset.get('browser_download_url')
+        
+        return None
+    
+    def download_and_install_bootstrap_update(self, update_info: Dict[str, Any]) -> bool:
+        """Download and install the bootstrap update.
+        
+        Args:
+            update_info: Update information dictionary
+            
+        Returns:
+            True if update was successful, False otherwise.
+        """
+        download_url = update_info.get('download_url')
+        if not download_url:
+            self._update_progress("No bootstrap download URL available", None, "error")
+            return False
+        
+        try:
+            # Create temporary directory for download
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                download_file = temp_path / "bootstrap_new.exe"
+                
+                # Download the bootstrap executable
+                if not self._download_file(download_url, download_file):
+                    return False
+                
+                # Verify the download
+                if not download_file.exists() or download_file.stat().st_size == 0:
+                    self._update_progress("Downloaded bootstrap file is invalid", None, "error")
+                    return False
+                
+                # Determine where to install the bootstrap
+                bootstrap_locations = [
+                    Path.cwd().parent / "FFTMinecraftLauncher.exe",  # Most likely location
+                    Path.cwd().parent / "bootstrap.exe",
+                    Path.cwd() / "FFTMinecraftLauncher.exe",
+                    Path.cwd() / "bootstrap.exe"
+                ]
+                
+                # Find existing bootstrap or use default location
+                target_bootstrap = None
+                for location in bootstrap_locations:
+                    if location.exists():
+                        target_bootstrap = location
+                        break
+                
+                if not target_bootstrap:
+                    # Default to parent directory with main name
+                    target_bootstrap = Path.cwd().parent / "FFTMinecraftLauncher.exe"
+                
+                self._update_progress(f"Installing bootstrap to: {target_bootstrap}", None, "info")
+                
+                # Create backup of current bootstrap
+                backup_path = target_bootstrap.with_suffix('.exe.backup')
+                if target_bootstrap.exists():
+                    shutil.copy2(str(target_bootstrap), str(backup_path))
+                    self.logger.info(f"Created bootstrap backup: {backup_path}")
+                
+                try:
+                    # Install new bootstrap
+                    shutil.copy2(str(download_file), str(target_bootstrap))
+                    self._update_progress("Bootstrap update completed successfully", 1.0, "success")
+                    
+                    # Create/update bootstrap version file
+                    version_file = target_bootstrap.parent / "bootstrap_version.json"
+                    try:
+                        import json
+                        import time
+                        version_data = {
+                            'version': update_info['version'],
+                            'updated_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                            'updated_by': 'launcher'
+                        }
+                        with open(version_file, 'w', encoding='utf-8') as f:
+                            json.dump(version_data, f, indent=2)
+                        self.logger.info(f"Updated bootstrap version file: {version_file}")
+                    except Exception as e:
+                        self.logger.warning(f"Could not update bootstrap version file: {e}")
+                    
+                    # Remove backup if successful
+                    if backup_path.exists():
+                        backup_path.unlink()
+                    
+                    return True
+                    
+                except Exception as e:
+                    self.logger.error(f"Failed to install bootstrap: {e}")
+                    self._update_progress("Failed to install bootstrap update", None, "error")
+                    
+                    # Restore backup if installation failed
+                    if backup_path.exists() and not target_bootstrap.exists():
+                        shutil.copy2(str(backup_path), str(target_bootstrap))
+                        self.logger.info("Restored bootstrap from backup")
+                    
+                    return False
+                
+        except Exception as e:
+            self.logger.error(f"Error during bootstrap update: {e}")
+            self._update_progress("Error during bootstrap update", None, "error")
+            return False
     
     def download_and_install_update(self, update_info: Dict[str, Any]) -> bool:
         """Download and install the launcher update using external updater.
