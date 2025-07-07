@@ -217,10 +217,23 @@ class UpdateService:
         essential_folders = ['mods', 'config', 'versions']
         has_essential = all((instance_path / folder).exists() for folder in essential_folders)
         
+        if not has_essential:
+            return False
+        
         # Check if NeoForge is installed
         has_neoforge = self._is_neoforge_installed(instance_path)
         
-        return has_essential and has_neoforge
+        if not has_neoforge:
+            return False
+        
+        # Check if sync folders exist (for folders that should be synced)
+        for folder_name in self.config.folders_to_sync:
+            folder_path = instance_path / folder_name
+            if not folder_path.exists():
+                self.logger.info(f"Sync folder '{folder_name}' missing - instance setup incomplete")
+                return False
+        
+        return True
 
     def _ensure_instance_setup(self) -> None:
         """Ensure the instance is properly set up with NeoForge and launcher profile."""
@@ -230,15 +243,35 @@ class UpdateService:
         if not instance_path:
             raise UpdateError("Instance path could not be determined")
         
+        # Check if instance is already properly set up
+        if self.check_instance_exists():
+            self._update_progress("Instance already exists and is properly configured")
+            self.logger.info("Instance verification passed - skipping full setup")
+            # Still ensure launcher profile is up to date (lightweight operation)
+            self._ensure_launcher_profile(instance_path)
+            return
+        
+        self.logger.info("Instance setup required - checking what needs to be done...")
+        
         # Create the instance directory if it doesn't exist
         if not instance_path.exists():
             self._update_progress("Creating instance directory...")
+            self.logger.info(f"Creating new instance directory at: {instance_path}")
             instance_path.mkdir(parents=True, exist_ok=True)
             
             # Create necessary subdirectories
             subdirs = ['mods', 'config', 'resourcepacks', 'kubejs', 'defaultconfigs', 'versions']
             for subdir in subdirs:
                 (instance_path / subdir).mkdir(exist_ok=True)
+        else:
+            # Instance directory exists, check if missing essential subdirectories
+            subdirs = ['mods', 'config', 'resourcepacks', 'kubejs', 'defaultconfigs', 'versions']
+            for subdir in subdirs:
+                subdir_path = instance_path / subdir
+                if not subdir_path.exists():
+                    self._update_progress(f"Creating missing directory: {subdir}")
+                    self.logger.info(f"Creating missing subdirectory: {subdir}")
+                    subdir_path.mkdir(exist_ok=True)
         
         # Create launcher profile BEFORE installing NeoForge
         self._ensure_launcher_profile(instance_path)
@@ -246,7 +279,11 @@ class UpdateService:
         # Check if NeoForge is installed
         if not self._is_neoforge_installed(instance_path):
             self._update_progress("Installing NeoForge...")
+            self.logger.info("NeoForge not found - installing...")
             self._install_neoforge(instance_path)
+        else:
+            self._update_progress("NeoForge already installed")
+            self.logger.info("NeoForge already installed - skipping installation")
     
     def _is_neoforge_installed(self, instance_path: Path) -> bool:
         """Check if NeoForge is installed in the instance."""
@@ -331,20 +368,36 @@ class UpdateService:
             # Check if profile already exists for this instance
             profile_name = "FFTClient"
             profile_exists = False
+            profile_needs_update = False
             
             for profile_id, profile_data in profiles_data.get("profiles", {}).items():
                 # Check by name OR by gameDir (to update existing instances)
                 if (profile_data.get("name") == profile_name or 
                     profile_data.get("gameDir") == str(instance_path)):
-                    # Update the profile with correct name, gameDir and version
-                    profile_data["name"] = profile_name
-                    profile_data["gameDir"] = str(instance_path)
-                    profile_data["lastVersionId"] = "neoforge-21.1.186"
-                    profile_data["type"] = "custom"
-                    profile_data["icon"] = "Furnace"
+                    
+                    # Check if profile needs updating
+                    needs_update = False
+                    if profile_data.get("name") != profile_name:
+                        profile_data["name"] = profile_name
+                        needs_update = True
+                    if profile_data.get("gameDir") != str(instance_path):
+                        profile_data["gameDir"] = str(instance_path)
+                        needs_update = True
+                    if profile_data.get("lastVersionId") != "neoforge-21.1.186":
+                        profile_data["lastVersionId"] = "neoforge-21.1.186"
+                        needs_update = True
+                    if profile_data.get("type") != "custom":
+                        profile_data["type"] = "custom"
+                        needs_update = True
+                    if profile_data.get("icon") != "Furnace":
+                        profile_data["icon"] = "Furnace"
+                        needs_update = True
+                    
                     profile_exists = True
+                    profile_needs_update = needs_update
                     break
             
+            # Only create new profile if it doesn't exist
             if not profile_exists:
                 # Create new profile
                 profile_id = str(uuid.uuid4()).replace('-', '')
@@ -360,10 +413,15 @@ class UpdateService:
                 }
                 
                 profiles_data["profiles"][profile_id] = new_profile
+                profile_needs_update = True
             
-            # Save the updated profiles
-            with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
-                json.dump(profiles_data, f, indent=2)
+            # Only save if we made changes
+            if profile_needs_update:
+                with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
+                    json.dump(profiles_data, f, indent=2)
+                self.logger.info("Updated launcher profile")
+            else:
+                self.logger.info("Launcher profile already up to date")
                 
         except Exception as e:
             self.logger.warning(f"Failed to create launcher profile: {e}")
@@ -469,8 +527,14 @@ class UpdateService:
         """
         self._update_progress(f"Syncing directory: {source.name}")
         
+        # First check if the directory actually needs updating
+        if destination.exists() and not self._compare_folder_contents(source, destination):
+            self.logger.info(f"Directory {source.name} is already up to date - skipping sync")
+            return
+        
         try:
             FileUtils.safe_copy_tree(source, destination, overwrite=True)
+            self.logger.info(f"Successfully synced directory: {source.name}")
         except FileOperationError as e:
             self.logger.error(f"Failed to sync directory {source.name}: {e}")
             raise
