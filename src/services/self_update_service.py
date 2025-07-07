@@ -444,6 +444,8 @@ class SelfUpdateService:
             
             total_size = int(response.headers.get('content-length', 0))
             downloaded = 0
+            last_progress_update = 0
+            progress_update_threshold = 0.05  # Update every 5%
             
             with open(destination, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -453,11 +455,14 @@ class SelfUpdateService:
                         
                         if total_size > 0:
                             progress = downloaded / total_size
-                            self._update_progress(
-                                f"Downloading... {downloaded // 1024}KB / {total_size // 1024}KB",
-                                progress,
-                                "loading"
-                            )
+                            # Only update progress every 5% to avoid spam and improve performance
+                            if progress - last_progress_update >= progress_update_threshold or progress >= 1.0:
+                                self._update_progress(
+                                    f"Downloading... {downloaded // 1024}KB / {total_size // 1024}KB",
+                                    progress,
+                                    "loading"
+                                )
+                                last_progress_update = progress
             
             self._update_progress("Download completed", 1.0, "success")
             return True

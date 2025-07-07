@@ -172,6 +172,10 @@ class MainWindow:
         # Setup logger callback
         def launcher_log_callback(formatted_message):
             """Handle launcher log messages with proper formatting."""
+            # Skip overly verbose debug messages that might slow things down
+            if "DEBUG" in formatted_message and any(spam_word in formatted_message.lower() for spam_word in ["chunk", "byte", "progress", "tick"]):
+                return
+            
             # Extract timestamp, level, and message from format: [HH:MM:SS] [LEVEL] message
             if formatted_message.startswith('[') and '] [' in formatted_message:
                 # Parse format: [timestamp] [LEVEL] message
@@ -535,8 +539,19 @@ class MainWindow:
             progress: Progress value (0.0 to 1.0), None for indeterminate
             status_type: Type of status ('info', 'success', 'warning', 'error', 'loading')
         """
-        # Show self-update progress in the log only for important messages
-        if any(keyword in message.lower() for keyword in ["update available", "downloading", "completed", "failed", "error", "installing"]):
+        # Filter out noisy download progress messages that slow down downloads
+        message_lower = message.lower()
+        
+        # Skip download progress ticks (e.g., "Downloading... 500KB / 2000KB")
+        if "downloading..." in message_lower and "kb" in message_lower:
+            # Only update the progress bar, don't log to console
+            if progress is not None:
+                self.progress_frame.update_progress(f"Updating launcher: {message}", progress)
+            return
+        
+        # Only log important milestone messages
+        important_keywords = ["update available", "download completed", "completed", "failed", "error", "installing", "started", "starting"]
+        if any(keyword in message_lower for keyword in important_keywords):
             self._add_log(f"Launcher Update: {message}")
         
         # Update progress bar if progress is provided
@@ -676,6 +691,23 @@ class MainWindow:
     
     def _on_update_progress(self, message: str) -> None:
         """Handle update progress."""
+        # Filter out noisy progress messages that can slow down downloads
+        message_lower = message.lower()
+        
+        # Skip frequent download progress updates
+        if ("downloading" in message_lower and ("kb" in message_lower or "mb" in message_lower)) or \
+           ("%" in message and any(word in message_lower for word in ["download", "progress"])):
+            # Only update the progress bar, don't log every tick
+            self.progress_frame.update_progress(message)
+            return
+        
+        # Log important milestone messages
+        important_keywords = ["starting", "completed", "extracting", "syncing", "installing", "failed", "error"]
+        if any(keyword in message_lower for keyword in important_keywords):
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._add_launcher_log("info", message, timestamp)
+        
+        # Always update the progress bar
         self.progress_frame.update_progress(message)
     
     def _on_update_completed(self, data=None) -> None:
