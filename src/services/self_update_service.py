@@ -193,35 +193,9 @@ class SelfUpdateService:
             Current bootstrap version or "0.0.0" if not found.
         """
         try:
-            # Look for bootstrap executable in parent directory or current directory
-            bootstrap_paths = [
-                Path.cwd().parent / "FFTMinecraftLauncher.exe",  # If launched from launcher subdirectory
-                Path.cwd().parent / "bootstrap.exe", 
-                Path.cwd() / "FFTMinecraftLauncher.exe",  # If launched from main directory
-                Path.cwd() / "bootstrap.exe"
-            ]
-            
-            # Also check for version file that bootstrap might maintain
-            version_files = [
-                Path.cwd().parent / "bootstrap_version.json",
-                Path.cwd() / "bootstrap_version.json"
-            ]
-            
-            # First try to read version from bootstrap version file
-            for version_file in version_files:
-                if version_file.exists():
-                    try:
-                        import json
-                        with open(version_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            version = data.get('version', '0.0.0')
-                            if version != "dynamic":
-                                return version
-                    except Exception as e:
-                        self.logger.debug(f"Could not read bootstrap version from {version_file}: {e}")
-            
-            # If no version file, assume it needs updating
-            self.logger.debug("No bootstrap version file found, assuming update needed")
+            # Since we're removing version.json files, always assume bootstrap needs updating
+            # The actual check will be done by comparing with GitHub releases
+            self.logger.debug("No local bootstrap version tracking, will check against GitHub")
             return "0.0.0"
             
         except Exception as e:
@@ -319,22 +293,6 @@ class SelfUpdateService:
                     # Install new bootstrap
                     shutil.copy2(str(download_file), str(target_bootstrap))
                     self._update_progress("Bootstrap update completed successfully", 1.0, "success")
-                    
-                    # Create/update bootstrap version file
-                    version_file = target_bootstrap.parent / "bootstrap_version.json"
-                    try:
-                        import json
-                        import time
-                        version_data = {
-                            'version': update_info['version'],
-                            'updated_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-                            'updated_by': 'launcher'
-                        }
-                        with open(version_file, 'w', encoding='utf-8') as f:
-                            json.dump(version_data, f, indent=2)
-                        self.logger.info(f"Updated bootstrap version file: {version_file}")
-                    except Exception as e:
-                        self.logger.warning(f"Could not update bootstrap version file: {e}")
                     
                     # Remove backup if successful
                     if backup_path.exists():

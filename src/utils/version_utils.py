@@ -8,10 +8,9 @@ from .logger import get_logger
 
 
 def get_launcher_version() -> str:
-    """Get the current launcher application version.
+    """Get the current launcher application version from GitHub releases.
     
-    This reads from version.json in the launcher directory, which is dynamically
-    generated during the build process.
+    This gets the latest release tag from the FFTMinecraftLauncher repository.
     
     Returns:
         Version string (e.g., "1.0.16") or "0.0.0" if not found.
@@ -19,46 +18,30 @@ def get_launcher_version() -> str:
     logger = get_logger()
     
     try:
-        # Get the directory where the launcher executable is located
-        if getattr(sys, 'frozen', False):
-            # Running as PyInstaller executable
-            launcher_dir = Path(sys.executable).parent
-        else:
-            # Running from source - look for version.json in project root
-            launcher_dir = Path(__file__).parent.parent.parent
+        import requests
         
-        version_file = launcher_dir / "version.json"
+        # GitHub repository for launcher releases
+        launcher_repo = "facufierro/FFTMinecraftLauncher"
+        url = f"https://api.github.com/repos/{launcher_repo}/releases/latest"
         
-        if not version_file.exists():
-            logger.warning(f"Version file not found at {version_file}")
-            return "0.0.0"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
         
-        # Check if file is empty first
-        if version_file.stat().st_size == 0:
-            logger.warning("Version file is empty")
-            return "0.0.0"
+        release_data = response.json()
+        version = release_data.get('tag_name', '').lstrip('v')
         
-        with open(version_file, 'r', encoding='utf-8-sig') as f:
-            content = f.read().strip()
-            if not content:
-                logger.warning("Version file contains no content")
-                return "0.0.0"
-            
-            data = json.loads(content)
-            version = data.get('version', '0.0.0')
-            
-            # Handle the case where version is "dynamic" (development file)
-            if version == "dynamic":
-                logger.warning("Found development version file with 'dynamic' version")
-                return "0.0.0"
-            
+        if version:
+            logger.debug(f"Current launcher version from GitHub: {version}")
             return version
+        else:
+            logger.warning("No version tag found in latest launcher release")
+            return "0.0.0"
             
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in version file: {e}")
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch launcher version from GitHub: {e}")
         return "0.0.0"
     except Exception as e:
-        logger.error(f"Error reading launcher version: {e}")
+        logger.error(f"Error getting launcher version: {e}")
         return "0.0.0"
 
 

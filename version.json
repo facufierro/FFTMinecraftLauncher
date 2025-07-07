@@ -1,5 +1,0 @@
-{
-    "version": "dynamic",
-    "release_date": "generated-during-build",
-    "description": "This file is dynamically generated during build process using git tags"
-}

@@ -47,19 +47,8 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Create bootstrap version file
-Write-Host "Creating bootstrap version file..." -ForegroundColor Yellow
-$versionNum = $gitVersion.TrimStart('v')
-$releaseDate = Get-Date -Format "yyyy-MM-dd"
-$bootstrapVersionInfo = @{
-    version = $versionNum
-    release_date = $releaseDate
-    description = "Minimal Bootstrap for FFT Minecraft Launcher"
-    architecture = "minimal-stable"
-}
-$bootstrapJsonContent = $bootstrapVersionInfo | ConvertTo-Json
-[System.IO.File]::WriteAllText("bootstrap_version.json", $bootstrapJsonContent, [System.Text.UTF8Encoding]::new($false))
-Write-Host "Bootstrap version: $versionNum (minimal-stable)" -ForegroundColor Cyan
+# Note: Bootstrap version files are no longer used - version is determined from GitHub releases
+Write-Host "Bootstrap version: $versionNum (from git tag)" -ForegroundColor Cyan
 
 # Create launcher package...
 Write-Host "Creating self-contained launcher package..." -ForegroundColor Yellow
@@ -120,20 +109,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Copying launcher application files..." -ForegroundColor Yellow
 Copy-Item "app.py" "temp_launcher\"
 
-# Create version.json for launcher package
-Write-Host "Creating launcher package version.json..." -ForegroundColor Yellow
-$versionNum = $gitVersion.TrimStart('v')
-$releaseDate = Get-Date -Format "yyyy-MM-dd"
-$versionInfo = @{
-    version = $versionNum
-    release_date = $releaseDate
-    description = "Self-contained FFT Minecraft Launcher Application"
-    package_type = "launcher_application"
-    bootstrap_compatible = $true
-}
-# Create JSON without BOM to avoid parsing issues
-$jsonContent = $versionInfo | ConvertTo-Json
-[System.IO.File]::WriteAllText("temp_launcher\version.json", $jsonContent, [System.Text.UTF8Encoding]::new($false))
+# Note: Launcher version files are no longer used - version is determined from GitHub releases
 
 # Copy source files
 Write-Host "Copying source files..." -ForegroundColor Yellow

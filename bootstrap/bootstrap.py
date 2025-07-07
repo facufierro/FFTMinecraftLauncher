@@ -162,52 +162,12 @@ def check_single_instance():
 
 
 def get_current_version():
-    """Get current launcher version."""
-    # Get the directory where the bootstrap exe is located
-    if getattr(sys, 'frozen', False):
-        bootstrap_dir = Path(sys.executable).parent
-    else:
-        bootstrap_dir = Path(__file__).parent
+    """Get current launcher version from local installation.
     
-    version_file = bootstrap_dir / "launcher" / "version.json"
-    if version_file.exists():
-        try:
-            # Check if file is empty first
-            if version_file.stat().st_size == 0:
-                safe_log('warning', "Version file is empty")
-                return "0.0.0"
-            
-            with open(version_file, 'r', encoding='utf-8-sig') as f:
-                content = f.read().strip()
-                if not content:
-                    safe_log('warning', "Version file contains no content")
-                    return "0.0.0"
-                
-                data = json.loads(content)
-                version = data.get('version', '0.0.0')
-                
-                # Handle the case where version is "dynamic" (development file)
-                if version == "dynamic":
-                    safe_log('warning', "Found development version file with 'dynamic' version")
-                    return "0.0.0"
-                
-                safe_log('debug', f"Current version from file: {version}")
-                return version
-        except json.JSONDecodeError as e:
-            safe_log('warning', f"Invalid JSON in version file: {e}")
-            safe_log('debug', f"Version file path: {version_file}")
-            # Delete corrupted version file so it gets re-downloaded
-            try:
-                version_file.unlink()
-                safe_log('info', "Removed corrupted version file")
-            except:
-                pass
-        except Exception as e:
-            safe_log('warning', f"Failed to read version file: {e}")
-    else:
-        safe_log('debug', "Version file does not exist")
-    
-    safe_log('debug', "No valid version found, returning default version")
+    Since we're removing version.json dependency, this will return 0.0.0
+    to always trigger version check against GitHub.
+    """
+    safe_log('debug', "No local version tracking, will check against GitHub releases")
     return "0.0.0"
 
 
@@ -616,33 +576,11 @@ def main():
     
     # Additional check: if launcher directory exists but essential files are missing
     if launcher_dir.exists():
-        essential_files = ['app.py', 'version.json']
+        essential_files = ['app.py']
         missing_files = [f for f in essential_files if not (launcher_dir / f).exists()]
         if missing_files:
             logger.warning(f"Launcher directory exists but is incomplete (missing: {missing_files})")
             needs_install = True
-        else:
-            # Check if version.json is valid
-            version_file = launcher_dir / "version.json"
-            try:
-                if version_file.stat().st_size == 0:
-                    logger.warning("Version file is empty - launcher installation is corrupted")
-                    needs_install = True
-                else:
-                    with open(version_file, 'r', encoding='utf-8-sig') as f:
-                        content = f.read().strip()
-                        if not content:
-                            logger.warning("Version file contains no content - launcher installation is corrupted")
-                            needs_install = True
-                        else:
-                            data = json.loads(content)
-                            version = data.get('version', '')
-                            if version == "dynamic" or not version:
-                                logger.warning("Version file contains invalid version - launcher installation is corrupted")
-                                needs_install = True
-            except (json.JSONDecodeError, Exception) as e:
-                logger.warning(f"Version file is corrupted ({e}) - launcher installation is corrupted")
-                needs_install = True
     
     # Single update check and installation logic
     needs_install = not launcher_dir.exists()
