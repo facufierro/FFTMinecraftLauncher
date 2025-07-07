@@ -122,6 +122,13 @@ class MainWindow:
         self._add_launcher_log("info", "Unified Console initialized", timestamp)
         self._add_launcher_log("info", "All bootstrap and launcher activity will appear here", timestamp)
         self._add_launcher_log("info", "Format: [TIME] [LEVEL] message", timestamp)
+        
+        # Test different log levels for color verification
+        self._add_launcher_log("info", "This is an INFO message (should be blue)", timestamp)
+        self._add_launcher_log("warning", "This is a WARN message (should be yellow)", timestamp)
+        self._add_launcher_log("error", "This is an ERROR message (should be red)", timestamp)
+        self._add_launcher_log("success", "This is a SUCCESS message (should be green)", timestamp)
+        self._add_launcher_log("debug", "This is a DEBUG message (should be gray)", timestamp)
     
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for launcher events."""
@@ -148,19 +155,54 @@ class MainWindow:
         # Setup logger callback
         def launcher_log_callback(formatted_message):
             """Handle launcher log messages with proper formatting."""
-            # Extract timestamp and message
-            if formatted_message.startswith('[') and '] ' in formatted_message:
+            # Extract timestamp, level, and message from format: [HH:MM:SS] [LEVEL] message
+            if formatted_message.startswith('[') and '] [' in formatted_message:
+                # Parse format: [timestamp] [LEVEL] message
+                timestamp_end = formatted_message.find('] [')
+                timestamp = formatted_message[1:timestamp_end]
+                
+                level_start = timestamp_end + 3  # Skip '] ['
+                level_end = formatted_message.find('] ', level_start)
+                if level_end > level_start:
+                    level_name = formatted_message[level_start:level_end]
+                    message = formatted_message[level_end + 2:]
+                    
+                    # Map level names to our display levels
+                    level_mapping = {
+                        "DEBUG": "debug",
+                        "INFO": "info",
+                        "WARN": "warning", 
+                        "ERROR": "error"
+                    }
+                    level = level_mapping.get(level_name, "info")
+                    
+                    # Override level based on message content for special cases
+                    message_lower = message.lower()
+                    if "success" in message_lower or "completed" in message_lower or "ready" in message_lower or "installed" in message_lower:
+                        level = "success"
+                    elif "update available" in message_lower:
+                        level = "warning"
+                    elif "error" in message_lower or "failed" in message_lower:
+                        level = "error"
+                    
+                    self._add_launcher_log(level, message, timestamp)
+                else:
+                    # Fallback if level parsing fails
+                    self._add_log(formatted_message)
+            elif formatted_message.startswith('[') and '] ' in formatted_message:
+                # Old format: [timestamp] message - extract and determine level
                 timestamp_end = formatted_message.find('] ')
                 timestamp = formatted_message[1:timestamp_end]
                 message = formatted_message[timestamp_end + 2:]
                 
                 # Determine log level from message content
                 level = "info"
-                if "error" in message.lower() or "failed" in message.lower():
+                message_lower = message.lower()
+                if "error" in message_lower or "failed" in message_lower:
                     level = "error"
-                elif "warning" in message.lower() or "warn" in message.lower():
+                elif "warning" in message_lower or "warn" in message_lower:
                     level = "warning"
-                elif "success" in message.lower() or "completed" in message.lower() or "ready" in message.lower():
+                elif "success" in message_lower or "completed" in message_lower or "ready" in message_lower or "installed" in message_lower:
                     level = "success"
                 
                 self._add_launcher_log(level, message, timestamp)

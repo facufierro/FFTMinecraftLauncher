@@ -374,7 +374,7 @@ class LogFrame(ctk.CTkFrame):
             scrollbar_button_color=("#cccccc", "#555555"),
             scrollbar_button_hover_color=("#aaaaaa", "#777777"),
             fg_color="#1a1a1a",  # Dark console background
-            text_color="#e0e0e0"  # Light gray terminal text
+            text_color="#e0e0e0"  # Default light gray text
         )
         self.log_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
         
@@ -391,18 +391,18 @@ class LogFrame(ctk.CTkFrame):
             self.log_text._textbox.tag_configure("bootstrap", foreground="#4fc3f7")
             # Launcher messages (green)
             self.log_text._textbox.tag_configure("launcher", foreground="#66bb6a")
-            # Info messages (white/light gray)
-            self.log_text._textbox.tag_configure("info", foreground="#e0e0e0")
-            # Warning messages (yellow) - consistent with progress frame
+            # Info messages (blue)
+            self.log_text._textbox.tag_configure("info", foreground="#4fc3f7")
+            # Warning messages (yellow)
             self.log_text._textbox.tag_configure("warning", foreground="#ffc107")
             # Error messages (red)
             self.log_text._textbox.tag_configure("error", foreground="#f44336")
-            # Success messages (bright green)
+            # Success messages (green)
             self.log_text._textbox.tag_configure("success", foreground="#4caf50")
             # Debug messages (gray)
             self.log_text._textbox.tag_configure("debug", foreground="#9e9e9e")
-            # Timestamp (light blue)
-            self.log_text._textbox.tag_configure("timestamp", foreground="#81d4fa")
+            # Timestamp (white)
+            self.log_text._textbox.tag_configure("timestamp", foreground="#ffffff")
         except Exception:
             # If tag configuration fails, continue without colors
             pass
@@ -466,12 +466,16 @@ class LogFrame(ctk.CTkFrame):
                 'info': '[INFO]',
                 'warning': '[WARN]',
                 'error': '[ERROR]',
-                'success': '[OK]',
-                'debug': '[DEBUG]'
+                'success': '[SUCCESS]',
+                'debug': '[DEBUG]',
+                'ok': '[SUCCESS]'  # Map 'ok' to 'SUCCESS'
             }
             
             level_prefix = level_prefixes.get(level, '[INFO]')
             level_tag = level if level in ['warning', 'error', 'success', 'debug'] else 'info'
+            # Map 'ok' to 'success' for coloring
+            if level == 'ok':
+                level_tag = 'success'
             
             # Format: [timestamp] [INFO] message
             formatted_line = f"[{timestamp}] {level_prefix} {message}\n"
@@ -491,12 +495,16 @@ class LogFrame(ctk.CTkFrame):
                 message_start = f"{level_end}+1c"
                 message_end = f"{line_start} lineend"
                 
-                # Apply tags (use source for different colors)
+                # Apply tags with correct colors
                 self.log_text._textbox.tag_add("timestamp", timestamp_start, timestamp_end)
-                self.log_text._textbox.tag_add(source, level_start, level_end)  # Color level prefix by source
-                self.log_text._textbox.tag_add(level_tag, message_start, message_end)
-            except Exception:
-                # If tagging fails, at least the message is visible
+                self.log_text._textbox.tag_add(level_tag, level_start, level_end)  # Color level prefix by level type
+                self.log_text._textbox.tag_add(level_tag, message_start, message_end)  # Color message by level type
+                
+                # Debug output to see what tags are being applied
+                print(f"DEBUG: Applied tags - level_tag='{level_tag}' for level='{level}' on line {line_start}")
+                
+            except Exception as e:
+                print(f"Failed to apply tags: {e}")
                 pass
             
             # Auto-scroll if enabled

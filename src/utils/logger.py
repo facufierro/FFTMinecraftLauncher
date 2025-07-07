@@ -50,7 +50,16 @@ class LauncherLogger:
         if self.ui_callback:
             try:
                 timestamp = datetime.now().strftime("%H:%M:%S")
-                formatted_message = f"[{timestamp}] {message}"
+                # Map logging levels to our level names
+                level_names = {
+                    logging.DEBUG: "DEBUG",
+                    logging.INFO: "INFO", 
+                    logging.WARNING: "WARN",
+                    logging.ERROR: "ERROR",
+                    logging.CRITICAL: "ERROR"
+                }
+                level_name = level_names.get(level, "INFO")
+                formatted_message = f"[{timestamp}] [{level_name}] {message}"
                 self.ui_callback(formatted_message)
             except Exception:
                 # If UI callback fails, just ignore it to prevent crashes
