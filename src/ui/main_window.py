@@ -42,6 +42,9 @@ class MainWindow:
         UIUtils.center_window(self.root, 800, 600)
         self.root.resizable(True, True)
         
+        # Set window icon
+        UIUtils.set_window_icon(self.root)
+        
         # Setup UI
         self._setup_ui()
         self._setup_event_handlers()

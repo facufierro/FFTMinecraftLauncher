@@ -35,6 +35,9 @@ class SettingsWindow:
         self.window.transient(self.parent)
         self.window.grab_set()
         
+        # Set window icon
+        UIUtils.set_window_icon(self.window)
+        
         # Handle window close
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         

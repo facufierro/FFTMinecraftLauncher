@@ -2,10 +2,29 @@
 
 from typing import Tuple, Optional
 import customtkinter as ctk
+from pathlib import Path
 
 
 class UIUtils:
     """Utility class for UI operations."""
+    
+    @staticmethod
+    def set_window_icon(window) -> None:
+        """Set the application icon for a window.
+        
+        Args:
+            window: The window to set the icon for
+        """
+        try:
+            # Get the path to the icon file
+            # When running from bootstrap, we need to go up from the launcher directory
+            current_dir = Path(__file__).parent.parent.parent  # Go up from src/utils/ to project root
+            icon_path = current_dir / "assets" / "minecraft_icon.ico"
+            if icon_path.exists():
+                window.iconbitmap(str(icon_path))
+        except Exception:
+            # If icon loading fails, continue without it
+            pass
     
     @staticmethod
     def center_window(window, width: int, height: int) -> None:
@@ -78,25 +97,58 @@ class UIUtils:
     def show_error_dialog(title: str, message: str) -> None:
         """Show an error dialog."""
         from tkinter import messagebox
-        messagebox.showerror(title, message)
+        import tkinter as tk
+        
+        # Create a temporary root window for the dialog
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+        UIUtils.set_window_icon(root)
+        
+        messagebox.showerror(title, message, parent=root)
+        root.destroy()
     
     @staticmethod
     def show_info_dialog(title: str, message: str) -> None:
         """Show an info dialog."""
         from tkinter import messagebox
-        messagebox.showinfo(title, message)
+        import tkinter as tk
+        
+        # Create a temporary root window for the dialog
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+        UIUtils.set_window_icon(root)
+        
+        messagebox.showinfo(title, message, parent=root)
+        root.destroy()
     
     @staticmethod
     def show_warning_dialog(title: str, message: str) -> None:
         """Show a warning dialog."""
         from tkinter import messagebox
-        messagebox.showwarning(title, message)
+        import tkinter as tk
+        
+        # Create a temporary root window for the dialog
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+        UIUtils.set_window_icon(root)
+        
+        messagebox.showwarning(title, message, parent=root)
+        root.destroy()
     
     @staticmethod
     def ask_yes_no(title: str, message: str) -> bool:
         """Show a yes/no dialog and return the result."""
         from tkinter import messagebox
-        return messagebox.askyesno(title, message)
+        import tkinter as tk
+        
+        # Create a temporary root window for the dialog
+        root = tk.Tk()
+        root.withdraw()  # Hide the root window
+        UIUtils.set_window_icon(root)
+        
+        result = messagebox.askyesno(title, message, parent=root)
+        root.destroy()
+        return result
     
     @staticmethod
     def create_modern_card(parent, title: str, value: str, icon: str = "", width: Optional[int] = None) -> ctk.CTkFrame:
