@@ -472,8 +472,16 @@ def launch_main_app():
         safe_log('info', f"Launching {main_script.name} as separate process...")
         
         # Launch the main application as a subprocess
-        # Use the same Python interpreter that's running the bootstrap
-        python_exe = sys.executable
+        # Use the Python interpreter from the launcher's virtual environment
+        runtime_env_dir = launcher_dir / "_runtime_env"
+        if runtime_env_dir.exists():
+            python_exe = str(runtime_env_dir / "Scripts" / "python.exe")
+            if not Path(python_exe).exists():
+                safe_log('warning', f"Runtime environment Python not found at {python_exe}, falling back to system Python")
+                python_exe = sys.executable
+        else:
+            safe_log('warning', "Runtime environment not found, using system Python")
+            python_exe = sys.executable
         
         # Set up the command to run
         cmd = [python_exe, str(main_script)]
