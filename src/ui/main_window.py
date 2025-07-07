@@ -113,7 +113,8 @@ class MainWindow:
         self.log_frame.grid(row=4, column=0, sticky="nsew", padx=20, pady=(0, 20))
         
         # Initial log message
-        self._add_log("Launcher initialized")
+        self._add_log("FFT Minecraft Launcher started")
+        self._add_log("Initializing launcher components...")
     
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for launcher events."""
@@ -411,14 +412,23 @@ class MainWindow:
     
     def close(self) -> None:
         """Close the application."""
-        # Close settings window if open
-        if self.settings_window and self.settings_window.is_open():
-            self.settings_window.close()
+        try:
+            # Close settings window if open
+            if self.settings_window and self.settings_window.is_open():
+                self.settings_window.close()
+        except Exception:
+            pass  # Ignore errors during cleanup
         
-        # Shutdown launcher core
-        self.launcher_core.shutdown()
+        try:
+            # Shutdown launcher core
+            self.launcher_core.shutdown()
+        except Exception:
+            pass  # Ignore errors during cleanup
         
-        # Destroy main window
-        if self.root:
-            self.root.quit()
-            self.root.destroy()
+        try:
+            # Destroy main window
+            if self.root:
+                self.root.quit()
+                self.root.destroy()
+        except Exception:
+            pass  # Ignore errors during cleanup

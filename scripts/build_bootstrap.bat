@@ -2,14 +2,28 @@
 echo Building Simple Bootstrap Launcher...
 
 cd /d "%~dp0\.."
-call _env\Scripts\activate.bat
+
+REM Try .venv first, then fallback to _env
+if exist .venv\Scripts\activate.bat (
+    call .venv\Scripts\activate.bat
+    set PYTHON_EXE=.venv\Scripts\python.exe
+    echo Using .venv environment
+) else if exist _env\Scripts\activate.bat (
+    call _env\Scripts\activate.bat
+    set PYTHON_EXE=_env\Scripts\python.exe
+    echo Using _env environment
+) else (
+    echo Error: No virtual environment found (.venv or _env)
+    pause
+    exit /b 1
+)
 
 echo Cleaning build cache...
 if exist build rmdir /S /Q build
 if exist dist rmdir /S /Q dist
 
 echo Building bootstrap...
-_env\Scripts\python.exe -m PyInstaller bootstrap\bootstrap.spec --noconfirm --clean
+%PYTHON_EXE% -m PyInstaller bootstrap\bootstrap.spec --noconfirm --clean
 
 echo Creating launcher package...
 if exist launcher_package.zip del launcher_package.zip
@@ -33,6 +47,7 @@ timeout /t 2 /nobreak >nul
 
 mkdir temp_launcher 2>nul
 copy app.py temp_launcher\
+copy requirements.txt temp_launcher\
 
 echo Creating dynamic version.json...
 echo { > temp_launcher\version.json

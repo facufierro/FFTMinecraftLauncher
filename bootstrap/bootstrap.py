@@ -388,6 +388,11 @@ def download_and_install_update(update_info):
             shutil.rmtree(backup_dir)
         
         safe_log('info', "Update installed successfully!")
+        
+        # Install dependencies if requirements.txt exists
+        if not install_launcher_dependencies(launcher_dir):
+            safe_log('warning', "Failed to install dependencies, launcher may not work properly")
+        
         return True
         
     except Exception as e:
@@ -396,6 +401,91 @@ def download_and_install_update(update_info):
         if 'backup_dir' in locals() and backup_dir.exists() and not launcher_dir.exists():
             safe_log('info', "Restoring backup...")
             shutil.move(str(backup_dir), str(launcher_dir))
+        return False
+
+
+def install_launcher_dependencies(launcher_dir):
+    """Install launcher dependencies using pip."""
+    try:
+        requirements_file = launcher_dir / "requirements.txt"
+        if not requirements_file.exists():
+            safe_log('debug', "No requirements.txt found, skipping dependency installation")
+            return True
+        
+        safe_log('info', "Installing launcher dependencies...")
+        
+        # Find Python executable (same logic as in launch_main_app)
+        python_exe = None
+        
+        # Get the directory where the bootstrap exe is located
+        if getattr(sys, 'frozen', False):
+            bootstrap_dir = Path(sys.executable).parent
+        else:
+            bootstrap_dir = Path(__file__).parent
+        
+        # First, try .venv virtual environment in the main project directory
+        project_venv_python = bootstrap_dir.parent / ".venv" / "Scripts" / "python.exe"
+        if project_venv_python.exists():
+            python_exe = str(project_venv_python.absolute())
+            safe_log('debug', f"Using project .venv virtual environment Python for pip: {python_exe}")
+        else:
+            # Second, try _env virtual environment in the main project directory
+            project_env_python = bootstrap_dir.parent / "_env" / "Scripts" / "python.exe"
+            if project_env_python.exists():
+                python_exe = str(project_env_python.absolute())
+                safe_log('debug', f"Using project _env virtual environment Python for pip: {python_exe}")
+            else:
+                # Third, try virtual environment in bootstrap directory
+                local_venv_python = bootstrap_dir / "_env" / "Scripts" / "python.exe"
+                if local_venv_python.exists():
+                    python_exe = str(local_venv_python.absolute())
+                    safe_log('debug', f"Using local virtual environment Python for pip: {python_exe}")
+                else:
+                    # If running from frozen executable, find system Python
+                    if getattr(sys, 'frozen', False):
+                        # Try common Python installation paths
+                        potential_paths = [
+                            "python.exe",  # Try PATH first
+                            "py.exe",      # Python Launcher
+                        ]
+                        
+                        for path in potential_paths:
+                            try:
+                                # Test if this python executable works
+                                result = subprocess.run([path, "--version"], 
+                                                      capture_output=True, 
+                                                      text=True, 
+                                                      timeout=5)
+                                if result.returncode == 0:
+                                    python_exe = path
+                                    safe_log('debug', f"Found system Python executable for pip: {python_exe}")
+                                    break
+                            except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+                                continue
+                        
+                        if not python_exe:
+                            safe_log('error', "Could not find Python executable for dependency installation!")
+                            return False
+                    else:
+                        # Running from script, use current Python
+                        python_exe = sys.executable
+                        safe_log('debug', f"Using current Python for pip: {python_exe}")
+        
+        # Install dependencies
+        safe_log('debug', f"Installing dependencies from: {requirements_file}")
+        result = subprocess.run([
+            python_exe, "-m", "pip", "install", "-r", str(requirements_file)
+        ], capture_output=True, text=True, timeout=120)
+        
+        if result.returncode == 0:
+            safe_log('info', "Dependencies installed successfully!")
+            return True
+        else:
+            safe_log('error', f"Failed to install dependencies. pip output: {result.stderr}")
+            return False
+        
+    except Exception as e:
+        safe_log('error', f"Failed to install dependencies: {e}")
         return False
 
 
@@ -432,13 +522,59 @@ def launch_main_app():
         safe_log('info', f"Starting launcher: {main_script.name}")
         
         # Find Python executable (prioritize virtual environment if available)
-        python_exe = sys.executable
-        venv_python = bootstrap_dir / "_env" / "Scripts" / "python.exe"
-        if venv_python.exists():
-            python_exe = str(venv_python.absolute())
-            safe_log('debug', f"Using virtual environment Python: {python_exe}")
+        python_exe = None
+        
+        # First, try .venv virtual environment in the main project directory
+        project_venv_python = bootstrap_dir.parent / ".venv" / "Scripts" / "python.exe"
+        if project_venv_python.exists():
+            python_exe = str(project_venv_python.absolute())
+            safe_log('debug', f"Using project .venv virtual environment Python: {python_exe}")
         else:
-            safe_log('debug', f"Using system Python: {python_exe}")
+            # Second, try _env virtual environment in the main project directory
+            project_env_python = bootstrap_dir.parent / "_env" / "Scripts" / "python.exe"
+            if project_env_python.exists():
+                python_exe = str(project_env_python.absolute())
+                safe_log('debug', f"Using project _env virtual environment Python: {python_exe}")
+            else:
+                # Third, try virtual environment in bootstrap directory
+                local_venv_python = bootstrap_dir / "_env" / "Scripts" / "python.exe"
+                if local_venv_python.exists():
+                    python_exe = str(local_venv_python.absolute())
+                    safe_log('debug', f"Using local virtual environment Python: {python_exe}")
+                else:
+                    # If running from frozen executable, find system Python
+                    if getattr(sys, 'frozen', False):
+                        # Try common Python installation paths
+                        potential_paths = [
+                            "python.exe",  # Try PATH first
+                            "py.exe",      # Python Launcher
+                            "C:\\Python\\python.exe",
+                            "C:\\Program Files\\Python\\python.exe",
+                            "C:\\Program Files (x86)\\Python\\python.exe"
+                        ]
+                        
+                        for path in potential_paths:
+                            try:
+                                # Test if this python executable works
+                                result = subprocess.run([path, "--version"], 
+                                                      capture_output=True, 
+                                                      text=True, 
+                                                      timeout=5)
+                                if result.returncode == 0:
+                                    python_exe = path
+                                    safe_log('debug', f"Found system Python executable: {python_exe}")
+                                    break
+                            except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+                                continue
+                        
+                        if not python_exe:
+                            safe_log('error', "Could not find Python executable!")
+                            safe_log('error', "Please ensure Python is installed and in your PATH")
+                            return False
+                    else:
+                        # Running from script, use current Python
+                        python_exe = sys.executable
+                        safe_log('debug', f"Using current Python: {python_exe}")
         
         # Set up environment
         env = os.environ.copy()
@@ -453,13 +589,15 @@ def launch_main_app():
         safe_log('debug', f"Launching: {python_exe} {main_script.name}")
         safe_log('debug', f"Working directory: {launcher_dir.absolute()}")
         
+        # For debugging purposes, capture stderr when launcher fails
         process = subprocess.Popen([python_exe, str(main_script.name)], 
                                  cwd=str(launcher_dir.absolute()), 
                                  env=env,
                                  stdin=subprocess.DEVNULL,
-                                 stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL,
-                                 creationflags=creation_flags)
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 creationflags=creation_flags,
+                                 text=True)
         
         # Wait a moment to see if the process starts successfully
         time.sleep(2)
@@ -468,8 +606,28 @@ def launch_main_app():
         poll_result = process.poll()
         if poll_result is None:
             safe_log('info', f"Launcher started successfully! (PID: {process.pid})")
+            # Close pipes since we don't need them anymore for a successful launch
+            try:
+                if process.stdout:
+                    process.stdout.close()
+                if process.stderr:
+                    process.stderr.close()
+            except:
+                pass
             return True
         else:
+            # Process exited, capture error output
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+                if stderr:
+                    safe_log('error', f"Launcher stderr: {stderr.strip()}")
+                if stdout:
+                    safe_log('error', f"Launcher stdout: {stdout.strip()}")
+            except subprocess.TimeoutExpired:
+                safe_log('error', "Timeout waiting for launcher error output")
+            except Exception as e:
+                safe_log('error', f"Failed to capture launcher error output: {e}")
+            
             safe_log('error', f"Launcher process exited immediately with code: {poll_result}")
             return False
         
@@ -523,6 +681,11 @@ def try_local_package(bootstrap_dir, launcher_dir):
         # Clean up temp extract directory
         shutil.rmtree(temp_extract_dir, ignore_errors=True)
         safe_log('info', "Local package extracted successfully!")
+        
+        # Install dependencies if requirements.txt exists
+        if not install_launcher_dependencies(launcher_dir):
+            safe_log('warning', "Failed to install dependencies, launcher may not work properly")
+        
         return True
     except Exception as e:
         safe_log('error', f"Failed to extract local package: {e}")

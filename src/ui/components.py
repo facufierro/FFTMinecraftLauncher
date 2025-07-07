@@ -357,9 +357,6 @@ class LogFrame(ctk.CTkFrame):
             scrollbar_button_hover_color=("#aaaaaa", "#777777")
         )
         self.log_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
-        
-        # Add initial welcome message
-        self._add_initial_logs()
     
     def _add_initial_logs(self) -> None:
         """Add initial log messages to match the screenshot."""
@@ -391,28 +388,33 @@ class LogFrame(ctk.CTkFrame):
             message: Message to add
             level: Log level ('info', 'warning', 'error', 'success')
         """
-        self.log_text.configure(state='normal')
-        
-        # Add timestamp if not present
-        if not message.startswith('['):
-            from datetime import datetime
-            timestamp = datetime.now().strftime("[%H:%M:%S]")
-            message = f"{timestamp} {message}"
-        
-        # Color coding based on level (simplified for CTkTextbox)
-        prefix_map = {
-            'info': 'ℹ️',
-            'warning': '⚠️',
-            'error': '❌',
-            'success': '✅'
-        }
-        
-        if level != 'info':
-            message = f"{prefix_map.get(level, '')} {message}"
-        
-        self.log_text.insert('end', f"{message}\n")
-        self.log_text.see('end')
-        self.log_text.configure(state='disabled')
+        try:
+            self.log_text.configure(state='normal')
+            
+            # Add timestamp if not present
+            if not message.startswith('['):
+                from datetime import datetime
+                timestamp = datetime.now().strftime("[%H:%M:%S]")
+                message = f"{timestamp} {message}"
+            
+            # Color coding based on level (simplified for CTkTextbox)
+            prefix_map = {
+                'info': 'ℹ️',
+                'warning': '⚠️',
+                'error': '❌',
+                'success': '✅'
+            }
+            
+            if level != 'info':
+                message = f"{prefix_map.get(level, '')} {message}"
+            
+            self.log_text.insert('end', f"{message}\n")
+            self.log_text.see('end')
+            self.log_text.configure(state='disabled')
+        except Exception:
+            # If we can't add to the log widget, just ignore it
+            # This prevents crashes during shutdown or widget destruction
+            pass
     
     def clear_log(self) -> None:
         """Clear all log messages."""

@@ -47,9 +47,13 @@ class LauncherLogger:
         self.logger.log(level, message)
         
         if self.ui_callback:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            formatted_message = f"[{timestamp}] {message}"
-            self.ui_callback(formatted_message)
+            try:
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                formatted_message = f"[{timestamp}] {message}"
+                self.ui_callback(formatted_message)
+            except Exception:
+                # If UI callback fails, just ignore it to prevent crashes
+                pass
     
     def debug(self, message: str):
         """Log a debug message."""
