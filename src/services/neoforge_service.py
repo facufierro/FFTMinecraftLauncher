@@ -10,6 +10,16 @@ from typing import Dict, List, Optional
 from ..models.config import LauncherConfig
 from ..utils.logger import get_logger
 
+# Windows-specific constants for hiding console windows
+if os.name == 'nt':
+    try:
+        # These constants may not be available on all systems
+        CREATE_NO_WINDOW = 0x08000000
+        subprocess.CREATE_NO_WINDOW = CREATE_NO_WINDOW
+    except AttributeError:
+        # Fallback if constant is not available
+        subprocess.CREATE_NO_WINDOW = 0x08000000
+
 
 class NeoForgeService:
     """Service for managing NeoForge installations in Minecraft launcher instances."""
@@ -124,7 +134,18 @@ class NeoForgeService:
                 "--installClient", str(instance_path)
             ]
             
-            result = subprocess.run(install_cmd, capture_output=True, text=True, cwd=str(instance_path))
+            # Configure process creation flags to hide console on Windows
+            creation_flags = 0
+            if os.name == 'nt':  # Windows
+                creation_flags = subprocess.CREATE_NO_WINDOW
+            
+            result = subprocess.run(
+                install_cmd, 
+                capture_output=True, 
+                text=True, 
+                cwd=str(instance_path),
+                creationflags=creation_flags
+            )
             
             if result.stdout:
                 self.logger.info(f"NeoForge installer stdout: {result.stdout}")
@@ -184,7 +205,18 @@ class NeoForgeService:
                 "--installClient", str(instance_path)
             ]
             
-            result = subprocess.run(install_cmd, capture_output=True, text=True, cwd=str(instance_path))
+            # Configure process creation flags to hide console on Windows
+            creation_flags = 0
+            if os.name == 'nt':  # Windows
+                creation_flags = subprocess.CREATE_NO_WINDOW
+            
+            result = subprocess.run(
+                install_cmd, 
+                capture_output=True, 
+                text=True, 
+                cwd=str(instance_path),
+                creationflags=creation_flags
+            )
             
             if result.stdout:
                 self.logger.info(f"NeoForge installer stdout: {result.stdout}")
