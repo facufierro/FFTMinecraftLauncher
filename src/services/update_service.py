@@ -211,6 +211,7 @@ class UpdateService:
         """
         instance_path = self.config.get_selected_instance_path()
         if not instance_path or not instance_path.exists():
+            self.logger.info("Instance path does not exist")
             return False
         
         # Check for essential folders (these should always exist)
@@ -218,13 +219,17 @@ class UpdateService:
         has_essential = all((instance_path / folder).exists() for folder in essential_folders)
         
         if not has_essential:
+            self.logger.info("Instance missing essential folders")
             return False
         
         # Check if NeoForge is installed
         has_neoforge = self._is_neoforge_installed(instance_path)
         
         if not has_neoforge:
+            self.logger.info("NeoForge not installed in instance")
             return False
+        
+        self.logger.info("Instance exists and has NeoForge - checking resource pack configuration...")
         
         # Don't check for sync folders here - they get populated during the update process
         # The instance is considered "existing" if it has NeoForge and essential folders
