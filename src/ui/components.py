@@ -393,8 +393,8 @@ class LogFrame(ctk.CTkFrame):
             self.log_text._textbox.tag_configure("launcher", foreground="#66bb6a")
             # Info messages (white/light gray)
             self.log_text._textbox.tag_configure("info", foreground="#e0e0e0")
-            # Warning messages (yellow)
-            self.log_text._textbox.tag_configure("warning", foreground="#ffb74d")
+            # Warning messages (yellow) - consistent with progress frame
+            self.log_text._textbox.tag_configure("warning", foreground="#ffc107")
             # Error messages (red)
             self.log_text._textbox.tag_configure("error", foreground="#f44336")
             # Success messages (bright green)
