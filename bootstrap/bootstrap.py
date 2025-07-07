@@ -433,14 +433,21 @@ def launch_main_app():
         
         # Launch the main application as a subprocess
         # Use the Python interpreter from the launcher's virtual environment
+        venv_python = launcher_dir / ".venv" / "Scripts" / "python.exe"
         runtime_env_dir = launcher_dir / "_runtime_env"
-        if runtime_env_dir.exists():
+        
+        if venv_python.exists():
+            python_exe = str(venv_python)
+            safe_log('info', f"Using launcher's virtual environment: {python_exe}")
+        elif runtime_env_dir.exists():
             python_exe = str(runtime_env_dir / "Scripts" / "python.exe")
-            if not Path(python_exe).exists():
+            if Path(python_exe).exists():
+                safe_log('info', f"Using runtime environment: {python_exe}")
+            else:
                 safe_log('warning', f"Runtime environment Python not found at {python_exe}, falling back to system Python")
                 python_exe = sys.executable
         else:
-            safe_log('warning', "Runtime environment not found, using system Python")
+            safe_log('warning', "No virtual environment found, using system Python")
             python_exe = sys.executable
         
         # Set up the command to run
@@ -448,6 +455,8 @@ def launch_main_app():
         
         safe_log('info', f"Command: {' '.join(cmd)}")
         safe_log('info', f"Working directory: {launcher_dir}")
+        safe_log('info', f"Python executable exists: {Path(python_exe).exists()}")
+        safe_log('info', f"Main script exists: {main_script.exists()}")
         safe_log('info', "=" * 40)
         
         # Launch the process as independent but not fully detached
@@ -455,19 +464,37 @@ def launch_main_app():
             cmd,
             cwd=str(launcher_dir),
             # Don't capture output - let the launcher show its own console/GUI
-            stdout=None,
-            stderr=None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             # On Windows, create a new process group but keep it attached to console
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
         )
         
         safe_log('info', f"Launcher process started with PID: {process.pid}")
-        safe_log('info', "Bootstrap completed successfully")
         
-        # Give the launcher a moment to initialize, then exit
-        # This breaks the parent-child dependency while ensuring the launcher starts
-        time.sleep(2)
-        return True
+        # Wait a moment to see if the process starts successfully
+        try:
+            # Check if process is still running after a short delay
+            time.sleep(1)
+            return_code = process.poll()
+            if return_code is not None:
+                # Process has already exited - this indicates an error
+                stdout, stderr = process.communicate()
+                safe_log('error', f"Launcher process exited immediately with code: {return_code}")
+                if stdout:
+                    safe_log('error', f"STDOUT: {stdout.decode('utf-8', errors='ignore')}")
+                if stderr:
+                    safe_log('error', f"STDERR: {stderr.decode('utf-8', errors='ignore')}")
+                return False
+            else:
+                safe_log('info', "Launcher process is running successfully")
+                safe_log('info', "Bootstrap completed successfully")
+                # Give the launcher a bit more time to initialize, then exit
+                time.sleep(1)
+                return True
+        except Exception as e:
+            safe_log('error', f"Error checking launcher process: {e}")
+            return False
         
     except Exception as e:
         safe_log('error', f"Failed to launch main application: {e}")
