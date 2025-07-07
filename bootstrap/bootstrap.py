@@ -589,7 +589,9 @@ def main():
     # Check for single instance
     if not check_single_instance():
         logger.warning("Another bootstrap instance is already running. Exiting.")
-        input("Press Enter to exit...")
+        # Don't use input() when running as compiled exe (no console available)
+        if not getattr(sys, 'frozen', False):
+            input("Press Enter to exit...")
         sys.exit(1)
     
     # Get the directory where the bootstrap exe is located
@@ -663,7 +665,9 @@ def main():
                 logger.warning("Installation failed! Trying local package...")
                 if not try_local_package(bootstrap_dir, launcher_dir):
                     logger.error("No launcher found and download failed!")
-                    input("Press Enter to exit...")
+                    # Don't use input() when running as compiled exe (no console available)
+                    if not getattr(sys, 'frozen', False):
+                        input("Press Enter to exit...")
                     sys.exit(1)
             else:
                 logger.warning("Update failed, using current version...")
@@ -671,7 +675,9 @@ def main():
         logger.info("No updates available, trying local package...")
         if not try_local_package(bootstrap_dir, launcher_dir):
             logger.error("No launcher found and download failed!")
-            input("Press Enter to exit...")
+            # Don't use input() when running as compiled exe (no console available)
+            if not getattr(sys, 'frozen', False):
+                input("Press Enter to exit...")
             sys.exit(1)
     else:
         logger.info("Launcher is up to date!")
@@ -688,7 +694,9 @@ def main():
         sys.exit(0)
     else:
         logger.error("Failed to start launcher!")
-        input("Press Enter to exit...")
+        # Don't use input() when running as compiled exe (no console available)
+        if not getattr(sys, 'frozen', False):
+            input("Press Enter to exit...")
         sys.exit(1)
 
 
