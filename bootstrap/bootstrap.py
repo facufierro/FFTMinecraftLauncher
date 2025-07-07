@@ -24,50 +24,21 @@ from tkinter import messagebox
 # Global logger instance
 logger = None
 
-# Message buffer for GUI mode
-message_buffer = []
-gui_callback = None
-
-
-def set_gui_callback(callback):
-    """Set the GUI callback for receiving log messages."""
-    global gui_callback
-    gui_callback = callback
-    
-    # Flush buffered messages to GUI
-    for msg in message_buffer:
-        try:
-            callback(msg['level'], msg['message'], msg['timestamp'])
-        except Exception:
-            pass  # Ignore errors during flush
-
 
 def safe_log(level, message):
     """Safe logging function that works even if logger is not initialized."""
     timestamp = datetime.datetime.now().strftime("%H:%M:%S")
     formatted_message = f"[{timestamp}] {level.upper()}: {message}"
     
-    # Always add to buffer for GUI
-    message_buffer.append({
-        'level': level,
-        'message': message,
-        'timestamp': timestamp,
-        'formatted': formatted_message
-    })
-    
-    # Send to GUI if callback is available
-    if gui_callback:
-        try:
-            gui_callback(level, message, timestamp)
-        except Exception:
-            pass  # Ignore GUI callback errors
-    
     # Log to file if logger is available
     if logger:
         getattr(logger, level)(message)
+    else:
+        # Fallback to console if logger not ready
+        print(formatted_message)
     
-    # In case of critical errors before GUI, show dialog
-    if level in ['error', 'critical'] and not gui_callback:
+    # Show error dialog for critical errors
+    if level in ['error', 'critical']:
         try:
             # Create a minimal root window for the dialog
             root = tk.Tk()
@@ -144,35 +115,30 @@ def check_single_instance():
             with open(lock_file, 'r') as f:
                 old_pid = int(f.read().strip())
             
-            # Try to check if process is still running
-            try:
-                import psutil
-                if psutil.pid_exists(old_pid):
+            # Simple process check on Windows
+            if os.name == 'nt':
+                try:
+                    # Use tasklist command on Windows
+                    result = subprocess.run(['tasklist', '/FI', f'PID eq {old_pid}'], 
+                                          capture_output=True, text=True, timeout=5)
+                    if f"{old_pid}" in result.stdout:
+                        safe_log('warning', f"Another bootstrap instance (PID: {old_pid}) is already running")
+                        return False
+                    else:
+                        safe_log('info', f"Stale lock file found (PID: {old_pid} no longer exists), removing...")
+                        lock_file.unlink()
+                except:
+                    # If tasklist fails, assume stale lock and remove it
+                    safe_log('info', "Cannot check PID, removing potentially stale lock file...")
+                    lock_file.unlink()
+            else:
+                # Non-Windows, try basic process check
+                try:
+                    os.kill(old_pid, 0)  # Signal 0 checks if process exists
                     safe_log('warning', f"Another bootstrap instance (PID: {old_pid}) is already running")
                     return False
-                else:
+                except OSError:
                     safe_log('info', f"Stale lock file found (PID: {old_pid} no longer exists), removing...")
-                    lock_file.unlink()
-            except ImportError:
-                # psutil not available, try alternative method on Windows
-                if os.name == 'nt':
-                    try:
-                        # Use tasklist command on Windows
-                        result = subprocess.run(['tasklist', '/FI', f'PID eq {old_pid}'], 
-                                              capture_output=True, text=True, timeout=5)
-                        if f"{old_pid}" in result.stdout:
-                            safe_log('warning', f"Another bootstrap instance (PID: {old_pid}) is already running")
-                            return False
-                        else:
-                            safe_log('info', f"Stale lock file found (PID: {old_pid} no longer exists), removing...")
-                            lock_file.unlink()
-                    except:
-                        # If tasklist fails, assume stale lock and remove it
-                        safe_log('info', "Cannot check PID, removing potentially stale lock file...")
-                        lock_file.unlink()
-                else:
-                    # Non-Windows, remove stale lock
-                    safe_log('info', "Cannot check PID on this platform, removing potentially stale lock file...")
                     lock_file.unlink()
         except (ValueError, FileNotFoundError):
             # If we can't parse PID, remove stale lock
@@ -474,7 +440,7 @@ def download_and_install_update(update_info):
 
 
 def launch_main_app():
-    """Launch the main launcher application directly in the same process."""
+    """Launch the main launcher application as a separate process."""
     # Get the directory where the bootstrap exe is located
     if getattr(sys, 'frozen', False):
         bootstrap_dir = Path(sys.executable).parent
@@ -503,92 +469,49 @@ def launch_main_app():
         return False
     
     try:
-        safe_log('info', f"Loading launcher: {main_script.name}")
+        safe_log('info', f"Launching {main_script.name} as separate process...")
         
-        # Add launcher directory to Python path
-        launcher_dir_str = str(launcher_dir.absolute())
-        if launcher_dir_str not in sys.path:
-            sys.path.insert(0, launcher_dir_str)
+        # Launch the main application as a subprocess
+        # Use the same Python interpreter that's running the bootstrap
+        python_exe = sys.executable
         
-        # Add src directory to path for imports
-        src_path = launcher_dir / "src"
-        src_path_str = str(src_path.absolute())
-        if src_path_str not in sys.path:
-            sys.path.insert(0, src_path_str)
+        # Set up the command to run
+        cmd = [python_exe, str(main_script)]
         
-        # Change working directory to launcher directory
-        original_cwd = os.getcwd()
-        os.chdir(launcher_dir)
-        
-        safe_log('info', "Starting unified launcher...")
+        safe_log('info', f"Command: {' '.join(cmd)}")
+        safe_log('info', f"Working directory: {launcher_dir}")
         safe_log('info', "=" * 40)
         
+        # Launch the process
+        process = subprocess.Popen(
+            cmd,
+            cwd=str(launcher_dir),
+            # Don't capture output - let the launcher show its own console/GUI
+            stdout=None,
+            stderr=None,
+            # On Windows, don't show a separate console window for the subprocess
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+        
+        safe_log('info', f"Launcher process started with PID: {process.pid}")
+        
+        # Wait for the process to complete
         try:
-            # Import and run the launcher in the same process
-            from src.core.launcher import LauncherCore, LauncherError
-            from src.ui.main_window import MainWindow
-            from src.utils.logger import setup_logger
-            import logging
-            
-            # Setup logging for the main launcher (no console output)
-            log_file = "launcher.log"
-            setup_logger(logging.INFO, log_file, console_output=False)
-            
-            # Initialize launcher core
-            launcher_core = LauncherCore()
-            
-            # Create main window
-            main_window = MainWindow(launcher_core)
-            
-            # Set up the bootstrap callback to send messages to GUI
-            def bootstrap_to_gui_callback(level, message, timestamp):
-                """Send bootstrap messages to the GUI log."""
-                # Format the message for GUI display
-                formatted_msg = f"Bootstrap: {message}"
-                main_window._add_bootstrap_log(level, formatted_msg, timestamp)
-            
-            # Connect bootstrap logging to GUI
-            set_gui_callback(bootstrap_to_gui_callback)
-            
-            # Set up the unified launcher logging callback
-            def launcher_to_gui_callback(message):
-                """Send launcher messages to the GUI log."""
-                # Extract timestamp and message
-                if message.startswith('[') and '] ' in message:
-                    timestamp_end = message.find('] ')
-                    timestamp = message[1:timestamp_end]
-                    msg_part = message[timestamp_end + 2:]
-                else:
-                    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-                    msg_part = message
-                main_window._add_launcher_log('info', msg_part, timestamp)
-            
-            # Set up the launcher logging callback
-            launcher_core.logger.set_ui_callback(launcher_to_gui_callback)
-            
-            safe_log('info', "Launcher GUI initialized successfully")
-            safe_log('info', "Starting main event loop...")
-            
-            # Run the main window (this will block until the window is closed)
-            main_window.run()
-            
-            safe_log('info', "Launcher GUI closed")
-            return True
-            
-        except LauncherError as e:
-            safe_log('error', f"Launcher error: {e}")
+            exit_code = process.wait()
+            safe_log('info', f"Launcher process exited with code: {exit_code}")
+            return exit_code == 0
+        except KeyboardInterrupt:
+            safe_log('info', "Bootstrap interrupted, terminating launcher...")
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                safe_log('warning', "Launcher did not terminate gracefully, killing...")
+                process.kill()
             return False
-        except Exception as e:
-            safe_log('error', f"Unexpected launcher error: {e}")
-            import traceback
-            safe_log('error', f"Traceback: {traceback.format_exc()}")
-            return False
-        finally:
-            # Restore original working directory
-            os.chdir(original_cwd)
         
     except Exception as e:
-        safe_log('error', f"Failed to load launcher: {e}")
+        safe_log('error', f"Failed to launch main application: {e}")
         import traceback
         safe_log('error', f"Traceback: {traceback.format_exc()}")
         return False
@@ -746,11 +669,11 @@ def main():
         logger.info("Launcher is up to date!")
     
     # Add delay before launching
-    logger.info("Preparing to launch unified GUI...")
+    logger.info("Preparing to launch application...")
     time.sleep(1)
     
-    # Launch main app
-    logger.info("Starting unified launcher...")
+    # Launch main app as separate process
+    logger.info("Starting launcher as separate process...")
     logger.info("=" * 40)
     if launch_main_app():
         logger.info("Launcher session completed successfully")

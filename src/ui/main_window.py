@@ -59,6 +59,27 @@ class MainWindow:
         # Check for updates on startup to set initial button state
         self.root.after(1000, self._check_for_updates_on_startup)
     
+    def _check_bootstrap_status(self) -> None:
+        """Check and display bootstrap completion status."""
+        from pathlib import Path
+        import os
+        
+        # Look for bootstrap logs to show completion status
+        bootstrap_dir = Path.cwd().parent if "launcher" in str(Path.cwd()) else Path.cwd()
+        logs_dir = bootstrap_dir / "logs"
+        
+        if logs_dir.exists():
+            # Find the most recent bootstrap log
+            log_files = list(logs_dir.glob("bootstrap_*.log"))
+            if log_files:
+                latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                self._add_launcher_log("success", f"Bootstrap completed successfully", timestamp)
+                self._add_launcher_log("info", f"Bootstrap log: {latest_log.name}", timestamp)
+            else:
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                self._add_launcher_log("info", "Running in standalone mode", timestamp)
+    
     def _setup_ui(self) -> None:
         """Setup the user interface."""
         # Main frame
@@ -119,9 +140,12 @@ class MainWindow:
         
         # Initial log message
         timestamp = datetime.now().strftime("%H:%M:%S")
-        self._add_launcher_log("info", "Unified Console initialized", timestamp)
-        self._add_launcher_log("info", "All bootstrap and launcher activity will appear here", timestamp)
-        self._add_launcher_log("info", "Format: [TIME] [LEVEL] message", timestamp)
+        self._add_launcher_log("info", "FFT Minecraft Launcher initialized", timestamp)
+        self._add_launcher_log("info", "Launcher started as separate process from bootstrap", timestamp)
+        self._add_launcher_log("info", "Console shows launcher activity", timestamp)
+        
+        # Check if we were launched by bootstrap and show bootstrap completion
+        self._check_bootstrap_status()
     
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for launcher events."""
@@ -253,11 +277,15 @@ class MainWindow:
     def _add_bootstrap_log(self, level: str, message: str, timestamp: str) -> None:
         """Add a bootstrap log message to the UI console.
         
+        NOTE: This method is preserved for compatibility but is no longer
+        used directly since bootstrap runs as a separate process.
+        
         Args:
             level: Log level
             message: Message to add
             timestamp: Timestamp string
         """
+        # This method is kept for compatibility but bootstrap now runs separately
         self.log_frame.add_bootstrap_log(level, message, timestamp)
     
     def _add_launcher_log(self, level: str, message: str, timestamp: str) -> None:
