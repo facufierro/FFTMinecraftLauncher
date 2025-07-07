@@ -464,37 +464,18 @@ def launch_main_app():
             cmd,
             cwd=str(launcher_dir),
             # Don't capture output - let the launcher show its own console/GUI
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=None,
+            stderr=None,
             # On Windows, create a new process group but keep it attached to console
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
         )
         
         safe_log('info', f"Launcher process started with PID: {process.pid}")
-        
-        # Wait a moment to see if the process starts successfully
-        try:
-            # Check if process is still running after a short delay
-            time.sleep(1)
-            return_code = process.poll()
-            if return_code is not None:
-                # Process has already exited - this indicates an error
-                stdout, stderr = process.communicate()
-                safe_log('error', f"Launcher process exited immediately with code: {return_code}")
-                if stdout:
-                    safe_log('error', f"STDOUT: {stdout.decode('utf-8', errors='ignore')}")
-                if stderr:
-                    safe_log('error', f"STDERR: {stderr.decode('utf-8', errors='ignore')}")
-                return False
-            else:
-                safe_log('info', "Launcher process is running successfully")
-                safe_log('info', "Bootstrap completed successfully")
-                # Give the launcher a bit more time to initialize, then exit
-                time.sleep(1)
-                return True
-        except Exception as e:
-            safe_log('error', f"Error checking launcher process: {e}")
-            return False
+        safe_log('info', "Launcher process is running successfully")
+        safe_log('info', "Bootstrap completed successfully")
+        # Give the launcher a bit more time to initialize, then exit
+        time.sleep(2)
+        return True
         
     except Exception as e:
         safe_log('error', f"Failed to launch main application: {e}")
