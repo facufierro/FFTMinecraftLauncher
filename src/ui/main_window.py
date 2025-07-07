@@ -199,39 +199,20 @@ class MainWindow:
     
     def _check_instance_status(self) -> None:
         """Check if the instance is installed and up to date."""
-        if not self.launcher_core.config:
+        if not self.launcher_core.config or not self.launcher_core.update_service:
             self.instance_installed = False
             return
             
-        instance_path = self.launcher_core.config.get_selected_instance_path()
+        # Use the update service to check if instance exists properly
+        self.instance_installed = self.launcher_core.update_service.check_instance_exists()
+        self._add_log(f"Instance status: {'Installed' if self.instance_installed else 'Not installed or incomplete'}")
         
-        # Check if instance directory exists and has basic structure
-        if instance_path and instance_path.exists():
-            # Check for essential folders
-            essential_folders = ['mods', 'config', 'versions']
-            has_essential = all((instance_path / folder).exists() for folder in essential_folders)
-            
-            # Check if NeoForge is installed in the versions directory
-            versions_dir = instance_path / "versions"
-            has_neoforge = False
-            if versions_dir.exists():
-                for version_dir in versions_dir.iterdir():
-                    if version_dir.is_dir() and "neoforge" in version_dir.name.lower():
-                        version_json = version_dir / f"{version_dir.name}.json"
-                        if version_json.exists():
-                            has_neoforge = True
-                            break
-            
-            self.instance_installed = has_essential and has_neoforge
-            self._add_log(f"Instance status: {'Installed' if self.instance_installed else 'Not installed or incomplete'}")
-            
-            if has_essential and not has_neoforge:
-                self._add_log("Instance directory found but NeoForge not installed")
-            elif not has_essential:
-                self._add_log("Instance directory missing essential folders")
-        else:
-            self.instance_installed = False
-            self._add_log("Instance directory not found")
+        if not self.instance_installed:
+            instance_path = self.launcher_core.config.get_selected_instance_path()
+            if instance_path and instance_path.exists():
+                self._add_log("Instance directory found but setup is incomplete")
+            else:
+                self._add_log("Instance directory not found")
     
     def _check_for_launcher_updates_silent(self) -> None:
         """Check for launcher self-updates silently (console logging only)."""

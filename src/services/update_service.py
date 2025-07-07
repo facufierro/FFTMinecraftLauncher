@@ -43,16 +43,14 @@ class UpdateService:
             self.progress_callback(message)
     
     def check_for_updates(self) -> UpdateInfo:
-        """Check for available updates and ensure instance is properly set up.
+        """Check for available updates.
         
         Returns:
             UpdateInfo object containing update information.
         """
         self._update_progress("Checking for updates...")
         
-        # First, ensure the instance is properly set up
-        self._ensure_instance_setup()
-        
+        # Just check for updates - don't set up instance yet
         update_info = self.github_service.create_update_info(
             self.config.current_version
         )
@@ -204,6 +202,25 @@ class UpdateService:
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_sha256.update(chunk)
         return hash_sha256.hexdigest()
+
+    def check_instance_exists(self) -> bool:
+        """Check if the instance exists and is properly set up.
+        
+        Returns:
+            True if instance exists and has NeoForge, False otherwise.
+        """
+        instance_path = self.config.get_selected_instance_path()
+        if not instance_path or not instance_path.exists():
+            return False
+        
+        # Check for essential folders
+        essential_folders = ['mods', 'config', 'versions']
+        has_essential = all((instance_path / folder).exists() for folder in essential_folders)
+        
+        # Check if NeoForge is installed
+        has_neoforge = self._is_neoforge_installed(instance_path)
+        
+        return has_essential and has_neoforge
 
     def _ensure_instance_setup(self) -> None:
         """Ensure the instance is properly set up with NeoForge and launcher profile."""
@@ -367,6 +384,10 @@ class UpdateService:
             return False
         
         try:
+            # First, ensure the instance is properly set up
+            self._ensure_instance_setup()
+            
+            # Then download and extract the release
             return self._download_and_extract_release(update_info)
         except UpdateError as e:
             self.logger.error(f"Update failed: {e}")
