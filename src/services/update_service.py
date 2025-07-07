@@ -366,12 +366,15 @@ class UpdateService:
             profile_exists = False
             profile_needs_update = False
             
+            # Define optimized Java arguments for performance (only used for new profiles)
+            default_java_args = "-Xmx8G -Xms4G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M"
+            
             for profile_id, profile_data in profiles_data.get("profiles", {}).items():
                 # Check by name OR by gameDir (to update existing instances)
                 if (profile_data.get("name") == profile_name or 
                     profile_data.get("gameDir") == str(instance_path)):
                     
-                    # Check if profile needs updating
+                    # Check if profile needs updating (but DON'T touch Java arguments if they exist)
                     needs_update = False
                     if profile_data.get("name") != profile_name:
                         profile_data["name"] = profile_name
@@ -388,6 +391,7 @@ class UpdateService:
                     if profile_data.get("icon") != "Furnace":
                         profile_data["icon"] = "Furnace"
                         needs_update = True
+                    # NOTE: We intentionally DO NOT update javaArgs here - preserve user customizations
                     
                     profile_exists = True
                     profile_needs_update = needs_update
@@ -395,7 +399,7 @@ class UpdateService:
             
             # Only create new profile if it doesn't exist
             if not profile_exists:
-                # Create new profile
+                # Create new profile with optimized default Java arguments
                 profile_id = str(uuid.uuid4()).replace('-', '')
                 
                 new_profile = {
@@ -405,7 +409,8 @@ class UpdateService:
                     "lastUsed": "2024-01-01T00:00:00.000Z",
                     "lastVersionId": "neoforge-21.1.186",
                     "icon": "Furnace",
-                    "gameDir": str(instance_path)
+                    "gameDir": str(instance_path),
+                    "javaArgs": default_java_args  # Set optimized defaults only for new profiles
                 }
                 
                 profiles_data["profiles"][profile_id] = new_profile
