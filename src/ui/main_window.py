@@ -115,9 +115,10 @@ class MainWindow:
         self.log_frame.grid(row=4, column=0, sticky="nsew", padx=20, pady=(0, 20))
         
         # Initial log message
-        self._add_log("FFT Minecraft Launcher started")
-        self._add_log("Initializing launcher components...")
-        self._add_log("Note: Button will show 'Update' if instance/modpack needs installation or updates")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self._add_launcher_log("info", "Unified Console initialized", timestamp)
+        self._add_launcher_log("info", "All bootstrap and launcher activity will appear here", timestamp)
+        self._add_launcher_log("info", "Format: [TIME] [LEVEL] message", timestamp)
     
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for launcher events."""
@@ -142,7 +143,29 @@ class MainWindow:
         events.subscribe(EventType.CONFIG_CHANGED, self._on_config_changed)
         
         # Setup logger callback
-        self.launcher_core.logger.set_ui_callback(self._add_log)
+        def launcher_log_callback(formatted_message):
+            """Handle launcher log messages with proper formatting."""
+            # Extract timestamp and message
+            if formatted_message.startswith('[') and '] ' in formatted_message:
+                timestamp_end = formatted_message.find('] ')
+                timestamp = formatted_message[1:timestamp_end]
+                message = formatted_message[timestamp_end + 2:]
+                
+                # Determine log level from message content
+                level = "info"
+                if "error" in message.lower() or "failed" in message.lower():
+                    level = "error"
+                elif "warning" in message.lower() or "warn" in message.lower():
+                    level = "warning"
+                elif "success" in message.lower() or "completed" in message.lower() or "ready" in message.lower():
+                    level = "success"
+                
+                self._add_launcher_log(level, message, timestamp)
+            else:
+                # Fallback to old method
+                self._add_log(formatted_message)
+        
+        self.launcher_core.logger.set_ui_callback(launcher_log_callback)
     
     def _update_ui_from_config(self) -> None:
         """Update UI elements from current configuration."""
@@ -166,10 +189,11 @@ class MainWindow:
         })
         
         # Log instance info
+        timestamp = datetime.now().strftime("%H:%M:%S")
         if instance_path and instance_path.exists():
-            self._add_log(f"Using instance directory: {instance_path}")
+            self._add_launcher_log("info", f"Using instance directory: {instance_path}", timestamp)
         else:
-            self._add_log("Instance directory will be created automatically")
+            self._add_launcher_log("warning", "Instance directory will be created automatically", timestamp)
     
     def _add_log(self, message: str) -> None:
         """Add a log message to the UI.
@@ -188,10 +212,31 @@ class MainWindow:
         
         self.log_frame.add_log_message(formatted_message)
     
+    def _add_bootstrap_log(self, level: str, message: str, timestamp: str) -> None:
+        """Add a bootstrap log message to the UI console.
+        
+        Args:
+            level: Log level
+            message: Message to add
+            timestamp: Timestamp string
+        """
+        self.log_frame.add_bootstrap_log(level, message, timestamp)
+    
+    def _add_launcher_log(self, level: str, message: str, timestamp: str) -> None:
+        """Add a launcher log message to the UI console.
+        
+        Args:
+            level: Log level
+            message: Message to add
+            timestamp: Timestamp string
+        """
+        self.log_frame.add_launcher_log(level, message, timestamp)
+    
     # Update checking methods
     def _check_for_updates_on_startup(self) -> None:
         """Check for updates on startup to set initial button state."""
-        self._add_log("Checking for updates...")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self._add_launcher_log("info", "Checking for updates...", timestamp)
         self.button_frame.set_button_states({'launch': 'disabled'})
         
         # First check if instance is installed
@@ -212,14 +257,17 @@ class MainWindow:
             
         # Use the update service to check if instance exists properly
         self.instance_installed = self.launcher_core.update_service.check_instance_exists()
-        self._add_log(f"Instance status: {'Installed' if self.instance_installed else 'Not installed or incomplete'}")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        status = 'Installed' if self.instance_installed else 'Not installed or incomplete'
+        level = "success" if self.instance_installed else "warning"
+        self._add_launcher_log(level, f"Instance status: {status}", timestamp)
         
         if not self.instance_installed:
             instance_path = self.launcher_core.config.get_selected_instance_path()
             if instance_path and instance_path.exists():
-                self._add_log("Instance directory found but setup is incomplete")
+                self._add_launcher_log("warning", "Instance directory found but setup is incomplete", timestamp)
             else:
-                self._add_log("Instance directory not found")
+                self._add_launcher_log("warning", "Instance directory not found", timestamp)
     
     def _check_for_launcher_updates_silent(self) -> None:
         """Check for launcher self-updates silently (console logging only)."""
@@ -308,7 +356,8 @@ class MainWindow:
         """Launch Minecraft launcher."""
         # First validate that Minecraft launcher is available
         if not self.launcher_core.minecraft_service or not self.launcher_core.validate_minecraft_installation():
-            self._add_log("Error: Minecraft launcher not found")
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._add_launcher_log("error", "Minecraft launcher not found", timestamp)
             UIUtils.show_error_dialog(
                 "Minecraft Launcher Not Found", 
                 "The Minecraft launcher could not be found on your system.\n\n"
@@ -327,12 +376,13 @@ class MainWindow:
         Args:
             success: Whether launch was successful
         """
+        timestamp = datetime.now().strftime("%H:%M:%S")
         if success:
-            self._add_log("Minecraft launcher opened successfully")
+            self._add_launcher_log("success", "Minecraft launcher opened successfully", timestamp)
             # Close the launcher after successfully opening Minecraft
             self.root.after(1000, self.close)  # Wait 1 second then close
         else:
-            self._add_log("Failed to open Minecraft launcher")
+            self._add_launcher_log("error", "Failed to open Minecraft launcher", timestamp)
             self.button_frame.set_button_states({'launch': 'normal'})
     
     def _on_theme_toggle(self) -> None:
@@ -359,6 +409,9 @@ class MainWindow:
         # Update last check time
         self.status_frame.update_last_check(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         
+        # Get timestamp for logging
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
         # Determine what the button should show based on instance and update status
         if not self.instance_installed:
             # Instance not installed - button should be "Update" to install everything
@@ -366,21 +419,23 @@ class MainWindow:
             self.button_frame.set_launch_button_text("Update")
             self.button_frame.set_launch_button_color("#ffc107", "#d39e00")  # Yellow for update
             self.progress_frame.update_progress("Instance not installed - click Update to install", 0, "warning")
-            self._add_log("Instance not installed - update needed")
+            self._add_launcher_log("warning", "Instance not installed - update needed", timestamp)
         elif update_info.updates_available:
             # Instance installed but modpack needs update
             self.needs_update = True
             self.button_frame.set_launch_button_text("Update")
             self.button_frame.set_launch_button_color("#ffc107", "#d39e00")  # Yellow for update
             self.progress_frame.update_progress(f"New version available: {update_info.latest_version}", 0, "warning")
-            self._add_log(f"Modpack update available: v{update_info.latest_version}")
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._add_launcher_log("warning", f"Modpack update available: v{update_info.latest_version}", timestamp)
         else:
             # Everything is up to date - button should be "Launch"
             self.needs_update = False
             self.button_frame.set_launch_button_text("Launch")
             self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
             self.progress_frame.update_progress(f"Up to date (Version: {update_info.latest_version})", 1.0, "success")
-            self._add_log("Ready to launch")
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._add_launcher_log("success", "Ready to launch", timestamp)
         
         # Enable the button
         self.button_frame.set_button_states({'launch': 'normal'})
@@ -435,11 +490,12 @@ class MainWindow:
         self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
         
         # Check if auto-launch is enabled
+        timestamp = datetime.now().strftime("%H:%M:%S")
         if self.launch_after_update_var.get():
-            self._add_log("Launching Minecraft...")
+            self._add_launcher_log("info", "Launching Minecraft...", timestamp)
             self.root.after(1000, self._launch_minecraft)  # Wait 1 second then launch
         else:
-            self._add_log("Update completed - ready to launch")
+            self._add_launcher_log("success", "Update completed - ready to launch", timestamp)
             self.button_frame.set_button_states({'launch': 'normal'})
     
     def _on_update_failed(self, error: str) -> None:

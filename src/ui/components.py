@@ -302,7 +302,7 @@ class ButtonFrame(ctk.CTkFrame):
 
 
 class LogFrame(ctk.CTkFrame):
-    """Enhanced log frame with better styling and features."""
+    """Enhanced log frame with console-like styling and rich color support."""
     
     def __init__(self, parent, **kwargs):
         """Initialize the log frame.
@@ -321,32 +321,50 @@ class LogFrame(ctk.CTkFrame):
         self.header_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 3))
         self.header_frame.columnconfigure(0, weight=1)
         
-        # Title with icon
+        # Title with console icon
         self.title_frame = ctk.CTkFrame(self.header_frame, fg_color="transparent")
         self.title_frame.grid(row=0, column=0, sticky="w")
         
         self.log_title = ctk.CTkLabel(
             self.title_frame,
-            text="Activity Log",
+            text="Activity Console",
             font=ctk.CTkFont(size=14, weight="bold")
         )
         self.log_title.pack(side="left")
         
+        # Controls frame
+        self.controls_frame = ctk.CTkFrame(self.header_frame, fg_color="transparent")
+        self.controls_frame.grid(row=0, column=1, sticky="e")
+        
+        # Auto-scroll toggle
+        self.auto_scroll_var = ctk.BooleanVar(value=True)
+        self.auto_scroll_cb = ctk.CTkCheckBox(
+            self.controls_frame,
+            text="Auto-scroll",
+            variable=self.auto_scroll_var,
+            width=80,
+            height=20,
+            font=ctk.CTkFont(size=10),
+            checkbox_width=16,
+            checkbox_height=16
+        )
+        self.auto_scroll_cb.pack(side="left", padx=(0, 10))
+        
         # Clear button
         self.clear_button = ctk.CTkButton(
-            self.header_frame,
+            self.controls_frame,
             text="Clear",
-            width=80,
-            height=28,
+            width=60,
+            height=24,
             font=ctk.CTkFont(size=11),
             fg_color="transparent",
             hover_color=("#e0e0e0", "#333333"),
-            text_color=("#808080", "#808080"),
+            text_color=("#666666", "#888888"),
             command=self.clear_log
         )
-        self.clear_button.grid(row=0, column=1, sticky="e")
+        self.clear_button.pack(side="left")
         
-        # Enhanced log text widget with custom styling
+        # Enhanced log text widget with console styling
         self.log_text = ctk.CTkTextbox(
             self, 
             height=320,
@@ -354,63 +372,139 @@ class LogFrame(ctk.CTkFrame):
             corner_radius=8,
             font=ctk.CTkFont(family="Consolas", size=11),
             scrollbar_button_color=("#cccccc", "#555555"),
-            scrollbar_button_hover_color=("#aaaaaa", "#777777")
+            scrollbar_button_hover_color=("#aaaaaa", "#777777"),
+            fg_color="#1a1a1a",  # Dark console background
+            text_color="#e0e0e0"  # Light gray terminal text
         )
         self.log_text.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
-    
-    def _add_initial_logs(self) -> None:
-        """Add initial log messages to match the screenshot."""
-        initial_logs = [
-            "[18:42:27] Using instance directory: D:\\Projects\\Games\\Minecraft\\FFTMinecraftLauncher\\instance",
-            "[18:42:27] [18:42:27] Checking for updates...",
-            "[18:42:27] [18:42:27] Checking for updates...",
-            "[18:42:27] [18:42:27] Checking for updates...",
-            "[18:42:27] [18:42:27] Checking instance setup...",
-            "[18:42:27] [18:42:27] Fetching latest release from: https://api.github.com/repos/facufierro/FFTClientMinecraft1211/releases/latest",
-            "[18:42:27] [18:42:27] Found release: 1.1.3",
-            "[18:42:27] [18:42:27] Checking for changes...",
-            "[18:42:27] [18:42:27] Downloading from: https://api.github.com/repos/facufierro/FFTClientMinecraft1211/zipball/1.1.3",
-            "[18:42:33] [18:42:33] Download completed: C:\\Users\\fierr\\AppData\\Local\\Temp\\tmpcSh2yt_c\\check.zip",
-            "[18:42:34] [18:42:34] All files match - no update needed",
-            "[18:42:34] [18:42:34] Up to date"
-        ]
         
-        self.log_text.configure(state='normal')
-        for log in initial_logs:
-            self.log_text.insert('end', f"{log}\n")
-        self.log_text.see('end')
-        self.log_text.configure(state='disabled')
+        # Configure text tags for different log levels
+        self._configure_text_tags()
+        
+        # Message counter
+        self.message_count = 0
+    
+    def _configure_text_tags(self):
+        """Configure text tags for different log levels and sources."""
+        try:
+            # Bootstrap messages (blue)
+            self.log_text._textbox.tag_configure("bootstrap", foreground="#4fc3f7")
+            # Launcher messages (green)
+            self.log_text._textbox.tag_configure("launcher", foreground="#66bb6a")
+            # Info messages (white/light gray)
+            self.log_text._textbox.tag_configure("info", foreground="#e0e0e0")
+            # Warning messages (yellow)
+            self.log_text._textbox.tag_configure("warning", foreground="#ffb74d")
+            # Error messages (red)
+            self.log_text._textbox.tag_configure("error", foreground="#f44336")
+            # Success messages (bright green)
+            self.log_text._textbox.tag_configure("success", foreground="#4caf50")
+            # Debug messages (gray)
+            self.log_text._textbox.tag_configure("debug", foreground="#9e9e9e")
+            # Timestamp (light blue)
+            self.log_text._textbox.tag_configure("timestamp", foreground="#81d4fa")
+        except Exception:
+            # If tag configuration fails, continue without colors
+            pass
+    
+    def add_bootstrap_log(self, level: str, message: str, timestamp: str) -> None:
+        """Add a bootstrap log message with color coding.
+        
+        Args:
+            level: Log level ('info', 'warning', 'error', etc.)
+            message: Message to add
+            timestamp: Timestamp string
+        """
+        self._add_console_message("bootstrap", level, message, timestamp)
+    
+    def add_launcher_log(self, level: str, message: str, timestamp: str) -> None:
+        """Add a launcher log message with color coding.
+        
+        Args:
+            level: Log level ('info', 'warning', 'error', etc.)
+            message: Message to add
+            timestamp: Timestamp string
+        """
+        self._add_console_message("launcher", level, message, timestamp)
     
     def add_log_message(self, message: str, level: str = "info") -> None:
-        """Add a log message with color coding.
+        """Add a general log message (backwards compatibility).
         
         Args:
             message: Message to add
             level: Log level ('info', 'warning', 'error', 'success')
         """
+        # Extract timestamp if present
+        timestamp = ""
+        if message.startswith('[') and '] ' in message:
+            timestamp_end = message.find('] ')
+            timestamp = message[1:timestamp_end]
+            message = message[timestamp_end + 2:]
+        else:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        self._add_console_message("launcher", level, message, timestamp)
+    
+    def _add_console_message(self, source: str, level: str, message: str, timestamp: str) -> None:
+        """Add a message to the console with rich formatting.
+        
+        Args:
+            source: Message source ('bootstrap' or 'launcher')
+            level: Log level
+            message: Message text
+            timestamp: Timestamp string
+        """
         try:
             self.log_text.configure(state='normal')
             
-            # Add timestamp if not present
-            if not message.startswith('['):
-                from datetime import datetime
-                timestamp = datetime.now().strftime("[%H:%M:%S]")
-                message = f"{timestamp} {message}"
+            # Message counter for line numbers
+            self.message_count += 1
             
-            # Color coding based on level (simplified for CTkTextbox)
-            prefix_map = {
-                'info': 'ℹ️',
-                'warning': '⚠️',
-                'error': '❌',
-                'success': '✅'
+            # Get level prefix and tag
+            level_prefixes = {
+                'info': '[INFO]',
+                'warning': '[WARN]',
+                'error': '[ERROR]',
+                'success': '[OK]',
+                'debug': '[DEBUG]'
             }
             
-            if level != 'info':
-                message = f"{prefix_map.get(level, '')} {message}"
+            level_prefix = level_prefixes.get(level, '[INFO]')
+            level_tag = level if level in ['warning', 'error', 'success', 'debug'] else 'info'
             
-            self.log_text.insert('end', f"{message}\n")
-            self.log_text.see('end')
+            # Format: [timestamp] [INFO] message
+            formatted_line = f"[{timestamp}] {level_prefix} {message}\n"
+            
+            # Insert with tags for colors
+            start_pos = self.log_text.index('end-1c')
+            self.log_text.insert('end', formatted_line)
+            
+            # Apply color tags
+            try:
+                # Calculate positions for each part
+                line_start = f"{start_pos.split('.')[0]}.0"
+                timestamp_start = f"{line_start}+1c"
+                timestamp_end = f"{timestamp_start}+{len(timestamp)+1}c"
+                level_start = f"{timestamp_end}+2c"
+                level_end = f"{level_start}+{len(level_prefix)}c"
+                message_start = f"{level_end}+1c"
+                message_end = f"{line_start} lineend"
+                
+                # Apply tags (use source for different colors)
+                self.log_text._textbox.tag_add("timestamp", timestamp_start, timestamp_end)
+                self.log_text._textbox.tag_add(source, level_start, level_end)  # Color level prefix by source
+                self.log_text._textbox.tag_add(level_tag, message_start, message_end)
+            except Exception:
+                # If tagging fails, at least the message is visible
+                pass
+            
+            # Auto-scroll if enabled
+            if self.auto_scroll_var.get():
+                self.log_text.see('end')
+            
             self.log_text.configure(state='disabled')
+            
         except Exception:
             # If we can't add to the log widget, just ignore it
             # This prevents crashes during shutdown or widget destruction
@@ -418,9 +512,13 @@ class LogFrame(ctk.CTkFrame):
     
     def clear_log(self) -> None:
         """Clear all log messages."""
-        self.log_text.configure(state='normal')
-        self.log_text.delete('1.0', 'end')
-        self.log_text.configure(state='disabled')
+        try:
+            self.log_text.configure(state='normal')
+            self.log_text.delete('1.0', 'end')
+            self.message_count = 0
+            self.log_text.configure(state='disabled')
+        except Exception:
+            pass
 
 
 class ThemeToggleButton:

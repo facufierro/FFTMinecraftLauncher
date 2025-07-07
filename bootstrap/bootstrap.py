@@ -17,18 +17,65 @@ import datetime
 import threading
 from pathlib import Path
 import requests
+import tkinter as tk
+from tkinter import messagebox
 
 
 # Global logger instance
 logger = None
 
+# Message buffer for GUI mode
+message_buffer = []
+gui_callback = None
+
+
+def set_gui_callback(callback):
+    """Set the GUI callback for receiving log messages."""
+    global gui_callback
+    gui_callback = callback
+    
+    # Flush buffered messages to GUI
+    for msg in message_buffer:
+        try:
+            callback(msg['level'], msg['message'], msg['timestamp'])
+        except Exception:
+            pass  # Ignore errors during flush
+
 
 def safe_log(level, message):
     """Safe logging function that works even if logger is not initialized."""
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+    formatted_message = f"[{timestamp}] {level.upper()}: {message}"
+    
+    # Always add to buffer for GUI
+    message_buffer.append({
+        'level': level,
+        'message': message,
+        'timestamp': timestamp,
+        'formatted': formatted_message
+    })
+    
+    # Send to GUI if callback is available
+    if gui_callback:
+        try:
+            gui_callback(level, message, timestamp)
+        except Exception:
+            pass  # Ignore GUI callback errors
+    
+    # Log to file if logger is available
     if logger:
         getattr(logger, level)(message)
-    else:
-        print(f"{level.upper()}: {message}")
+    
+    # In case of critical errors before GUI, show dialog
+    if level in ['error', 'critical'] and not gui_callback:
+        try:
+            # Create a minimal root window for the dialog
+            root = tk.Tk()
+            root.withdraw()  # Hide the root window
+            messagebox.showerror("Bootstrap Error", f"{message}\n\nCheck log files for details.")
+            root.destroy()
+        except Exception:
+            pass  # If even dialog fails, just continue
 
 
 def setup_logging():
@@ -483,28 +530,41 @@ def launch_main_app():
             from src.utils.logger import setup_logger
             import logging
             
-            # Setup logging for the main launcher (reuse the bootstrap console)
+            # Setup logging for the main launcher (no console output)
             log_file = "launcher.log"
             setup_logger(logging.INFO, log_file, console_output=False)
-            
-            # Create a unified logger callback that uses our bootstrap logger
-            def unified_log_callback(message):
-                # Extract just the message part (remove timestamp if present)
-                if message.startswith('[') and '] ' in message:
-                    # Remove the timestamp prefix since we'll add our own
-                    msg_part = message.split('] ', 1)[-1]
-                else:
-                    msg_part = message
-                safe_log('info', f"Launcher: {msg_part}")
             
             # Initialize launcher core
             launcher_core = LauncherCore()
             
-            # Set up the unified logging callback
-            launcher_core.logger.set_ui_callback(unified_log_callback)
-            
-            # Create and run UI
+            # Create main window
             main_window = MainWindow(launcher_core)
+            
+            # Set up the bootstrap callback to send messages to GUI
+            def bootstrap_to_gui_callback(level, message, timestamp):
+                """Send bootstrap messages to the GUI log."""
+                # Format the message for GUI display
+                formatted_msg = f"Bootstrap: {message}"
+                main_window._add_bootstrap_log(level, formatted_msg, timestamp)
+            
+            # Connect bootstrap logging to GUI
+            set_gui_callback(bootstrap_to_gui_callback)
+            
+            # Set up the unified launcher logging callback
+            def launcher_to_gui_callback(message):
+                """Send launcher messages to the GUI log."""
+                # Extract timestamp and message
+                if message.startswith('[') and '] ' in message:
+                    timestamp_end = message.find('] ')
+                    timestamp = message[1:timestamp_end]
+                    msg_part = message[timestamp_end + 2:]
+                else:
+                    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+                    msg_part = message
+                main_window._add_launcher_log('info', msg_part, timestamp)
+            
+            # Set up the launcher logging callback
+            launcher_core.logger.set_ui_callback(launcher_to_gui_callback)
             
             safe_log('info', "Launcher GUI initialized successfully")
             safe_log('info', "Starting main event loop...")
@@ -686,8 +746,8 @@ def main():
         logger.info("Launcher is up to date!")
     
     # Add delay before launching
-    logger.info("Preparing to launch...")
-    time.sleep(2)
+    logger.info("Preparing to launch unified GUI...")
+    time.sleep(1)
     
     # Launch main app
     logger.info("Starting unified launcher...")
