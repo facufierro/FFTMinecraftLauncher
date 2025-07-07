@@ -515,7 +515,7 @@ class LogFrame(ctk.CTkFrame):
                 
                 # Message: everything after level and space
                 message_start = f"{level_bracket2_end}+1c"  # Skip space after level
-                message_end = f"{line_start} lineend-1c"  # Exclude newline
+                message_end = f"{line_start} lineend"  # Include the entire line end
                 
                 # Apply tags with correct colors
                 # White brackets around timestamp
