@@ -80,8 +80,16 @@ class LauncherConfig:
     
     def get_minecraft_path(self) -> Path:
         """Get the launcher's instance directory as a Path object."""
-        # Use instance folder in the same directory as the launcher
-        return Path.cwd() / "instance"
+        # Use instance folder in the same directory as the executable
+        import sys
+        if getattr(sys, 'frozen', False):
+            # Running as a PyInstaller bundle
+            exe_dir = Path(sys.executable).parent
+        else:
+            # Running as a Python script - use the main app.py directory
+            exe_dir = Path(__file__).parent.parent.parent  # Go up from src/models/ to project root
+        
+        return exe_dir / "instance"
     
     def get_selected_instance_path(self) -> Optional[Path]:
         """Get the path to the launcher's instance."""
