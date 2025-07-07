@@ -450,22 +450,23 @@ def launch_main_app():
         safe_log('info', f"Working directory: {launcher_dir}")
         safe_log('info', "=" * 40)
         
-        # Launch the process as completely independent (detached)
+        # Launch the process as independent but not fully detached
         process = subprocess.Popen(
             cmd,
             cwd=str(launcher_dir),
             # Don't capture output - let the launcher show its own console/GUI
             stdout=None,
             stderr=None,
-            # On Windows, create a detached process that runs independently
-            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS) if os.name == 'nt' else 0
+            # On Windows, create a new process group but keep it attached to console
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
         )
         
         safe_log('info', f"Launcher process started with PID: {process.pid}")
         safe_log('info', "Bootstrap completed successfully")
         
-        # DON'T WAIT - Let the launcher run independently
-        # The bootstrap exits here, allowing the launcher to update it later
+        # Give the launcher a moment to initialize, then exit
+        # This breaks the parent-child dependency while ensuring the launcher starts
+        time.sleep(2)
         return True
         
     except Exception as e:
