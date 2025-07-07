@@ -50,6 +50,8 @@ class MainWindow:
         # State tracking
         self.update_info = None
         self.needs_update = False
+        self.instance_installed = False
+        self.instance_up_to_date = False
         
         # Check for updates on startup to set initial button state
         self.root.after(1000, self._check_for_updates_on_startup)
@@ -115,6 +117,7 @@ class MainWindow:
         # Initial log message
         self._add_log("FFT Minecraft Launcher started")
         self._add_log("Initializing launcher components...")
+        self._add_log("Note: Button will show 'Update' if instance/modpack needs installation or updates")
     
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for launcher events."""
@@ -157,16 +160,10 @@ class MainWindow:
         
         self.status_frame.update_version(config.current_version or "Unknown")
         
-        # Check Minecraft launcher and update launch button
-        is_valid = self.launcher_core.validate_minecraft_installation()
+        # Initially disable the launch button until we check status
         self.button_frame.set_button_states({
-            'launch': 'normal' if is_valid else 'disabled'
+            'launch': 'disabled'
         })
-        
-        if is_valid:
-            self._add_log("Minecraft launcher found")
-        else:
-            self._add_log("Warning: Minecraft launcher not found")
         
         # Log instance info
         if instance_path and instance_path.exists():
@@ -189,11 +186,52 @@ class MainWindow:
         """Check for updates on startup to set initial button state."""
         self._add_log("Checking for updates...")
         self.button_frame.set_button_states({'launch': 'disabled'})
+        
+        # First check if instance is installed
+        self._check_instance_status()
+        
+        # Then check for updates
         self.launcher_core.check_for_updates()
         
         # Also check for launcher self-updates (console only)
         if self.self_update_service:
             self.root.after(2000, self._check_for_launcher_updates_silent)
+    
+    def _check_instance_status(self) -> None:
+        """Check if the instance is installed and up to date."""
+        if not self.launcher_core.config:
+            self.instance_installed = False
+            return
+            
+        instance_path = self.launcher_core.config.get_selected_instance_path()
+        
+        # Check if instance directory exists and has basic structure
+        if instance_path and instance_path.exists():
+            # Check for essential folders
+            essential_folders = ['mods', 'config', 'versions']
+            has_essential = all((instance_path / folder).exists() for folder in essential_folders)
+            
+            # Check if NeoForge is installed in the versions directory
+            versions_dir = instance_path / "versions"
+            has_neoforge = False
+            if versions_dir.exists():
+                for version_dir in versions_dir.iterdir():
+                    if version_dir.is_dir() and "neoforge" in version_dir.name.lower():
+                        version_json = version_dir / f"{version_dir.name}.json"
+                        if version_json.exists():
+                            has_neoforge = True
+                            break
+            
+            self.instance_installed = has_essential and has_neoforge
+            self._add_log(f"Instance status: {'Installed' if self.instance_installed else 'Not installed or incomplete'}")
+            
+            if has_essential and not has_neoforge:
+                self._add_log("Instance directory found but NeoForge not installed")
+            elif not has_essential:
+                self._add_log("Instance directory missing essential folders")
+        else:
+            self.instance_installed = False
+            self._add_log("Instance directory not found")
     
     def _check_for_launcher_updates_silent(self) -> None:
         """Check for launcher self-updates silently (console logging only)."""
@@ -267,19 +305,32 @@ class MainWindow:
     # Main action handler
     def _handle_launch_action(self) -> None:
         """Handle the main launch/update action."""
-        if not self.needs_update:
-            # Check for updates first
-            self._add_log("Checking for updates...")
-            self.button_frame.set_button_states({'launch': 'disabled'})
-            self.launcher_core.check_for_updates()
+        current_button_text = self.button_frame.launch_button.cget("text")
+        
+        if current_button_text == "Launch":
+            # Launch Minecraft and close the app
+            self._launch_minecraft()
         else:
-            # Updates are available - perform update then launch
+            # Button says "Update" - perform update then launch if checkbox is checked
             self._add_log("Starting update...")
             self.button_frame.set_button_states({'launch': 'disabled'})
             self.launcher_core.perform_update()
     
     def _launch_minecraft(self) -> None:
         """Launch Minecraft launcher."""
+        # First validate that Minecraft launcher is available
+        if not self.launcher_core.minecraft_service or not self.launcher_core.validate_minecraft_installation():
+            self._add_log("Error: Minecraft launcher not found")
+            UIUtils.show_error_dialog(
+                "Minecraft Launcher Not Found", 
+                "The Minecraft launcher could not be found on your system.\n\n"
+                "Please install the official Minecraft launcher from:\n"
+                "https://www.minecraft.net/en-us/download\n\n"
+                "After installation, restart this launcher."
+            )
+            self.button_frame.set_button_states({'launch': 'normal'})
+            return
+            
         self.launcher_core.launch_minecraft(self._on_minecraft_launched)
     
     def _on_minecraft_launched(self, success: bool) -> None:
@@ -294,6 +345,7 @@ class MainWindow:
             self.root.after(1000, self.close)  # Wait 1 second then close
         else:
             self._add_log("Failed to open Minecraft launcher")
+            self.button_frame.set_button_states({'launch': 'normal'})
     
     def _on_theme_toggle(self) -> None:
         """Handle theme toggle."""
@@ -315,38 +367,58 @@ class MainWindow:
         """Handle update check completed."""
         self.progress_frame.reset_progress()
         self.update_info = update_info
-        self.needs_update = update_info.updates_available
         
         # Update last check time
         self.status_frame.update_last_check(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         
-        # Update button based on update status
-        if update_info.updates_available:
+        # Determine what the button should show based on instance and update status
+        if not self.instance_installed:
+            # Instance not installed - button should be "Update" to install everything
+            self.needs_update = True
             self.button_frame.set_launch_button_text("Update")
             self.button_frame.set_launch_button_color("#ffc107", "#d39e00")  # Yellow for update
-            self.progress_frame.update_progress(
-                f"New version available: {update_info.latest_version}", 0
-            )
-            
-            # Auto-update on startup if enabled
-            if self.launcher_core.config and self.launcher_core.config.auto_update:
-                self._add_log("Auto-update enabled - starting update automatically...")
-                self.root.after(1000, self._handle_launch_action)
-            else:
-                self.button_frame.set_button_states({'launch': 'normal'})
+            self.progress_frame.update_progress("Instance not installed - click Update to install", 0, "warning")
+            self._add_log("Instance not installed - update needed")
+        elif update_info.updates_available:
+            # Instance installed but modpack needs update
+            self.needs_update = True
+            self.button_frame.set_launch_button_text("Update")
+            self.button_frame.set_launch_button_color("#ffc107", "#d39e00")  # Yellow for update
+            self.progress_frame.update_progress(f"New version available: {update_info.latest_version}", 0, "warning")
+            self._add_log(f"Modpack update available: v{update_info.latest_version}")
         else:
+            # Everything is up to date - button should be "Launch"
+            self.needs_update = False
             self.button_frame.set_launch_button_text("Launch")
             self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
-            self.progress_frame.update_progress(
-                f"Up to date (Version: {update_info.latest_version})", 1.0
-            )
-            self.button_frame.set_button_states({'launch': 'normal'})
+            self.progress_frame.update_progress(f"Up to date (Version: {update_info.latest_version})", 1.0, "success")
+            self._add_log("Ready to launch")
+        
+        # Enable the button
+        self.button_frame.set_button_states({'launch': 'normal'})
+        
+        # Auto-update on startup if enabled and update is needed
+        if (self.launcher_core.config and self.launcher_core.config.auto_update and 
+            self.needs_update):
+            self._add_log("Auto-update enabled - starting update automatically...")
+            self.root.after(1000, self._handle_launch_action)
     
     def _on_update_check_failed(self, error: str) -> None:
         """Handle update check failed."""
         self.progress_frame.reset_progress()
-        self.progress_frame.update_progress("Error checking updates", 0)
-        self.button_frame.set_button_states({'launch': 'normal'})
+        self.progress_frame.update_progress("Error checking updates", 0, "error")
+        
+        # If we can't check for updates but instance is installed, allow launch
+        if self.instance_installed:
+            self.button_frame.set_launch_button_text("Launch")
+            self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
+            self.button_frame.set_button_states({'launch': 'normal'})
+            self._add_log("Update check failed but instance is available - ready to launch")
+        else:
+            # Can't check updates and no instance - keep disabled
+            self.button_frame.set_button_states({'launch': 'disabled'})
+            self._add_log("Update check failed and no instance available")
+            
         UIUtils.show_error_dialog("Update Check Failed", f"Failed to check for updates:\n{error}")
     
     def _on_update_started(self, data=None) -> None:
@@ -360,14 +432,17 @@ class MainWindow:
     
     def _on_update_completed(self, data=None) -> None:
         """Handle update completed."""
-        self.progress_frame.update_progress("Update completed successfully", 1.0)
+        self.progress_frame.update_progress("Update completed successfully", 1.0, "success")
         
         # Update version display
         if self.launcher_core.config:
             self.status_frame.update_version(self.launcher_core.config.current_version or "Unknown")
         
-        # Reset button to launch mode
+        # Update instance status since update is complete
+        self.instance_installed = True
         self.needs_update = False
+        
+        # Reset button to launch mode
         self.button_frame.set_launch_button_text("Launch")
         self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
         
@@ -382,7 +457,16 @@ class MainWindow:
     def _on_update_failed(self, error: str) -> None:
         """Handle update failed."""
         self.progress_frame.reset_progress()
-        self.progress_frame.update_progress("Update failed", 0)
+        self.progress_frame.update_progress("Update failed", 0, "error")
+        
+        # Reset button state based on current status
+        if self.needs_update:
+            self.button_frame.set_launch_button_text("Update")
+            self.button_frame.set_launch_button_color("#ffc107", "#d39e00")  # Yellow for update
+        else:
+            self.button_frame.set_launch_button_text("Launch")
+            self.button_frame.set_launch_button_color("#28a745", "#1e7e34")  # Green for launch
+            
         self.button_frame.set_button_states({'launch': 'normal'})
         UIUtils.show_error_dialog("Update Failed", f"Failed to update files:\n{error}")
     
