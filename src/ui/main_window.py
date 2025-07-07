@@ -309,7 +309,7 @@ class MainWindow:
     def _check_bootstrap_and_continue(self) -> None:
         """Check bootstrap first, then continue with normal launcher flow."""
         # Prevent duplicate bootstrap checks
-        if self.bootstrap_checked:
+        if hasattr(self, 'bootstrap_checked') and self.bootstrap_checked:
             self._continue_launcher_initialization()
             return
         
@@ -374,6 +374,7 @@ class MainWindow:
         """Check if bootstrap is running and close it gracefully."""
         import subprocess
         import os
+        import time
         from pathlib import Path
         
         try:
@@ -387,7 +388,7 @@ class MainWindow:
                     result = subprocess.run(['tasklist', '/FI', f'IMAGENAME eq {bootstrap_name}'], 
                                           capture_output=True, text=True, timeout=5)
                     
-                    if bootstrap_name in result.stdout:
+                    if bootstrap_name in result.stdout and 'No tasks are running' not in result.stdout:
                         self._add_log(f"Found running bootstrap: {bootstrap_name}")
                         
                         # Try to close it gracefully first
@@ -396,6 +397,8 @@ class MainWindow:
                         
                         if close_result.returncode == 0:
                             self._add_log("Bootstrap process closed successfully")
+                            # Wait a moment for the process to fully close
+                            time.sleep(1)
                         else:
                             self._add_log("Bootstrap may have already closed")
                         break
@@ -404,6 +407,9 @@ class MainWindow:
                     self._add_log("Timeout checking for bootstrap process")
                 except Exception as e:
                     self._add_log(f"Error checking bootstrap process {bootstrap_name}: {e}")
+            
+            # Additional wait to ensure file handles are released
+            time.sleep(0.5)
                     
         except Exception as e:
             self._add_log(f"Could not check/close bootstrap: {e}")
@@ -568,9 +574,15 @@ class MainWindow:
         # Filter out noisy download progress messages that slow down downloads
         message_lower = message.lower()
         
-        # Skip all downloading progress messages with KB/MB indicators
-        if ("downloading..." in message_lower and ("kb" in message_lower or "mb" in message_lower)) or \
-           ("downloading" in message_lower and "/" in message and ("kb" in message_lower or "mb" in message_lower)):
+        # Skip all download progress messages with specific patterns
+        is_download_progress = (
+            ("downloading..." in message_lower and ("kb" in message_lower or "mb" in message_lower)) or
+            ("downloading" in message_lower and "/" in message and ("kb" in message_lower or "mb" in message_lower)) or
+            (message.count("KB") >= 2) or  # Pattern like "720KB / 14339KB"
+            ("downloading... " in message and "kb /" in message_lower)
+        )
+        
+        if is_download_progress:
             # Only update the progress bar, don't log to console
             if progress is not None:
                 self.progress_frame.update_progress(f"Updating launcher: {message}", progress)
