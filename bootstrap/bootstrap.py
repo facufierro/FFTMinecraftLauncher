@@ -450,33 +450,23 @@ def launch_main_app():
         safe_log('info', f"Working directory: {launcher_dir}")
         safe_log('info', "=" * 40)
         
-        # Launch the process
+        # Launch the process as completely independent (detached)
         process = subprocess.Popen(
             cmd,
             cwd=str(launcher_dir),
             # Don't capture output - let the launcher show its own console/GUI
             stdout=None,
             stderr=None,
-            # On Windows, don't show a separate console window for the subprocess
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            # On Windows, create a detached process that runs independently
+            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS) if os.name == 'nt' else 0
         )
         
         safe_log('info', f"Launcher process started with PID: {process.pid}")
+        safe_log('info', "Bootstrap completed successfully")
         
-        # Wait for the process to complete
-        try:
-            exit_code = process.wait()
-            safe_log('info', f"Launcher process exited with code: {exit_code}")
-            return exit_code == 0
-        except KeyboardInterrupt:
-            safe_log('info', "Bootstrap interrupted, terminating launcher...")
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                safe_log('warning', "Launcher did not terminate gracefully, killing...")
-                process.kill()
-            return False
+        # DON'T WAIT - Let the launcher run independently
+        # The bootstrap exits here, allowing the launcher to update it later
+        return True
         
     except Exception as e:
         safe_log('error', f"Failed to launch main application: {e}")
