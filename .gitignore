@@ -37,3 +37,4 @@ test.*
 # Temporary Files
 temp/
 *.tmp
+attachments.json
