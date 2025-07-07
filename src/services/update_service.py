@@ -213,7 +213,7 @@ class UpdateService:
         if not instance_path or not instance_path.exists():
             return False
         
-        # Check for essential folders
+        # Check for essential folders (these should always exist)
         essential_folders = ['mods', 'config', 'versions']
         has_essential = all((instance_path / folder).exists() for folder in essential_folders)
         
@@ -226,12 +226,8 @@ class UpdateService:
         if not has_neoforge:
             return False
         
-        # Check if sync folders exist (for folders that should be synced)
-        for folder_name in self.config.folders_to_sync:
-            folder_path = instance_path / folder_name
-            if not folder_path.exists():
-                self.logger.info(f"Sync folder '{folder_name}' missing - instance setup incomplete")
-                return False
+        # Don't check for sync folders here - they get populated during the update process
+        # The instance is considered "existing" if it has NeoForge and essential folders
         
         return True
 
