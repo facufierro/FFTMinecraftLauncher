@@ -1,9 +1,13 @@
 #!/usr/bin/env pwsh
 # FFT Minecraft Launcher Build Script
-# Builds bootstrap executable and creates bundled launcher package
+# Builds minimal bootstrap executable and creates self-contained launcher package
 
 Write-Host "Building FFT Minecraft Launcher..." -ForegroundColor Green
 Write-Host "=================================" -ForegroundColor Green
+Write-Host "New Minimal Bootstrap Architecture" -ForegroundColor Cyan
+Write-Host "- Bootstrap: Minimal, stable, downloads & launches" -ForegroundColor Cyan
+Write-Host "- Launcher: Full application, auto-updateable" -ForegroundColor Cyan
+Write-Host ""
 
 # Change to project root
 Set-Location (Split-Path $PSScriptRoot -Parent)
@@ -26,25 +30,41 @@ Write-Host "Cleaning build cache..." -ForegroundColor Yellow
 if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
 if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
 
-# Build bootstrap
-Write-Host "Building bootstrap executable..." -ForegroundColor Yellow
-& $pythonExe -m PyInstaller bootstrap\bootstrap.spec --noconfirm --clean
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Error: Bootstrap build failed" -ForegroundColor Red
-    exit 1
-}
-
-# Clean up old package
-Write-Host "Creating launcher package..." -ForegroundColor Yellow
-if (Test-Path "launcher_package.zip") { Remove-Item "launcher_package.zip" }
-
-# Get version from git tag
+# Get version from git tag first
 $gitVersion = git tag --list --sort=-version:refname | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } | Select-Object -First 1
 if (-not $gitVersion) {
     Write-Host "Warning: No valid git tags found, using default version" -ForegroundColor Yellow
     $gitVersion = "v1.0.0"
 }
 Write-Host "Using version: $gitVersion" -ForegroundColor Cyan
+
+# Build bootstrap
+Write-Host "Building minimal bootstrap executable..." -ForegroundColor Yellow
+Write-Host "The bootstrap will never need rebuilding for app changes!" -ForegroundColor Cyan
+& $pythonExe -m PyInstaller bootstrap\bootstrap.spec --noconfirm --clean
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error: Bootstrap build failed" -ForegroundColor Red
+    exit 1
+}
+
+# Create bootstrap version file
+Write-Host "Creating bootstrap version file..." -ForegroundColor Yellow
+$versionNum = $gitVersion.TrimStart('v')
+$releaseDate = Get-Date -Format "yyyy-MM-dd"
+$bootstrapVersionInfo = @{
+    version = $versionNum
+    release_date = $releaseDate
+    description = "Minimal Bootstrap for FFT Minecraft Launcher"
+    architecture = "minimal-stable"
+}
+$bootstrapJsonContent = $bootstrapVersionInfo | ConvertTo-Json
+[System.IO.File]::WriteAllText("bootstrap_version.json", $bootstrapJsonContent, [System.Text.UTF8Encoding]::new($false))
+Write-Host "Bootstrap version: $versionNum (minimal-stable)" -ForegroundColor Cyan
+
+# Create launcher package...
+Write-Host "Creating self-contained launcher package..." -ForegroundColor Yellow
+Write-Host "This package will be downloaded and updated by the bootstrap" -ForegroundColor Cyan
+if (Test-Path "launcher_package.zip") { Remove-Item "launcher_package.zip" }
 
 # Clean Python cache files
 Write-Host "Cleaning Python cache files..." -ForegroundColor Yellow
@@ -96,18 +116,20 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Copy application files
-Write-Host "Copying application files..." -ForegroundColor Yellow
+# Copy application files (launcher application, not bootstrap)
+Write-Host "Copying launcher application files..." -ForegroundColor Yellow
 Copy-Item "app.py" "temp_launcher\"
 
-# Create version.json
-Write-Host "Creating version.json..." -ForegroundColor Yellow
+# Create version.json for launcher package
+Write-Host "Creating launcher package version.json..." -ForegroundColor Yellow
 $versionNum = $gitVersion.TrimStart('v')
 $releaseDate = Get-Date -Format "yyyy-MM-dd"
 $versionInfo = @{
     version = $versionNum
     release_date = $releaseDate
-    description = "FFT Minecraft Launcher with Bootstrap System"
+    description = "Self-contained FFT Minecraft Launcher Application"
+    package_type = "launcher_application"
+    bootstrap_compatible = $true
 }
 # Create JSON without BOM to avoid parsing issues
 $jsonContent = $versionInfo | ConvertTo-Json
@@ -178,9 +200,16 @@ for ($i = 0; $i -lt 3; $i++) {
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host "BUILD COMPLETE!" -ForegroundColor Green
+Write-Host "MINIMAL BOOTSTRAP ARCHITECTURE" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host "Bootstrap executable: dist\FFTMinecraftLauncher.exe" -ForegroundColor Cyan
+Write-Host "Bootstrap version: bootstrap_version.json" -ForegroundColor Cyan
 Write-Host "Launcher package: launcher_package.zip" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "You can now use the Release button to create a GitHub release" -ForegroundColor Yellow
+Write-Host "DEPLOYMENT:" -ForegroundColor Yellow
+Write-Host "1. Upload both files to GitHub releases" -ForegroundColor White
+Write-Host "2. Bootstrap downloads launcher_package.zip automatically" -ForegroundColor White
+Write-Host "3. Launcher can update bootstrap.exe when needed" -ForegroundColor White
+Write-Host ""
+Write-Host "The bootstrap will remain stable across all future updates!" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
