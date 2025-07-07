@@ -109,7 +109,9 @@ $versionInfo = @{
     release_date = $releaseDate
     description = "FFT Minecraft Launcher with Bootstrap System"
 }
-$versionInfo | ConvertTo-Json | Out-File "temp_launcher\version.json" -Encoding UTF8
+# Create JSON without BOM to avoid parsing issues
+$jsonContent = $versionInfo | ConvertTo-Json
+[System.IO.File]::WriteAllText("temp_launcher\version.json", $jsonContent, [System.Text.UTF8Encoding]::new($false))
 
 # Copy source files
 Write-Host "Copying source files..." -ForegroundColor Yellow

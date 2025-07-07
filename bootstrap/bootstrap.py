@@ -164,7 +164,7 @@ def get_current_version():
                 safe_log('warning', "Version file is empty")
                 return "0.0.0"
             
-            with open(version_file, 'r', encoding='utf-8') as f:
+            with open(version_file, 'r', encoding='utf-8-sig') as f:
                 content = f.read().strip()
                 if not content:
                     safe_log('warning', "Version file contains no content")
@@ -682,7 +682,7 @@ def main():
                     logger.warning("Version file is empty - launcher installation is corrupted")
                     needs_install = True
                 else:
-                    with open(version_file, 'r', encoding='utf-8') as f:
+                    with open(version_file, 'r', encoding='utf-8-sig') as f:
                         content = f.read().strip()
                         if not content:
                             logger.warning("Version file contains no content - launcher installation is corrupted")
