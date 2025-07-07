@@ -229,7 +229,70 @@ class UpdateService:
         # Don't check for sync folders here - they get populated during the update process
         # The instance is considered "existing" if it has NeoForge and essential folders
         
+        # Check if resource packs need to be configured
+        self._check_and_configure_resource_packs(instance_path)
+        
         return True
+    
+    def _check_and_configure_resource_packs(self, instance_path: Path) -> None:
+        """Check if resource packs exist but aren't configured, and configure them.
+        
+        Args:
+            instance_path: Path to the instance directory
+        """
+        try:
+            resourcepacks_dir = instance_path / "resourcepacks"
+            if not resourcepacks_dir.exists():
+                self.logger.debug("No resourcepacks directory found during startup check")
+                return
+            
+            self.logger.info("Checking resource pack configuration at startup...")
+            
+            # List all files in resourcepacks directory for debugging
+            pack_files = list(resourcepacks_dir.iterdir())
+            if pack_files:
+                self.logger.info(f"Found {len(pack_files)} files in resourcepacks directory:")
+                for pack_file in pack_files:
+                    self.logger.info(f"  - {pack_file.name}")
+            else:
+                self.logger.info("No files found in resourcepacks directory during startup check")
+                return
+            
+            # Look for FFT resource packs
+            for pack_file in pack_files:
+                if pack_file.name.startswith("fft-resourcepack") or pack_file.name.startswith("fft_resourcepack"):
+                    # Check if this pack is already configured in options.txt
+                    options_file = instance_path / "options.txt"
+                    pack_name = pack_file.stem if pack_file.suffix == '.zip' else pack_file.name
+                    resource_pack_file = f"file/{pack_name}"
+                    
+                    pack_configured = False
+                    if options_file.exists():
+                        try:
+                            with open(options_file, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                if f'"{resource_pack_file}"' in content:
+                                    pack_configured = True
+                                    self.logger.info(f"Resource pack {pack_name} is already configured")
+                        except Exception as e:
+                            self.logger.warning(f"Error reading options.txt: {e}")
+                    else:
+                        self.logger.info("No options.txt file found - resource pack will be configured")
+                    
+                    if not pack_configured:
+                        self.logger.info(f"Found unconfigured resource pack: {pack_name} - configuring now")
+                        # Import here to avoid circular imports
+                        from ..services.neoforge_service import NeoForgeService
+                        neoforge_service = NeoForgeService(self.config)
+                        success = neoforge_service.configure_default_resource_pack(instance_path, pack_name)
+                        if success:
+                            self.logger.info(f"Successfully configured resource pack {pack_name} at startup")
+                        else:
+                            self.logger.warning(f"Failed to configure resource pack {pack_name} at startup")
+                    break
+                    
+        except Exception as e:
+            self.logger.warning(f"Error checking resource pack configuration: {e}")
 
     def _ensure_instance_setup(self) -> None:
         """Ensure the instance is properly set up with NeoForge and launcher profile."""
@@ -514,6 +577,9 @@ class UpdateService:
                 else:
                     self.logger.warning(f"Source folder '{folder_name}' not found in update")
             
+            # After syncing files, check if we need to configure resource packs
+            self._configure_resource_packs_after_sync(instance_path)
+            
             return True
             
         except FileOperationError as e:
@@ -554,6 +620,61 @@ class UpdateService:
         except FileOperationError as e:
             self.logger.error(f"Failed to sync file {source.name}: {e}")
             raise
+    
+    def _configure_resource_packs_after_sync(self, instance_path: Path) -> None:
+        """Configure resource packs after files have been synced.
+        
+        Args:
+            instance_path: Path to the instance directory
+        """
+        try:
+            # Import here to avoid circular imports
+            from ..services.neoforge_service import NeoForgeService
+            
+            resourcepacks_dir = instance_path / "resourcepacks"
+            if not resourcepacks_dir.exists():
+                self.logger.debug("No resourcepacks directory found - skipping resource pack configuration")
+                return
+            
+            self.logger.info(f"Checking for resource packs in: {resourcepacks_dir}")
+            
+            # List all files in resourcepacks directory for debugging
+            pack_files = list(resourcepacks_dir.iterdir())
+            if pack_files:
+                self.logger.info(f"Found {len(pack_files)} files in resourcepacks directory:")
+                for pack_file in pack_files:
+                    self.logger.info(f"  - {pack_file.name}")
+            else:
+                self.logger.info("No files found in resourcepacks directory")
+                return
+            
+            # Look for FFT resource packs
+            fft_pack_found = False
+            for pack_file in pack_files:
+                if pack_file.name.startswith("fft-resourcepack") or pack_file.name.startswith("fft_resourcepack"):
+                    self._update_progress("Configuring resource pack...")
+                    self.logger.info(f"Found FFT resource pack: {pack_file.name}")
+                    
+                    # Use NeoForge service to configure the resource pack
+                    neoforge_service = NeoForgeService(self.config)
+                    pack_name = pack_file.stem if pack_file.suffix == '.zip' else pack_file.name
+                    
+                    success = neoforge_service.configure_default_resource_pack(instance_path, pack_name)
+                    if success:
+                        self.logger.info(f"Successfully configured resource pack: {pack_name}")
+                        self._update_progress("Resource pack configured successfully")
+                    else:
+                        self.logger.warning(f"Failed to configure resource pack: {pack_name}")
+                    
+                    fft_pack_found = True
+                    break
+            
+            if not fft_pack_found:
+                self.logger.info("No FFT resource packs found in resourcepacks directory")
+                
+        except Exception as e:
+            self.logger.warning(f"Error configuring resource packs: {e}")
+            # Don't raise the error - this is not critical for the update process
     
     def force_update(self) -> bool:
         """Force an update regardless of current version.
