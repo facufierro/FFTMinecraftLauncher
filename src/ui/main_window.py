@@ -200,6 +200,7 @@ class MainWindow:
                 # Fallback to old method
                 self._add_log(formatted_message)
         
+        # Set callback on logger service
         self.launcher_core.logger.set_ui_callback(launcher_log_callback)
     
     def _update_ui_from_config(self) -> None:

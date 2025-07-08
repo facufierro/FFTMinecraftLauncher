@@ -5,107 +5,112 @@ import sys
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+from ..services.logging_service import LoggingService
 
 
+# Global logging service instance
+_logging_service: Optional[LoggingService] = None
+
+
+def setup_logger(log_level: int = logging.INFO) -> LoggingService:
+    """Setup and return the global logger instance.
+    
+    Args:
+        log_level: Logging level
+        
+    Returns:
+        LoggingService instance
+    """
+    global _logging_service
+    
+    if _logging_service is None:
+        _logging_service = LoggingService("FFTLauncher")
+    
+    return _logging_service
+
+
+def get_logger() -> LoggingService:
+    """Get the global logger instance.
+    
+    Returns:
+        LoggingService instance
+    """
+    global _logging_service
+    
+    if _logging_service is None:
+        _logging_service = setup_logger()
+    
+    return _logging_service
+
+
+# For backwards compatibility with the old API
 class LauncherLogger:
-    """Custom logger for the launcher with both file and UI output."""
+    """Compatibility wrapper for LoggingService."""
     
     def __init__(self, name: str = "FFTLauncher"):
-        self.logger = logging.getLogger(name)
-        self.ui_callback = None
+        """Initialize the logger wrapper.
         
+        Args:
+            name: Logger name
+        """
+        self.service = get_logger()
+        self.logger = self.service.logger
+    
     def setup(self, log_level: int = logging.INFO, log_file: Optional[str] = None, console_output: bool = True):
-        """Setup the logger with file and console handlers."""
-        self.logger.setLevel(log_level)
+        """Setup the logger with file and console handlers.
         
-        # Clear existing handlers
-        self.logger.handlers.clear()
-        
-        # Create formatter
-        formatter = logging.Formatter(
-            '[%(asctime)s] %(levelname)s: %(message)s',
-            datefmt='%H:%M:%S'
-        )
-        
-        # Console handler (optional - may be disabled in unified mode)
-        if console_output:
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(formatter)
-            self.logger.addHandler(console_handler)
-        
-        # File handler (optional)
-        if log_file:
-            file_handler = logging.FileHandler(log_file, encoding='utf-8')
-            file_handler.setFormatter(formatter)
-            self.logger.addHandler(file_handler)
+        Args:
+            log_level: Logging level
+            log_file: Log file path (ignored, using service defaults)
+            console_output: Whether to output to console
+        """
+        # Nothing to do - service handles this
+        pass
     
     def set_ui_callback(self, callback):
-        """Set a callback function for UI logging."""
-        self.ui_callback = callback
-    
-    def _log_with_ui(self, level: int, message: str):
-        """Log message and send to UI if callback is set."""
-        self.logger.log(level, message)
+        """Set a callback function for UI logging.
         
-        if self.ui_callback:
-            try:
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                # Map logging levels to our level names
-                level_names = {
-                    logging.DEBUG: "DEBUG",
-                    logging.INFO: "INFO", 
-                    logging.WARNING: "WARN",
-                    logging.ERROR: "ERROR",
-                    logging.CRITICAL: "ERROR"
-                }
-                level_name = level_names.get(level, "INFO")
-                formatted_message = f"[{timestamp}] [{level_name}] {message}"
-                self.ui_callback(formatted_message)
-            except Exception:
-                # If UI callback fails, just ignore it to prevent crashes
-                pass
+        Args:
+            callback: UI callback function
+        """
+        self.service.set_ui_callback(callback)
     
     def debug(self, message: str):
-        """Log a debug message."""
-        self._log_with_ui(logging.DEBUG, message)
+        """Log a debug message.
+        
+        Args:
+            message: Message to log
+        """
+        self.service.debug(message)
     
     def info(self, message: str):
-        """Log an info message."""
-        self._log_with_ui(logging.INFO, message)
+        """Log an info message.
+        
+        Args:
+            message: Message to log
+        """
+        self.service.info(message)
     
     def warning(self, message: str):
-        """Log a warning message."""
-        self._log_with_ui(logging.WARNING, message)
+        """Log a warning message.
+        
+        Args:
+            message: Message to log
+        """
+        self.service.warning(message)
     
     def error(self, message: str):
-        """Log an error message."""
-        self._log_with_ui(logging.ERROR, message)
+        """Log an error message.
+        
+        Args:
+            message: Message to log
+        """
+        self.service.error(message)
     
     def critical(self, message: str):
-        """Log a critical message."""
-        self._log_with_ui(logging.CRITICAL, message)
-
-
-# Global logger instance
-_logger_instance: Optional[LauncherLogger] = None
-
-
-def setup_logger(log_level: int = logging.INFO, log_file: Optional[str] = None, console_output: bool = True) -> LauncherLogger:
-    """Setup and return the global logger instance."""
-    global _logger_instance
-    
-    if _logger_instance is None:
-        _logger_instance = LauncherLogger()
-    
-    _logger_instance.setup(log_level, log_file, console_output)
-    return _logger_instance
-
-
-def get_logger() -> LauncherLogger:
-    """Get the global logger instance."""
-    global _logger_instance
-    
-    if _logger_instance is None:
-        _logger_instance = setup_logger()
-    
-    return _logger_instance
+        """Log a critical message.
+        
+        Args:
+            message: Message to log
+        """
+        self.service.critical(message)

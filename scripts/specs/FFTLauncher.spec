@@ -10,7 +10,14 @@ from pathlib import Path
 
 # Get the project root directory
 spec_dir = os.path.dirname(os.path.abspath(SPEC))
-project_root = os.path.dirname(spec_dir)  # Go up from scripts/specs to project root
+scripts_dir = os.path.dirname(spec_dir)  # specs -> scripts
+project_root = os.path.dirname(scripts_dir)  # scripts -> project root
+
+# Print debugging info
+print(f"SPEC file path: {os.path.abspath(SPEC)}")
+print(f"Spec directory: {spec_dir}")
+print(f"Scripts directory: {scripts_dir}")
+print(f"Project root: {project_root}")
 
 # Add src directory to Python path
 src_dir = os.path.join(project_root, 'src')
@@ -24,6 +31,8 @@ app_author = 'FFT Team'
 
 # Define the main script
 main_script = os.path.join(project_root, 'app.py')
+print(f"Main script path: {main_script}")
+print(f"Main script exists: {os.path.exists(main_script)}")
 
 # Data files to include
 data_files = [
@@ -116,7 +125,7 @@ a = Analysis(
         'pstats',
         'trace',
         'timeit',
-        'dis',
+        # 'dis',  # Needed by inspect module
         'pickletools',
         'calendar',
         'email',
