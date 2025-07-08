@@ -6,7 +6,7 @@
 import os
 
 # Get absolute path to icon
-ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(SPEC))), 'assets', 'minecraft_icon.ico')
+ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(SPEC))), 'assets', 'icon.ico')
 
 # Debug: Print icon path
 print(f"Building MINIMAL BOOTSTRAP")

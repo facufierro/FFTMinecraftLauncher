@@ -19,7 +19,7 @@ class UIUtils:
             # Get the path to the icon file
             # When running from bootstrap, we need to go up from the launcher directory
             current_dir = Path(__file__).parent.parent.parent  # Go up from src/utils/ to project root
-            icon_path = current_dir / "assets" / "minecraft_icon.ico"
+            icon_path = current_dir / "assets" / "icon.ico"
             if icon_path.exists():
                 window.iconbitmap(str(icon_path))
         except Exception:
