@@ -60,6 +60,20 @@ class BuildScript:
             print(f"Warning: Could not get git version: {e}")
             return "v2.0.0"
     
+    def _create_version_file(self) -> None:
+        """Create version.txt file for the launcher."""
+        try:
+            version_file = self.project_root / "version.txt"
+            version_clean = self.version.lstrip('v')  # Remove 'v' prefix if present
+            
+            with open(version_file, 'w') as f:
+                f.write(version_clean)
+            
+            print(f"Created version file: {version_file} ({version_clean})")
+            
+        except Exception as e:
+            print(f"Warning: Could not create version file: {e}")
+    
     def _check_pyinstaller(self) -> bool:
         """Check if PyInstaller is installed, install if needed."""
         try:
@@ -168,6 +182,9 @@ class BuildScript:
             self.clean_build_cache()
         
         print(f"Version: {self.version}")
+        
+        # Create version file for the launcher
+        self._create_version_file()
         
         # Check PyInstaller
         if not self._check_pyinstaller():

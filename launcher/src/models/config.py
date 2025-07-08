@@ -25,6 +25,9 @@ class LauncherConfig:
     current_version: Optional[str] = None
     last_check: Optional[str] = None
     
+    # Launcher version tracking
+    launcher_version: Optional[str] = None
+    
     def __post_init__(self):
         """Initialize dynamic fields after object creation."""
         if self.current_version is None:

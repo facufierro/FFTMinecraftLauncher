@@ -9,6 +9,7 @@ from ..models.update_info import UpdateInfo
 from ..utils.ui_utils import UIUtils
 from .components import StatusFrame, ProgressFrame, ButtonFrame, LogFrame, ThemeToggleButton
 from .settings_window import SettingsWindow
+from .version_dialog import show_version_check_dialog
 
 
 class MainWindow:
@@ -47,8 +48,8 @@ class MainWindow:
         self.instance_installed = False
         self.instance_up_to_date = False
         
-        # Check for updates on startup
-        self.root.after(1000, self._check_for_updates_on_startup)
+        # Check for updates on startup (launcher version first, then modpack)
+        self.root.after(1000, self._check_launcher_version_on_startup)
     
     def _setup_ui(self) -> None:
         """Setup the user interface."""
@@ -259,6 +260,52 @@ class MainWindow:
         self.log_frame.add_launcher_log(level, message, timestamp)
     
     # Update checking methods
+    def _check_launcher_version_on_startup(self) -> None:
+        """Check launcher version on startup."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self._add_launcher_log("info", "Checking launcher version...", timestamp)
+        
+        # Check for launcher updates first
+        self.launcher_core.check_for_launcher_update(self._on_launcher_version_check)
+    
+    def _on_launcher_version_check(self, update_available: bool, current_version: str, latest_version: str) -> None:
+        """Handle launcher version check result."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        if update_available:
+            self._add_launcher_log("warning", f"Launcher update available: {current_version} -> {latest_version}", timestamp)
+            
+            # Show update dialog on main thread
+            self.root.after(100, lambda: self._show_launcher_update_dialog(current_version, latest_version))
+        else:
+            self._add_launcher_log("info", f"Launcher is up to date (v{current_version})", timestamp)
+            # Continue with normal startup - check for modpack updates
+            self.root.after(500, self._check_for_updates_on_startup)
+    
+    def _show_launcher_update_dialog(self, current_version: str, latest_version: str) -> None:
+        """Show the launcher update dialog."""
+        def on_update():
+            # User chose to update - close launcher and run updater
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._add_launcher_log("info", "Starting updater...", timestamp)
+            # TODO: Launch updater and close launcher
+            self.root.quit()
+        
+        def on_cancel():
+            # User chose not to update - close launcher
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._add_launcher_log("info", "Update cancelled. Closing launcher.", timestamp)
+            self.root.quit()
+        
+        # Show the dialog
+        show_version_check_dialog(
+            self.root,
+            current_version,
+            latest_version,
+            on_update,
+            on_cancel
+        )
+    
     def _check_for_updates_on_startup(self) -> None:
         """Check for updates on startup to set initial button state."""
         timestamp = datetime.now().strftime("%H:%M:%S")

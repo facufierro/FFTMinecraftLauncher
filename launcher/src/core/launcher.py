@@ -8,6 +8,7 @@ from ..models.update_info import UpdateInfo
 from ..services.github_service import GitHubService
 from ..services.update_service import UpdateService
 from ..services.minecraft_service import MinecraftService
+from ..services.launcher_version_service import LauncherVersionService
 from ..utils.logging_utils import get_logger, setup_logger
 from .events import LauncherEvents, EventType
 
@@ -30,6 +31,7 @@ class LauncherCore:
         self.github_service: Optional[GitHubService] = None
         self.update_service: Optional[UpdateService] = None
         self.minecraft_service: Optional[MinecraftService] = None
+        self.launcher_version_service: Optional[LauncherVersionService] = None
         
         # State
         self.is_updating = False
@@ -73,6 +75,7 @@ class LauncherCore:
         self.github_service = GitHubService(self.config.github_repo)
         self.update_service = UpdateService(self.config)
         self.minecraft_service = MinecraftService(self.config)
+        self.launcher_version_service = LauncherVersionService()
         
         # Set up progress callback for update service
         self.update_service.set_progress_callback(self._on_update_progress)
@@ -130,6 +133,37 @@ class LauncherCore:
             'old': old_config,
             'new': dict(self.config.__dict__)
         })
+    
+    def check_for_launcher_update(self, callback: Optional[Callable[[bool, str, str], None]] = None) -> None:
+        """Check for launcher updates asynchronously.
+        
+        Args:
+            callback: Optional callback with (update_available, current_version, latest_version)
+        """
+        if not self.launcher_version_service or not self.config:
+            if callback:
+                callback(False, "Unknown", "Unknown")
+            return
+        
+        def check_thread():
+            try:
+                if self.launcher_version_service and self.config:
+                    update_available, current_version, latest_version = self.launcher_version_service.check_for_launcher_update(self.config)
+                    
+                    if callback:
+                        callback(update_available, current_version or "Unknown", latest_version or "Unknown")
+                else:
+                    if callback:
+                        callback(False, "Unknown", "Unknown")
+                
+            except Exception as e:
+                self.logger.error(f"Launcher version check failed: {e}")
+                if callback:
+                    callback(False, "Unknown", "Unknown")
+        
+        import threading
+        check_thread_obj = threading.Thread(target=check_thread, daemon=True)
+        check_thread_obj.start()
     
     def check_for_updates(self, callback: Optional[Callable[[UpdateInfo], None]] = None) -> None:
         """Check for updates asynchronously.
