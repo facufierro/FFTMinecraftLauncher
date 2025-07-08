@@ -57,4 +57,5 @@ Use VS Code action buttons or run manually:
 - ✅ Minecraft profile management
 - ✅ NeoForge mod support
 - ✅ GitHub integration for releases
- 
+   
+   
