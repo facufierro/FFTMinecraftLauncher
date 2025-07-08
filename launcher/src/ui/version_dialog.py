@@ -132,8 +132,14 @@ class VersionCheckDialog:
         
         try:
             # Get the path to the updater executable
-            current_dir = Path(__file__).parent.parent.parent.parent  # Go up to project root
-            updater_path = current_dir / "dist" / "Updater.exe"
+            if getattr(sys, 'frozen', False):
+                # Running as PyInstaller executable
+                current_dir = Path(sys.executable).parent
+                updater_path = current_dir / "Updater.exe"
+            else:
+                # Running as Python script
+                current_dir = Path(__file__).parent.parent.parent.parent  # Go up to project root
+                updater_path = current_dir / "dist" / "Updater.exe"
             
             if updater_path.exists():
                 # Start the updater
