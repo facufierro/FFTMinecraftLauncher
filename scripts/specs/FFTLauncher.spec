@@ -128,7 +128,6 @@ a = Analysis(
         # 'dis',  # Needed by inspect module
         'pickletools',
         'calendar',
-        'email',
         'html',
         'http',
         'xmlrpc',
