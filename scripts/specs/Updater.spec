@@ -149,8 +149,8 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # No icon for updater
-    icon=None,
+    # No icon for updater - explicitly disable
+    icon=False,
     version_file=None,
     manifest=None,
     uac_admin=False,
