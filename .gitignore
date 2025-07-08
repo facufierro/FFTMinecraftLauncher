@@ -13,7 +13,6 @@ FFTMinecraftLauncher.exe
 launcher_package.zip
 
 # Runtime Files
-launcher/
 launcher_config.json
 launcher_profiles.json
 temp_launcher

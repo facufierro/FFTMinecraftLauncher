@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from ..models.update_info import UpdateInfo
-from ..utils.logger import get_logger
+from ..utils.logging_utils import get_logger
 from ..utils.github_utils import get_github_client
 
 

@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 from ..models.config import LauncherConfig
-from ..utils.logger import get_logger
+from ..utils.logging_utils import get_logger
 from .neoforge_service import NeoForgeService
 
 

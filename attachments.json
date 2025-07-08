@@ -1,6 +1,6 @@
 {
     "files": [
-        "dist/FFTMinecraftLauncher.exe",
-        "launcher_package.zip"
+        "dist/FFTLauncher.exe",
+        "dist/Updater.exe"
     ]
 }

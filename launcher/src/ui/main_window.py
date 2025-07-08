@@ -6,11 +6,10 @@ from typing import Optional, Callable
 from ..core.launcher import LauncherCore
 from ..core.events import EventType
 from ..models.update_info import UpdateInfo
-from ..services.self_update_service import SelfUpdateService
 from ..utils.ui_utils import UIUtils
-from ..utils.process_utils import get_process_manager
 from .components import StatusFrame, ProgressFrame, ButtonFrame, LogFrame, ThemeToggleButton
 from .settings_window import SettingsWindow
+from .version_dialog import show_version_check_dialog
 
 
 class MainWindow:
@@ -24,14 +23,6 @@ class MainWindow:
         """
         self.launcher_core = launcher_core
         self.settings_window: Optional[SettingsWindow] = None
-        
-        # Self-update service (console only - no UI)
-        if launcher_core.config:
-            self.self_update_service = SelfUpdateService(launcher_core.config)
-            # Set progress callback for self-updates to show in log
-            self.self_update_service.set_progress_callback(self._on_self_update_progress)
-        else:
-            self.self_update_service = None
         
         # Setup appearance
         ctk.set_appearance_mode("System")
@@ -56,31 +47,9 @@ class MainWindow:
         self.needs_update = False
         self.instance_installed = False
         self.instance_up_to_date = False
-        self.bootstrap_checked = False  # Prevent duplicate bootstrap checks
         
-        # Check bootstrap first, then continue with normal flow
-        self.root.after(1000, self._check_bootstrap_and_continue)
-    
-    def _check_bootstrap_status(self) -> None:
-        """Check and display bootstrap completion status."""
-        from pathlib import Path
-        import os
-        
-        # Look for bootstrap logs to show completion status
-        bootstrap_dir = Path.cwd().parent if "launcher" in str(Path.cwd()) else Path.cwd()
-        logs_dir = bootstrap_dir / "logs"
-        
-        if logs_dir.exists():
-            # Find the most recent bootstrap log
-            log_files = list(logs_dir.glob("bootstrap_*.log"))
-            if log_files:
-                latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                self._add_launcher_log("success", f"Bootstrap completed successfully", timestamp)
-                self._add_launcher_log("info", f"Bootstrap log: {latest_log.name}", timestamp)
-            else:
-                timestamp = datetime.now().strftime("%H:%M:%S")
-                self._add_launcher_log("info", "Running in standalone mode", timestamp)
+        # Check for updates on startup (launcher version first, then modpack)
+        self.root.after(1000, self._check_launcher_version_on_startup)
     
     def _setup_ui(self) -> None:
         """Setup the user interface."""
@@ -92,7 +61,7 @@ class MainWindow:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(4, weight=1)  # Log frame is back to row 4
+        main_frame.rowconfigure(4, weight=1)  # Log frame is at row 4
         
         # Title
         title_label = ctk.CTkLabel(
@@ -119,7 +88,7 @@ class MainWindow:
         self.button_frame = ButtonFrame(main_frame)
         self.button_frame.grid(row=3, column=0, pady=(0, 10))
         
-        # Setup button callbacks - only launch button now
+        # Setup button callbacks - only launch button
         self.button_frame.set_button_callbacks({
             'launch': self._handle_launch_action
         })
@@ -143,11 +112,6 @@ class MainWindow:
         # Initial log message
         timestamp = datetime.now().strftime("%H:%M:%S")
         self._add_launcher_log("info", "FFT Minecraft Launcher initialized", timestamp)
-        self._add_launcher_log("info", "Launcher started as separate process from bootstrap", timestamp)
-        self._add_launcher_log("info", "Console shows launcher activity", timestamp)
-        
-        # Check if we were launched by bootstrap and show bootstrap completion
-        self._check_bootstrap_status()
     
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for launcher events."""
@@ -237,6 +201,7 @@ class MainWindow:
                 # Fallback to old method
                 self._add_log(formatted_message)
         
+        # Set callback on logger service
         self.launcher_core.logger.set_ui_callback(launcher_log_callback)
     
     def _update_ui_from_config(self) -> None:
@@ -284,20 +249,6 @@ class MainWindow:
         
         self.log_frame.add_log_message(formatted_message)
     
-    def _add_bootstrap_log(self, level: str, message: str, timestamp: str) -> None:
-        """Add a bootstrap log message to the UI console.
-        
-        NOTE: This method is preserved for compatibility but is no longer
-        used directly since bootstrap runs as a separate process.
-        
-        Args:
-            level: Log level
-            message: Message to add
-            timestamp: Timestamp string
-        """
-        # This method is kept for compatibility but bootstrap now runs separately
-        self.log_frame.add_bootstrap_log(level, message, timestamp)
-    
     def _add_launcher_log(self, level: str, message: str, timestamp: str) -> None:
         """Add a launcher log message to the UI console.
         
@@ -307,105 +258,54 @@ class MainWindow:
             timestamp: Timestamp string
         """
         self.log_frame.add_launcher_log(level, message, timestamp)
-    def _check_bootstrap_and_continue(self) -> None:
-        """Check bootstrap first, then continue with normal launcher flow."""
-        # Prevent duplicate bootstrap checks
-        if hasattr(self, 'bootstrap_checked') and self.bootstrap_checked:
-            self._continue_launcher_initialization()
-            return
-        
-        self.bootstrap_checked = True
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        
-        # Log initial startup message
-        self._add_launcher_log("info", "FFT Minecraft Launcher initialized", timestamp)
-        self._add_launcher_log("info", "Launcher started as separate process from bootstrap", timestamp)
-        self._add_launcher_log("info", "Console shows launcher activity", timestamp)
-        self._check_bootstrap_status()
-        
-        # Check for bootstrap updates first
-        if self.self_update_service:
-            self._add_launcher_log("info", "Checking for bootstrap updates...", timestamp)
-            self._check_for_bootstrap_updates_with_restart()
-        else:
-            # If no self-update service, continue with normal flow
-            self._continue_launcher_initialization()
-    
-    def _check_for_bootstrap_updates_with_restart(self) -> None:
-        """Check for bootstrap updates and update if needed (bootstrap should be closed by now)."""
-        if not self.self_update_service:
-            self._continue_launcher_initialization()
-            return
-        
-        def check_async():
-            if self.self_update_service:  # Type guard for mypy
-                try:
-                    update_info = self.self_update_service.check_for_bootstrap_update()
-                    if update_info:
-                        version = update_info.get('version', 'Unknown')
-                        self.root.after(0, lambda: self._add_log(f"Bootstrap update available: v{version}"))
-                        
-                        # Check if bootstrap is still running and close it if needed
-                        self.root.after(0, lambda: self._close_bootstrap_if_running())
-                        
-                        self.root.after(0, lambda: self._add_log("Updating bootstrap..."))
-                        
-                        # Download and install bootstrap update (should work now that bootstrap is closed)
-                        success = self.self_update_service.download_and_install_bootstrap_update(update_info)
-                        
-                        if success:
-                            self.root.after(0, lambda: self._add_log("Bootstrap updated successfully"))
-                            self.root.after(0, lambda: self._continue_launcher_initialization())
-                        else:
-                            self.root.after(0, lambda: self._add_log("Bootstrap update failed - continuing with current version"))
-                            self.root.after(0, lambda: self._continue_launcher_initialization())
-                    else:
-                        self.root.after(0, lambda: self._add_log("Bootstrap is up to date"))
-                        self.root.after(0, lambda: self._continue_launcher_initialization())
-                        
-                except Exception as e:
-                    self.root.after(0, lambda: self._add_log(f"Bootstrap update check failed: {e}"))
-                    self.root.after(0, lambda: self._continue_launcher_initialization())
-        
-        # Run in a separate thread to avoid blocking UI
-        import threading
-        threading.Thread(target=check_async, daemon=True).start()
-    
-    def _close_bootstrap_if_running(self) -> None:
-        """Check if bootstrap is running and close it gracefully."""
-        process_manager = get_process_manager()
-        
-        try:
-            # Try to close bootstrap processes gracefully
-            bootstrap_names = ['FFTMinecraftLauncher.exe', 'bootstrap.exe']
-            
-            for bootstrap_name in bootstrap_names:
-                if process_manager.is_process_running(bootstrap_name):
-                    self._add_log(f"Found running bootstrap: {bootstrap_name}")
-                    
-                    if process_manager.kill_process(bootstrap_name):
-                        self._add_log("Bootstrap process closed successfully")
-                        break
-                    else:
-                        self._add_log("Failed to close bootstrap process")
-            
-            # Additional wait to ensure file handles are released
-            import time
-            time.sleep(0.5)
-                    
-        except Exception as e:
-            self._add_log(f"Could not check/close bootstrap: {e}")
-            # Continue anyway - maybe bootstrap already closed
-    
-    def _continue_launcher_initialization(self) -> None:
-        """Continue with normal launcher initialization after bootstrap check."""
-        # Only call this once by checking if we've already initialized
-        if hasattr(self, '_launcher_initialized') and self._launcher_initialized:
-            return
-        self._launcher_initialized = True
-        self._check_for_updates_on_startup()
     
     # Update checking methods
+    def _check_launcher_version_on_startup(self) -> None:
+        """Check launcher version on startup."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self._add_launcher_log("info", "Checking launcher version...", timestamp)
+        
+        # Check for launcher updates first
+        self.launcher_core.check_for_launcher_update(self._on_launcher_version_check)
+    
+    def _on_launcher_version_check(self, update_available: bool, current_version: str, latest_version: str) -> None:
+        """Handle launcher version check result."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        if update_available:
+            self._add_launcher_log("warning", f"Launcher update available: {current_version} -> {latest_version}", timestamp)
+            
+            # Show update dialog on main thread
+            self.root.after(100, lambda: self._show_launcher_update_dialog(current_version, latest_version))
+        else:
+            self._add_launcher_log("info", f"Launcher is up to date (v{current_version})", timestamp)
+            # Continue with normal startup - check for modpack updates
+            self.root.after(500, self._check_for_updates_on_startup)
+    
+    def _show_launcher_update_dialog(self, current_version: str, latest_version: str) -> None:
+        """Show the launcher update dialog."""
+        def on_update():
+            # User chose to update - close launcher and run updater
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._add_launcher_log("info", "Starting updater...", timestamp)
+            # TODO: Launch updater and close launcher
+            self.root.quit()
+        
+        def on_cancel():
+            # User chose not to update - close launcher
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self._add_launcher_log("info", "Update cancelled. Closing launcher.", timestamp)
+            self.root.quit()
+        
+        # Show the dialog
+        show_version_check_dialog(
+            self.root,
+            current_version,
+            latest_version,
+            on_update,
+            on_cancel
+        )
+    
     def _check_for_updates_on_startup(self) -> None:
         """Check for updates on startup to set initial button state."""
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -418,10 +318,6 @@ class MainWindow:
         
         # Then check for updates
         self.launcher_core.check_for_updates()
-        
-        # Also check for launcher self-updates (console only) - but don't do bootstrap again
-        if self.self_update_service:
-            self.root.after(2000, self._check_for_launcher_updates_silent)
     
     def _check_instance_status(self) -> None:
         """Check if the instance is installed and up to date."""
@@ -442,142 +338,6 @@ class MainWindow:
                 self._add_launcher_log("warning", "Instance directory found but setup is incomplete", timestamp)
             else:
                 self._add_launcher_log("warning", "Instance directory not found", timestamp)
-    
-    def _check_for_launcher_updates_silent(self) -> None:
-        """Check for launcher self-updates silently (console logging only)."""
-        if not self.self_update_service:
-            return
-        
-        def check_async():
-            if self.self_update_service:  # Type guard for mypy
-                update_info = self.self_update_service.check_for_launcher_update()
-                # Just log the result - no UI updates
-                if update_info:
-                    version = update_info.get('version', 'Unknown')
-                    self.root.after(0, lambda: self._add_log(f"Launcher update available: v{version}"))
-                    
-                    # Check if auto-update is enabled for launcher updates
-                    if self.launcher_core.config and self.launcher_core.config.auto_update:
-                        self.root.after(0, lambda: self._add_log("Auto-update enabled - updating launcher automatically..."))
-                        self.root.after(0, lambda: self._start_launcher_auto_update(update_info))
-                    else:
-                        self.root.after(0, lambda: self._add_log("Auto-update disabled - launcher update available but not installing automatically"))
-        
-        # Run in a separate thread to avoid blocking UI
-        import threading
-        threading.Thread(target=check_async, daemon=True).start()
-    
-    def _check_for_bootstrap_updates_silent(self) -> None:
-        """Check for bootstrap updates silently (console logging only)."""
-        if not self.self_update_service:
-            return
-        
-        def check_async():
-            if self.self_update_service:  # Type guard for mypy
-                update_info = self.self_update_service.check_for_bootstrap_update()
-                # Just log the result - no UI updates
-                if update_info:
-                    version = update_info.get('version', 'Unknown')
-                    self.root.after(0, lambda: self._add_log(f"Bootstrap update available: v{version}"))
-                    
-                    # Check if auto-update is enabled for bootstrap updates
-                    if self.launcher_core.config and self.launcher_core.config.auto_update:
-                        self.root.after(0, lambda: self._add_log("Auto-update enabled - updating bootstrap automatically..."))
-                        self.root.after(0, lambda: self._start_bootstrap_auto_update(update_info))
-                    else:
-                        self.root.after(0, lambda: self._add_log("Auto-update disabled - bootstrap update available but not installing automatically"))
-        
-        # Run in a separate thread to avoid blocking UI
-        import threading
-        threading.Thread(target=check_async, daemon=True).start()
-    
-    def _start_bootstrap_auto_update(self, update_info) -> None:
-        """Start automatic bootstrap update process."""
-        if not self.self_update_service:
-            return
-            
-        self._add_log("Auto-updating bootstrap...")
-        self.progress_frame.update_progress("Updating bootstrap...", None, "loading")
-        
-        def update_async():
-            if self.self_update_service:  # Type guard for mypy
-                try:
-                    success = self.self_update_service.download_and_install_bootstrap_update(update_info)
-                    if success:
-                        self.root.after(0, lambda: self._add_log("Bootstrap updated successfully - restart launcher to use new bootstrap"))
-                        self.root.after(0, lambda: self.progress_frame.update_progress("Bootstrap updated", 1.0, "success"))
-                    else:
-                        self.root.after(0, lambda: self._add_log("Bootstrap update failed"))
-                        self.root.after(0, lambda: self.progress_frame.update_progress("Bootstrap update failed", 0, "error"))
-                except Exception as e:
-                    self.root.after(0, lambda: self._add_log(f"Bootstrap update error: {e}"))
-                    self.root.after(0, lambda: self.progress_frame.update_progress("Bootstrap update error", 0, "error"))
-        
-        # Run in a separate thread to avoid blocking UI
-        import threading
-        threading.Thread(target=update_async, daemon=True).start()
-    
-    def _start_launcher_auto_update(self, update_info) -> None:
-        """Start automatic launcher self-update process."""
-        if not self.self_update_service:
-            return
-            
-        self._add_log("Auto-updating launcher...")
-        self.progress_frame.update_progress("Updating launcher...", None, "loading")
-        
-        def update_async():
-            if self.self_update_service:  # Type guard for mypy
-                try:
-                    success = self.self_update_service.download_and_install_update(update_info)
-                    if success:
-                        self.root.after(0, lambda: self._add_log("Launcher will restart to complete update..."))
-                        self.root.after(0, lambda: self.progress_frame.update_progress("Restarting launcher...", 1.0, "success"))
-                        # Exit the current launcher - the update script will restart it
-                        self.root.after(3000, lambda: self.root.quit())
-                    else:
-                        self.root.after(0, lambda: self._add_log("Launcher update failed"))
-                        self.root.after(0, lambda: self.progress_frame.update_progress("Launcher update failed", 0, "error"))
-                except Exception as e:
-                    self.root.after(0, lambda: self._add_log(f"Launcher update error: {e}"))
-                    self.root.after(0, lambda: self.progress_frame.update_progress("Launcher update error", 0, "error"))
-        
-        # Run in a separate thread to avoid blocking UI
-        import threading
-        threading.Thread(target=update_async, daemon=True).start()
-    
-    def _on_self_update_progress(self, message: str, progress: Optional[float] = None, status_type: str = "info") -> None:
-        """Handle self-update progress updates.
-        
-        Args:
-            message: Progress message
-            progress: Progress value (0.0 to 1.0), None for indeterminate
-            status_type: Type of status ('info', 'success', 'warning', 'error', 'loading')
-        """
-        # Filter out noisy download progress messages that slow down downloads
-        message_lower = message.lower()
-        
-        # Skip all download progress messages with specific patterns
-        is_download_progress = (
-            ("downloading..." in message_lower and ("kb" in message_lower or "mb" in message_lower)) or
-            ("downloading" in message_lower and "/" in message and ("kb" in message_lower or "mb" in message_lower)) or
-            (message.count("KB") >= 2) or  # Pattern like "720KB / 14339KB"
-            ("downloading... " in message and "kb /" in message_lower)
-        )
-        
-        if is_download_progress:
-            # Only update the progress bar, don't log to console
-            if progress is not None:
-                self.progress_frame.update_progress(f"Updating launcher: {message}", progress)
-            return
-        
-        # Only log important milestone messages
-        important_keywords = ["update available", "download completed", "completed successfully", "failed", "error", "installing", "started"]
-        if any(keyword in message_lower for keyword in important_keywords):
-            self._add_log(f"Launcher Update: {message}")
-        
-        # Update progress bar if progress is provided
-        if progress is not None:
-            self.progress_frame.update_progress(f"Updating launcher: {message}", progress)
     
     # Main action handler
     def _handle_launch_action(self) -> None:
@@ -638,8 +398,7 @@ class MainWindow:
         """Handle update check started."""
         self.progress_frame.update_progress("Checking for updates...")
         self.button_frame.set_button_states({
-            'check': 'disabled',
-            'update': 'disabled'
+            'launch': 'disabled'
         })
     
     def _on_update_check_completed(self, update_info: UpdateInfo) -> None:

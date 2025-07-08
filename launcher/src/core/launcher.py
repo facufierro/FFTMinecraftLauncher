@@ -8,8 +8,13 @@ from ..models.update_info import UpdateInfo
 from ..services.github_service import GitHubService
 from ..services.update_service import UpdateService
 from ..services.minecraft_service import MinecraftService
-from ..utils.logger import get_logger, setup_logger
+from ..services.launcher_version_service import LauncherVersionService
+from ..services.updater_download_service import UpdaterDownloadService
+from ..utils.logging_utils import get_logger, setup_logger
 from .events import LauncherEvents, EventType
+
+# Version constant - updated automatically by build script
+LAUNCHER_VERSION = "1.0.66"
 
 
 class LauncherCore:
@@ -30,6 +35,8 @@ class LauncherCore:
         self.github_service: Optional[GitHubService] = None
         self.update_service: Optional[UpdateService] = None
         self.minecraft_service: Optional[MinecraftService] = None
+        self.launcher_version_service: Optional[LauncherVersionService] = None
+        self.updater_download_service: Optional[UpdaterDownloadService] = None
         
         # State
         self.is_updating = False
@@ -42,10 +49,21 @@ class LauncherCore:
     def _initialize(self) -> None:
         """Initialize the launcher components."""
         try:
-            # Setup logging only if not already initialized
-            if not self.logger.logger.handlers:
-                setup_logger()
+            # Setup logging
             self.logger.info("Initializing FFT Minecraft Launcher...")
+            self.logger.info(f"Using log directory: {self.logger.log_dir}")
+            self.logger.info(f"Latest log: {self.logger.latest_log_path}")
+            
+            # Clean up old logs
+            self.logger.cleanup_old_logs(max_logs=10)
+            
+            # Download updater first - this is the first thing we do
+            self.logger.info("Downloading updater...")
+            self.updater_download_service = UpdaterDownloadService()
+            updater_success = self.updater_download_service.download_updater_at_startup()
+            
+            if not updater_success:
+                self.logger.warning("Updater download failed, but continuing with launcher initialization")
             
             # Load configuration
             self.load_config()
@@ -70,6 +88,7 @@ class LauncherCore:
         self.github_service = GitHubService(self.config.github_repo)
         self.update_service = UpdateService(self.config)
         self.minecraft_service = MinecraftService(self.config)
+        self.launcher_version_service = LauncherVersionService()
         
         # Set up progress callback for update service
         self.update_service.set_progress_callback(self._on_update_progress)
@@ -127,6 +146,37 @@ class LauncherCore:
             'old': old_config,
             'new': dict(self.config.__dict__)
         })
+    
+    def check_for_launcher_update(self, callback: Optional[Callable[[bool, str, str], None]] = None) -> None:
+        """Check for launcher updates asynchronously.
+        
+        Args:
+            callback: Optional callback with (update_available, current_version, latest_version)
+        """
+        if not self.launcher_version_service or not self.config:
+            if callback:
+                callback(False, "Unknown", "Unknown")
+            return
+        
+        def check_thread():
+            try:
+                if self.launcher_version_service and self.config:
+                    update_available, current_version, latest_version = self.launcher_version_service.check_for_launcher_update(self.config)
+                    
+                    if callback:
+                        callback(update_available, current_version or "Unknown", latest_version or "Unknown")
+                else:
+                    if callback:
+                        callback(False, "Unknown", "Unknown")
+                
+            except Exception as e:
+                self.logger.error(f"Launcher version check failed: {e}")
+                if callback:
+                    callback(False, "Unknown", "Unknown")
+        
+        import threading
+        check_thread_obj = threading.Thread(target=check_thread, daemon=True)
+        check_thread_obj.start()
     
     def check_for_updates(self, callback: Optional[Callable[[UpdateInfo], None]] = None) -> None:
         """Check for updates asynchronously.
@@ -257,6 +307,88 @@ class LauncherCore:
         if not self.minecraft_service:
             return False
         return self.minecraft_service.validate_installation()
+    
+    def verify_mods_folder_integrity(self, callback: Optional[Callable[[bool, str], None]] = None) -> None:
+        """Verify mods folder integrity against repository.
+        
+        This method checks if the local mods folder matches the repository version
+        and can be used to detect synchronization issues.
+        
+        Args:
+            callback: Optional callback with (is_valid, message) parameters
+        """
+        if not self.update_service or not self.config:
+            if callback:
+                callback(False, "Services not initialized")
+            return
+        
+        def verify_thread():
+            try:
+                # Type guard checks
+                if not self.update_service or not self.config:
+                    if callback:
+                        callback(False, "Required services not available")
+                    return
+                
+                self.logger.info("Starting mods folder integrity verification...")
+                
+                # Get latest release info for comparison
+                update_info = self.update_service.check_for_updates()
+                
+                # Download and compare mods folder
+                import tempfile
+                from pathlib import Path
+                
+                download_url = update_info.get_download_url()
+                if not download_url:
+                    if callback:
+                        callback(False, "Could not get repository download URL")
+                    return
+                
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_path = Path(temp_dir)
+                    zip_path = temp_path / "verify.zip"
+                    extract_path = temp_path / "extract"
+                    
+                    # Download and extract
+                    if not self.update_service.github_service.download_file(download_url, str(zip_path)):
+                        if callback:
+                            callback(False, "Failed to download repository files for verification")
+                        return
+                    
+                    import zipfile
+                    with zipfile.ZipFile(zip_path, 'r') as zip_file:
+                        zip_file.extractall(extract_path)
+                    
+                    # Get instance path
+                    instance_path = self.config.get_selected_instance_path()
+                    if not instance_path:
+                        if callback:
+                            callback(False, "Instance path not available")
+                        return
+                    
+                    # Verify mods folder
+                    is_valid = self.update_service._verify_mods_folder_integrity(extract_path, instance_path)
+                    
+                    if is_valid:
+                        message = "Mods folder is properly synchronized with repository"
+                        self.logger.info(message)
+                    else:
+                        message = "Mods folder differs from repository version - update recommended"
+                        self.logger.warning(message)
+                    
+                    if callback:
+                        callback(is_valid, message)
+                        
+            except Exception as e:
+                error_msg = f"Error during mods folder verification: {e}"
+                self.logger.error(error_msg)
+                if callback:
+                    callback(False, error_msg)
+        
+        import threading
+        verify_thread_obj = threading.Thread(target=verify_thread, daemon=True)
+        verify_thread_obj.start()
     
     def get_minecraft_info(self) -> dict:
         """Get Minecraft installation information.

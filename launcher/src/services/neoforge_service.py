@@ -8,7 +8,7 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional
 from ..models.config import LauncherConfig
-from ..utils.logger import get_logger
+from ..utils.logging_utils import get_logger
 
 # Windows-specific constants for hiding console windows
 if os.name == 'nt':

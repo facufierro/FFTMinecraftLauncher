@@ -6,7 +6,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Optional, Callable, List
-from .logger import get_logger
+from .logging_utils import get_logger
 
 
 class FileOperations:
