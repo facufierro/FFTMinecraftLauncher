@@ -38,7 +38,7 @@ class VersionCheckDialog:
         # Create dialog window
         self.dialog = ctk.CTkToplevel(self.parent)
         self.dialog.title("Launcher Update Available")
-        self.dialog.geometry("550x300")
+        self.dialog.geometry("550x350")  # Increased height for progress bar
         self.dialog.resizable(False, False)
         
         # Set window icon
@@ -95,6 +95,26 @@ class VersionCheckDialog:
         )
         message_label.pack(pady=(0, 20))
         
+        # Progress frame (hidden by default)
+        self.progress_frame = ctk.CTkFrame(main_frame)
+        
+        # Progress bar
+        self.progress_bar = ctk.CTkProgressBar(
+            self.progress_frame,
+            width=300,
+            height=20
+        )
+        self.progress_bar.pack(pady=(10, 5))
+        self.progress_bar.set(0)
+        
+        # Status label
+        self.status_label = ctk.CTkLabel(
+            self.progress_frame,
+            text="",
+            font=ctk.CTkFont(size=12)
+        )
+        self.status_label.pack(pady=(5, 10))
+        
         # Buttons frame
         button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         button_frame.pack(fill="x", padx=10)
@@ -123,8 +143,11 @@ class VersionCheckDialog:
         )
         self.cancel_button.pack(side="right")
         
+        # Initialize update state
+        self.is_updating = False
+        
         # Handle window close
-        self.dialog.protocol("WM_DELETE_WINDOW", self._on_cancel_clicked)
+        self.dialog.protocol("WM_DELETE_WINDOW", self._on_window_close)
         
         # Focus the dialog
         self.dialog.focus()
@@ -136,6 +159,17 @@ class VersionCheckDialog:
         from pathlib import Path
         
         try:
+            # Set updating state
+            self.is_updating = True
+            
+            # Show progress frame and update button state
+            self.progress_frame.pack(fill="x", padx=10, pady=(0, 20))
+            self.update_button.configure(text="Updating...", state="disabled")
+            self.cancel_button.configure(state="disabled")
+            self.status_label.configure(text="Preparing download...")
+            self.progress_bar.set(0.1)
+            self.dialog.update()
+            
             # Download the new launcher version as Launcher.update
             self._download_launcher_update()
             
@@ -150,22 +184,48 @@ class VersionCheckDialog:
                 updater_path = current_dir / "dist" / "Updater.exe"
             
             if updater_path.exists():
+                # Update progress
+                self.status_label.configure(text="Starting updater...")
+                self.progress_bar.set(0.9)
+                self.dialog.update()
+                
                 # Start the updater
                 subprocess.Popen([str(updater_path)], creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
                 
-                # Close the dialog
-                self.result = "update"
-                self.dialog.destroy()
+                # Final progress
+                self.status_label.configure(text="Update complete! Closing launcher...")
+                self.progress_bar.set(1.0)
+                self.dialog.update()
                 
-                # Exit the launcher completely
-                sys.exit(0)
+                # Brief pause to show completion
+                self.dialog.after(1000, self._complete_update)
             else:
                 # Show error if updater not found
+                self._reset_ui()
                 UIUtils.show_error_dialog("Updater Not Found", 
                                          f"Could not find Updater.exe at:\n{updater_path}")
         except Exception as e:
+            self._reset_ui()
             UIUtils.show_error_dialog("Error Opening Updater", 
                                      f"Failed to open updater: {str(e)}")
+    
+    def _complete_update(self):
+        """Complete the update process."""
+        import sys
+        
+        # Close the dialog
+        self.result = "update"
+        self.dialog.destroy()
+        
+        # Exit the launcher completely
+        sys.exit(0)
+    
+    def _reset_ui(self):
+        """Reset UI to initial state on error."""
+        self.is_updating = False
+        self.progress_frame.pack_forget()
+        self.update_button.configure(text="Update", state="normal")
+        self.cancel_button.configure(state="normal")
     
     def _download_launcher_update(self):
         """Download the new launcher version as Launcher.update."""
@@ -182,6 +242,11 @@ class VersionCheckDialog:
             # Running as Python script
             current_dir = Path(__file__).parent.parent.parent.parent  # Go up to project root
             download_path = current_dir / "dist" / "FFTLauncher.update"
+        
+        # Update progress
+        self.status_label.configure(text="Fetching release information...")
+        self.progress_bar.set(0.2)
+        self.dialog.update()
         
         # Get the latest release download URL
         api_url = "https://api.github.com/repos/facufierro/FFTMinecraftLauncher/releases/latest"
@@ -200,22 +265,55 @@ class VersionCheckDialog:
         if not download_url:
             raise Exception("FFTLauncher.exe not found in latest release")
         
-        # Download the file
-        self.update_button.configure(text="Downloading...")
-        self.update_button.configure(state="disabled")
-        self.cancel_button.configure(state="disabled")
+        # Update progress
+        self.status_label.configure(text="Starting download...")
+        self.progress_bar.set(0.3)
+        self.dialog.update()
         
+        # Download the file with progress tracking
         response = requests.get(download_url, stream=True)
         response.raise_for_status()
         
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded_size = 0
+        
         with open(download_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+                if chunk:
+                    f.write(chunk)
+                    downloaded_size += len(chunk)
+                    
+                    # Update progress bar (30% to 80% for download)
+                    if total_size > 0:
+                        download_progress = downloaded_size / total_size
+                        progress_value = 0.3 + (download_progress * 0.5)  # 30% to 80%
+                        self.progress_bar.set(progress_value)
+                        
+                        # Update status with download info
+                        mb_downloaded = downloaded_size / (1024 * 1024)
+                        mb_total = total_size / (1024 * 1024) if total_size > 0 else 0
+                        if mb_total > 0:
+                            self.status_label.configure(text=f"Downloading... {mb_downloaded:.1f} MB / {mb_total:.1f} MB")
+                        else:
+                            self.status_label.configure(text=f"Downloading... {mb_downloaded:.1f} MB")
+                        
+                        self.dialog.update()
         
-        self.update_button.configure(text="Downloaded! Opening Updater...")
+        # Download complete
+        self.status_label.configure(text="Download complete!")
+        self.progress_bar.set(0.8)
+        self.dialog.update()
+    
+    def _on_window_close(self):
+        """Handle window close button - prevent closing during update."""
+        if not self.is_updating:
+            self._on_cancel_clicked()
     
     def _on_cancel_clicked(self):
         """Handle cancel button click."""
+        if self.is_updating:
+            return  # Don't allow cancel during update
+        
         self.result = "cancel"
         if self.on_cancel:
             self.on_cancel()
