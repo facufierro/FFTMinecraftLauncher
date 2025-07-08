@@ -177,11 +177,11 @@ class VersionCheckDialog:
         if getattr(sys, 'frozen', False):
             # Running as PyInstaller executable
             current_dir = Path(sys.executable).parent
-            download_path = current_dir / "Launcher.update"
+            download_path = current_dir / "FFTLauncher.update"
         else:
             # Running as Python script
             current_dir = Path(__file__).parent.parent.parent.parent  # Go up to project root
-            download_path = current_dir / "dist" / "Launcher.update"
+            download_path = current_dir / "dist" / "FFTLauncher.update"
         
         # Get the latest release download URL
         api_url = "https://api.github.com/repos/facufierro/FFTMinecraftLauncher/releases/latest"

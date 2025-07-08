@@ -21,19 +21,20 @@ def replace_file():
     
     # Wait for the update file to appear (up to 30 seconds)
     print("Waiting for download to complete...")
+    found = False
     for i in range(30):
         if os.path.exists(update_file):
             print(f"Found {update_file}")
+            found = True
             break
         print(f"Waiting... ({i+1}/30)")
         time.sleep(1)
     
+    if not found:
+        print("Error: FFTLauncher.update not found after waiting 30 seconds")
+        return False
+    
     try:
-        # Check if update file exists
-        if not os.path.exists(update_file):
-            print("Error: FFTLauncher.update not found after waiting")
-            return False
-        
         # Wait a bit more to ensure file is fully written
         print("Waiting for file to be fully written...")
         time.sleep(2)
