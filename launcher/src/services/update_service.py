@@ -120,7 +120,7 @@ class UpdateService:
                 with zipfile.ZipFile(zip_path, 'r') as zip_file:
                     zip_file.extractall(extract_path)
                 
-                # Compare files in folders_to_sync
+                # Compare files in folders_to_sync with special attention to mods folder
                 for folder in self.config.folders_to_sync:
                     remote_folder = extract_path / folder
                     local_folder = instance_path / folder
@@ -136,6 +136,10 @@ class UpdateService:
                     if self._compare_folder_contents(remote_folder, local_folder):
                         self.logger.info(f"Files in {folder} have changed - update needed")
                         return True  # Files are different, need update
+                
+                # Additional explicit check for mods folder integrity
+                if not self._verify_mods_folder_integrity(extract_path, instance_path):
+                    return True
                 
                 self.logger.info("All files match - no update needed")
                 return False  # All files match
@@ -196,6 +200,225 @@ class UpdateService:
         
         return False  # All files match
     
+    def _verify_mods_folder_integrity(self, remote_extract_path: Path, instance_path: Path) -> bool:
+        """Perform additional verification of mods folder integrity.
+        
+        This method provides an extra layer of verification specifically for the mods folder
+        to ensure it's always synchronized with the repository version.
+        
+        Args:
+            remote_extract_path: Path to extracted remote files
+            instance_path: Path to local instance
+            
+        Returns:
+            True if mods folder is properly synchronized, False if update needed.
+        """
+        try:
+            remote_mods = remote_extract_path / "mods"
+            local_mods = instance_path / "mods"
+            
+            # If remote has mods folder but local doesn't, update needed
+            if remote_mods.exists() and not local_mods.exists():
+                self.logger.warning("Local mods folder missing - update needed")
+                return False
+            
+            # If remote doesn't have mods folder, local shouldn't either
+            if not remote_mods.exists():
+                if local_mods.exists() and any(local_mods.iterdir()):
+                    self.logger.warning("Local mods folder should be empty - cleaning needed")
+                    return False
+                return True  # Both don't exist or local is empty
+            
+            # Both exist - perform detailed comparison
+            remote_mod_files = set()
+            local_mod_files = set()
+            
+            # Get all .jar files in remote mods folder
+            for file_path in remote_mods.rglob('*.jar'):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(remote_mods)
+                    remote_mod_files.add((rel_path, file_path.stat().st_size))
+            
+            # Get all .jar files in local mods folder
+            for file_path in local_mods.rglob('*.jar'):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(local_mods)
+                    local_mod_files.add((rel_path, file_path.stat().st_size))
+            
+            # Check if mod file sets are different
+            if remote_mod_files != local_mod_files:
+                self.logger.warning("Mods folder contents differ from repository:")
+                
+                # Log specific differences
+                only_in_remote = remote_mod_files - local_mod_files
+                only_in_local = local_mod_files - remote_mod_files
+                
+                if only_in_remote:
+                    self.logger.info(f"Mods in repository but not locally: {[str(f[0]) for f in only_in_remote]}")
+                if only_in_local:
+                    self.logger.info(f"Mods locally but not in repository: {[str(f[0]) for f in only_in_local]}")
+                
+                return False
+            
+            # Additional hash-based verification for critical mod files
+            for rel_path, size in remote_mod_files:
+                remote_file = remote_mods / rel_path
+                local_file = local_mods / rel_path
+                
+                if not local_file.exists():
+                    continue  # Already caught above
+                
+                # For files that might be critical, do hash comparison
+                if self._is_critical_mod_file(rel_path):
+                    try:
+                        remote_hash = self._get_file_hash(remote_file)
+                        local_hash = self._get_file_hash(local_file)
+                        
+                        if remote_hash != local_hash:
+                            self.logger.warning(f"Critical mod file hash mismatch: {rel_path}")
+                            return False
+                    except Exception as e:
+                        self.logger.warning(f"Failed to verify hash for {rel_path}: {e}")
+                        return False
+            
+            self.logger.info("Mods folder integrity verification passed")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error during mods folder integrity check: {e}")
+            return False  # Assume update needed on error
+    
+    def _is_critical_mod_file(self, file_path: Path) -> bool:
+        """Determine if a mod file is critical and should have hash verification.
+        
+        Args:
+            file_path: Relative path to the mod file
+            
+        Returns:
+            True if the file is considered critical.
+        """
+        # Consider all .jar files as critical for now
+        # In the future, this could be expanded to check for specific mod names
+        return file_path.suffix.lower() == '.jar'
+    
+    def _verify_mods_folder_post_sync(self, source_path: Path, instance_path: Path) -> None:
+        """Verify mods folder integrity after synchronization.
+        
+        This method performs a final verification that the mods folder was correctly
+        synchronized and matches the repository version exactly.
+        
+        Args:
+            source_path: Path to the source files that were synced
+            instance_path: Path to the local instance
+        """
+        try:
+            source_mods = source_path / "mods"
+            local_mods = instance_path / "mods"
+            
+            self.logger.info("Performing post-sync verification of mods folder...")
+            
+            # Quick verification that folders match
+            if not self._verify_mods_folder_integrity(source_path, instance_path):
+                self.logger.error("Post-sync mods folder verification failed!")
+                # Try to fix by re-syncing just the mods folder
+                self._fix_mods_folder_sync(source_mods, local_mods)
+            else:
+                self.logger.info("Post-sync mods folder verification passed")
+                
+            # Log the final state for debugging
+            self._log_mods_folder_state(local_mods)
+            
+        except Exception as e:
+            self.logger.error(f"Error during post-sync mods folder verification: {e}")
+    
+    def _fix_mods_folder_sync(self, source_mods: Path, local_mods: Path) -> None:
+        """Attempt to fix mods folder synchronization issues.
+        
+        Args:
+            source_mods: Path to source mods folder
+            local_mods: Path to local mods folder
+        """
+        try:
+            self.logger.warning("Attempting to fix mods folder synchronization...")
+            
+            if source_mods.exists():
+                # Re-sync the mods directory
+                self._sync_directory(source_mods, local_mods)
+                self.logger.info("Mods folder re-synchronization completed")
+            else:
+                # If source doesn't have mods, ensure local is empty
+                if local_mods.exists():
+                    import shutil
+                    shutil.rmtree(local_mods)
+                    local_mods.mkdir(exist_ok=True)
+                    self.logger.info("Cleaned local mods folder (no mods in repository)")
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to fix mods folder synchronization: {e}")
+    
+    def _log_mods_folder_state(self, mods_folder: Path) -> None:
+        """Log the current state of the mods folder for debugging.
+        
+        Args:
+            mods_folder: Path to the mods folder to inspect
+        """
+        try:
+            if not mods_folder.exists():
+                self.logger.info("Mods folder: Does not exist")
+                return
+            
+            mod_files = list(mods_folder.rglob('*.jar'))
+            self.logger.info(f"Mods folder: Contains {len(mod_files)} mod files")
+            
+            if mod_files:
+                for mod_file in sorted(mod_files):
+                    rel_path = mod_file.relative_to(mods_folder)
+                    size_mb = mod_file.stat().st_size / (1024 * 1024)
+                    self.logger.info(f"  - {rel_path} ({size_mb:.1f} MB)")
+            else:
+                self.logger.info("  - No mod files found")
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to log mods folder state: {e}")
+    
+    def _check_mods_folder_at_startup(self, instance_path: Path) -> None:
+        """Perform a basic mods folder check during startup.
+        
+        This method performs a lightweight check of the mods folder during startup
+        to log its current state and detect any obvious issues.
+        
+        Args:
+            instance_path: Path to the instance directory
+        """
+        try:
+            mods_folder = instance_path / "mods"
+            
+            if not mods_folder.exists():
+                self.logger.warning("Mods folder does not exist - will be created during next update")
+                return
+            
+            # Count mod files
+            mod_files = list(mods_folder.rglob('*.jar'))
+            self.logger.info(f"Startup check: Found {len(mod_files)} mod files in mods folder")
+            
+            # Check for common issues
+            if not mod_files:
+                self.logger.warning("Mods folder is empty - this may indicate synchronization issues")
+            
+            # Check for non-jar files that might indicate corruption
+            all_files = list(mods_folder.rglob('*'))
+            non_jar_files = [f for f in all_files if f.is_file() and not f.name.endswith('.jar')]
+            
+            if non_jar_files:
+                self.logger.warning(f"Found {len(non_jar_files)} non-jar files in mods folder:")
+                for file in non_jar_files[:5]:  # Log up to 5 examples
+                    self.logger.warning(f"  - {file.name}")
+                if len(non_jar_files) > 5:
+                    self.logger.warning(f"  ... and {len(non_jar_files) - 5} more")
+            
+        except Exception as e:
+            self.logger.warning(f"Error during startup mods folder check: {e}")
+    
     def _get_file_hash(self, file_path: Path) -> str:
         """Get SHA256 hash of a file.
         
@@ -241,11 +464,11 @@ class UpdateService:
         
         self.logger.info("Instance exists and has NeoForge - checking resource pack configuration...")
         
-        # Don't check for sync folders here - they get populated during the update process
-        # The instance is considered "existing" if it has NeoForge and essential folders
-        
         # Check if resource packs need to be configured
         self._check_and_configure_resource_packs(instance_path)
+        
+        # Also perform a quick mods folder integrity check during startup
+        self._check_mods_folder_at_startup(instance_path)
         
         return True
     
@@ -607,6 +830,9 @@ class UpdateService:
             
             # After syncing files, check if we need to configure resource packs
             self._configure_resource_packs_after_sync(instance_path)
+            
+            # Perform post-sync verification of mods folder
+            self._verify_mods_folder_post_sync(source_path, instance_path)
             
             return True
             

@@ -298,6 +298,88 @@ class LauncherCore:
             return False
         return self.minecraft_service.validate_installation()
     
+    def verify_mods_folder_integrity(self, callback: Optional[Callable[[bool, str], None]] = None) -> None:
+        """Verify mods folder integrity against repository.
+        
+        This method checks if the local mods folder matches the repository version
+        and can be used to detect synchronization issues.
+        
+        Args:
+            callback: Optional callback with (is_valid, message) parameters
+        """
+        if not self.update_service or not self.config:
+            if callback:
+                callback(False, "Services not initialized")
+            return
+        
+        def verify_thread():
+            try:
+                # Type guard checks
+                if not self.update_service or not self.config:
+                    if callback:
+                        callback(False, "Required services not available")
+                    return
+                
+                self.logger.info("Starting mods folder integrity verification...")
+                
+                # Get latest release info for comparison
+                update_info = self.update_service.check_for_updates()
+                
+                # Download and compare mods folder
+                import tempfile
+                from pathlib import Path
+                
+                download_url = update_info.get_download_url()
+                if not download_url:
+                    if callback:
+                        callback(False, "Could not get repository download URL")
+                    return
+                
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_path = Path(temp_dir)
+                    zip_path = temp_path / "verify.zip"
+                    extract_path = temp_path / "extract"
+                    
+                    # Download and extract
+                    if not self.update_service.github_service.download_file(download_url, str(zip_path)):
+                        if callback:
+                            callback(False, "Failed to download repository files for verification")
+                        return
+                    
+                    import zipfile
+                    with zipfile.ZipFile(zip_path, 'r') as zip_file:
+                        zip_file.extractall(extract_path)
+                    
+                    # Get instance path
+                    instance_path = self.config.get_selected_instance_path()
+                    if not instance_path:
+                        if callback:
+                            callback(False, "Instance path not available")
+                        return
+                    
+                    # Verify mods folder
+                    is_valid = self.update_service._verify_mods_folder_integrity(extract_path, instance_path)
+                    
+                    if is_valid:
+                        message = "Mods folder is properly synchronized with repository"
+                        self.logger.info(message)
+                    else:
+                        message = "Mods folder differs from repository version - update recommended"
+                        self.logger.warning(message)
+                    
+                    if callback:
+                        callback(is_valid, message)
+                        
+            except Exception as e:
+                error_msg = f"Error during mods folder verification: {e}"
+                self.logger.error(error_msg)
+                if callback:
+                    callback(False, error_msg)
+        
+        import threading
+        verify_thread_obj = threading.Thread(target=verify_thread, daemon=True)
+        verify_thread_obj.start()
+    
     def get_minecraft_info(self) -> dict:
         """Get Minecraft installation information.
         
