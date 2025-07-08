@@ -1,160 +1,127 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 PyInstaller spec file for FFT Minecraft Launcher
-Builds the launcher into a standalone executable FFTLauncher.exe
+Optimized build configuration for Windows executable
 """
 
 import sys
 import os
 from pathlib import Path
 
-# Get the project root directory
-spec_dir = os.path.dirname(os.path.abspath(SPEC))
-scripts_dir = os.path.dirname(spec_dir)  # specs -> scripts
-project_root = os.path.dirname(scripts_dir)  # scripts -> project root
+# Project structure
+spec_dir = Path(__file__).parent
+project_root = spec_dir.parent.parent
+src_dir = project_root / 'src'
+main_script = project_root / 'app.py'
 
-# Print debugging info
-print(f"SPEC file path: {os.path.abspath(SPEC)}")
-print(f"Spec directory: {spec_dir}")
-print(f"Scripts directory: {scripts_dir}")
-print(f"Project root: {project_root}")
-
-# Add src directory to Python path
-src_dir = os.path.join(project_root, 'src')
-sys.path.insert(0, src_dir)
+print(f"Building FFT Launcher from: {project_root}")
+print(f"Main script: {main_script}")
 
 # Application metadata
-app_name = 'FFTLauncher'
-app_version = '2.0.0'
-app_description = 'FFT Minecraft Modpack Launcher'
-app_author = 'FFT Team'
+APP_NAME = 'FFTLauncher'
+APP_VERSION = '2.0.0'
+APP_DESCRIPTION = 'FFT Minecraft Modpack Launcher'
 
-# Define the main script
-main_script = os.path.join(project_root, 'app.py')
-print(f"Main script path: {main_script}")
-print(f"Main script exists: {os.path.exists(main_script)}")
-
-# Data files to include
-data_files = [
-    # Include assets
-    (os.path.join(project_root, 'assets', 'icon.ico'), 'assets'),
-    # Include requirements (for reference)
-    (os.path.join(project_root, 'requirements.txt'), '.'),
-    (os.path.join(project_root, 'README.md'), '.'),
+# Data files to bundle
+datas = [
+    (str(project_root / 'assets' / 'icon.ico'), 'assets'),
 ]
 
-# Hidden imports that PyInstaller might miss
-hidden_imports = [
+# Core dependencies for CustomTkinter GUI application
+hiddenimports = [
+    # GUI Framework
     'customtkinter',
-    'PIL',
-    'PIL._tkinter_finder',
     'tkinter',
     'tkinter.ttk',
     'tkinter.messagebox',
     'tkinter.filedialog',
+    
+    # Image processing for CustomTkinter
+    'PIL',
+    'PIL.Image',
+    'PIL.ImageTk',
+    'PIL._tkinter_finder',
+    
+    # HTTP and networking
     'requests',
-    'zipfile',
+    'urllib3',
+    'certifi',
+    'charset_normalizer',
+    'idna',
+    
+    # Standard library essentials
     'json',
-    'pathlib',
-    'datetime',
+    'logging',
     'threading',
     'subprocess',
-    'shutil',
-    'tempfile',
-    'urllib.request',
-    'urllib.parse',
-    'logging',
+    'pathlib',
+    'datetime',
     'configparser',
+    'tempfile',
+    'shutil',
+    'zipfile',
     'hashlib',
     'base64',
     'platform',
     'webbrowser',
+    'queue',
+    'concurrent.futures',
+    
+    # Type hints
     'typing',
     'dataclasses',
     'enum',
-    'concurrent.futures',
-    'queue',
 ]
 
-# Collect all source modules
-def collect_src_modules():
-    """Collect all Python modules from the src directory."""
+# Auto-discover source modules
+def collect_source_modules():
+    """Automatically collect all source modules from src directory."""
     modules = []
-    src_path = Path(src_dir)
-    
-    for py_file in src_path.rglob('*.py'):
-        if py_file.name == '__init__.py':
-            continue
-            
-        # Convert file path to module path
-        rel_path = py_file.relative_to(src_path)
-        module_path = str(rel_path.with_suffix('')).replace(os.sep, '.')
-        modules.append(f'src.{module_path}')
-    
+    for py_file in src_dir.rglob('*.py'):
+        if py_file.name != '__init__.py':
+            # Convert to module path: src/core/launcher.py -> src.core.launcher
+            relative = py_file.relative_to(project_root)
+            module = str(relative.with_suffix('')).replace(os.sep, '.')
+            modules.append(module)
     return modules
 
-# Add all source modules to hidden imports
-src_modules = collect_src_modules()
-hidden_imports.extend(src_modules)
+# Add discovered modules to hidden imports
+hiddenimports.extend(collect_source_modules())
 
-# Analysis configuration
+# Build analysis
 a = Analysis(
-    [main_script],
-    pathex=[project_root, src_dir],
+    [str(main_script)],
+    pathex=[str(project_root), str(src_dir)],
     binaries=[],
-    datas=data_files,
-    hiddenimports=hidden_imports,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Exclude unnecessary modules to reduce size
-        'matplotlib',
-        'numpy',
-        'pandas',
-        'scipy',
-        'IPython',
-        'jupyter',
-        'notebook',
+        # Testing frameworks
         'pytest',
         'unittest',
         'doctest',
+        
+        # Development tools
         'pdb',
         'cProfile',
         'profile',
-        'pstats',
-        'trace',
-        'timeit',
-        # 'dis',  # Needed by inspect module
-        'pickletools',
-        'calendar',
-        'html',
-        'http',
-        'xmlrpc',
-        'sqlite3',
-        'turtle',
-        'audioop',
-        'chunk',
-        'colorsys',
-        'imghdr',
-        'sndhdr',
-        'sunau',
-        'wave',
-        'aifc',
-        'ossaudiodev',
-        'spwd',
-        'grp',
+        
+        # Unix-specific modules (building for Windows)
         'pwd',
-        'crypt',
+        'grp',
         'termios',
-        'tty',
-        'pty',
         'fcntl',
-        'pipes',
-        'posixpath',
         'resource',
         'readline',
-        'rlcompleter',
+        
+        # Audio modules not needed
+        'audioop',
+        'wave',
+        'sunau',
+        'aifc',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -162,10 +129,10 @@ a = Analysis(
     noarchive=False,
 )
 
-# Remove duplicate entries
+# Create Python archive
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
-# Executable configuration
+# Build executable
 exe = EXE(
     pyz,
     a.scripts,
@@ -173,31 +140,29 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name=app_name,
+    name=APP_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,  # Use UPX compression to reduce file size
+    upx=True,  # Compress with UPX
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,  # No console window for GUI app
+    console=False,  # GUI application - no console
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # Windows-specific options
-    icon=os.path.join(project_root, 'assets', 'icon.ico'),
-    version_file=None,  # We could create a version file if needed
+    # Windows executable options
+    icon=str(project_root / 'assets' / 'icon.ico'),
+    version_file=None,
     manifest=None,
-    uac_admin=False,  # Don't require admin privileges
+    uac_admin=False,
     uac_uiaccess=False,
 )
 
-# Additional build information
-print(f"Building {app_name} v{app_version}")
-print(f"Project root: {project_root}")
-print(f"Main script: {main_script}")
-print(f"Source directory: {src_dir}")
-print(f"Hidden imports: {len(hidden_imports)} modules")
-print(f"Data files: {len(data_files)} files")
+print(f"✓ Built {APP_NAME} v{APP_VERSION}")
+print(f"✓ Executable: {APP_NAME}.exe")
+print(f"✓ Icon: {project_root / 'assets' / 'icon.ico'}")
+print(f"✓ Source modules: {len([m for m in hiddenimports if m.startswith('src.')])}")
+print(f"✓ Total dependencies: {len(hiddenimports)}")
