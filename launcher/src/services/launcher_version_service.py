@@ -52,8 +52,8 @@ class LauncherVersionService:
         except Exception as e:
             self.logger.error(f"Error reading launcher version from config: {e}")
         
-        # Fallback to default version (should match the build spec)
-        default_version = "2.0.0"
+        # Fallback to default version (should be lower than any real release)
+        default_version = "0.0.0"
         return default_version
     
     def get_latest_launcher_version(self) -> Optional[str]:
