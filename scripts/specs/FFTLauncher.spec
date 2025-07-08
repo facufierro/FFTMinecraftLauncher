@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 # Project structure
-spec_dir = Path(__file__).parent
+spec_dir = Path(SPEC).parent
 project_root = spec_dir.parent.parent
 src_dir = project_root / 'src'
 main_script = project_root / 'app.py'
