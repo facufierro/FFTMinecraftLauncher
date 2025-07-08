@@ -13,15 +13,30 @@ def get_base_directory():
 
 def replace_file():
     """Replace FFTLauncher.exe with FFTLauncher.update"""
+    import time
+    
     base_dir = get_base_directory()
     exe_file = os.path.join(base_dir, "FFTLauncher.exe")
     update_file = os.path.join(base_dir, "FFTLauncher.update")
     
+    # Wait for the update file to appear (up to 30 seconds)
+    print("Waiting for download to complete...")
+    for i in range(30):
+        if os.path.exists(update_file):
+            print(f"Found {update_file}")
+            break
+        print(f"Waiting... ({i+1}/30)")
+        time.sleep(1)
+    
     try:
         # Check if update file exists
         if not os.path.exists(update_file):
-            print("Error: FFTLauncher.update not found")
+            print("Error: FFTLauncher.update not found after waiting")
             return False
+        
+        # Wait a bit more to ensure file is fully written
+        print("Waiting for file to be fully written...")
+        time.sleep(2)
         
         # Remove the exe file if it exists
         if os.path.exists(exe_file):
