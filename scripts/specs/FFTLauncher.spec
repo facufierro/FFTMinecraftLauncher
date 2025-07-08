@@ -79,8 +79,8 @@ def collect_source_modules():
     modules = []
     for py_file in src_dir.rglob('*.py'):
         if py_file.name != '__init__.py':
-            # Convert to module path: src/core/launcher.py -> src.core.launcher
-            relative = py_file.relative_to(project_root)
+            # Convert to module path: src/launcher/core/launcher.py -> launcher.core.launcher
+            relative = py_file.relative_to(src_dir)
             module = str(relative.with_suffix('')).replace(os.sep, '.')
             modules.append(module)
     return modules

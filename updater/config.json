@@ -1,0 +1,8 @@
+{
+    "target_file": "app.exe",
+    "github_repo": "facufierro/Updater",
+    "github_file_path": "dist/app.exe",
+    "auto_launch": true,
+    "check_interval_days": 1,
+    "log_level": "INFO"
+}
