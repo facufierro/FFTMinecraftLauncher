@@ -74,19 +74,25 @@ class LoggingUtils:
             file_handler = logging.FileHandler(self.latest_log_path, mode='w', encoding='utf-8')
             file_handler.setLevel(logging.DEBUG)
             
-            # Create console handler
-            console_handler = logging.StreamHandler()
-            console_handler.setLevel(logging.INFO)
-            
             # Create formatter
             formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', 
                                         datefmt='%H:%M:%S')
             file_handler.setFormatter(formatter)
-            console_handler.setFormatter(formatter)
             
-            # Add handlers to logger
+            # Add file handler to logger
             self.logger.addHandler(file_handler)
-            self.logger.addHandler(console_handler)
+            
+            # Only add console handler if we're not in a frozen executable or if stdout exists
+            if not getattr(sys, 'frozen', False) and sys.stdout and hasattr(sys.stdout, 'write'):
+                try:
+                    console_handler = logging.StreamHandler()
+                    console_handler.setLevel(logging.INFO)
+                    console_handler.setFormatter(formatter)
+                    self.logger.addHandler(console_handler)
+                except Exception:
+                    # If console handler fails, just continue with file logging
+                    pass
+            
         except Exception as e:
             print(f"Failed to setup logger: {e}")
     
@@ -276,6 +282,17 @@ class LoggingUtils:
     
     def capture_stdout_stderr(self) -> None:
         """Redirect stdout and stderr to the logger."""
+        # Don't capture stdout/stderr in frozen executables to avoid issues
+        if getattr(sys, 'frozen', False):
+            self.debug("Skipping stdout/stderr capture in frozen executable")
+            return
+            
+        # Check if stdout and stderr are valid before capturing
+        if not (sys.stdout and hasattr(sys.stdout, 'write') and 
+                sys.stderr and hasattr(sys.stderr, 'write')):
+            self.debug("Skipping stdout/stderr capture - streams not available")
+            return
+        
         # Create logging wrappers for stdout and stderr
         class LoggerWriter:
             def __init__(self, logger_func):
@@ -286,19 +303,29 @@ class LoggingUtils:
                 if message and message.strip():
                     if message.endswith('\n'):
                         self.buffer += message[:-1]
-                        self.logger_func(self.buffer)
+                        if self.buffer.strip():  # Only log non-empty messages
+                            self.logger_func(self.buffer)
                         self.buffer = ""
                     else:
                         self.buffer += message
                         
             def flush(self):
-                if self.buffer:
+                if self.buffer and self.buffer.strip():
                     self.logger_func(self.buffer)
                     self.buffer = ""
         
-        # Redirect stdout and stderr
-        sys.stdout = LoggerWriter(self.info)
-        sys.stderr = LoggerWriter(self.error)
+        try:
+            # Store original streams
+            self._original_stdout = sys.stdout
+            self._original_stderr = sys.stderr
+            
+            # Redirect stdout and stderr
+            sys.stdout = LoggerWriter(self.info)
+            sys.stderr = LoggerWriter(self.error)
+            
+            self.debug("Successfully captured stdout and stderr")
+        except Exception as e:
+            self.warning(f"Failed to capture stdout/stderr: {e}")
     
     def log_system_info(self) -> None:
         """Log system information for diagnostics."""
@@ -341,7 +368,7 @@ def setup_logger(log_level: int = logging.INFO,
     
     Args:
         log_level: Logging level
-        capture_output: Whether to capture stdout and stderr
+        capture_output: Whether to capture stdout and stderr (ignored in frozen executables)
         max_logs: Maximum number of logs to keep
         
     Returns:
@@ -358,8 +385,8 @@ def setup_logger(log_level: int = logging.INFO,
         # Clean up old logs
         _logger_instance.cleanup_old_logs(max_logs=max_logs)
         
-        # Capture stdout/stderr if requested
-        if capture_output:
+        # Capture stdout/stderr if requested and not in frozen executable
+        if capture_output and not getattr(sys, 'frozen', False):
             _logger_instance.capture_stdout_stderr()
     
     return _logger_instance
