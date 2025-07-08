@@ -120,26 +120,10 @@ class UpdateService:
                 with zipfile.ZipFile(zip_path, 'r') as zip_file:
                     zip_file.extractall(extract_path)
                 
-                # Compare files in folders_to_sync with special attention to mods folder
-                for folder in self.config.folders_to_sync:
-                    remote_folder = extract_path / folder
-                    local_folder = instance_path / folder
-                    
-                    if not remote_folder.exists():
-                        continue  # Skip if folder doesn't exist in release
-                    
-                    if not local_folder.exists():
-                        self.logger.info(f"Local folder {folder} missing - update needed")
-                        return True  # Local folder missing, need update
-                    
-                    # Compare all files in this folder
-                    if self._compare_folder_contents(remote_folder, local_folder):
-                        self.logger.info(f"Files in {folder} have changed - update needed")
-                        return True  # Files are different, need update
-                
-                # Additional explicit check for mods folder integrity
-                if not self._verify_mods_folder_integrity(extract_path, instance_path):
-                    return True
+                # Compare all files between repo and instance
+                if self._compare_folder_contents(extract_path, instance_path):
+                    self.logger.info("Files have changed - update needed")
+                    return True  # Files are different, need update
                 
                 self.logger.info("All files match - no update needed")
                 return False  # All files match
@@ -853,20 +837,17 @@ class UpdateService:
             # Ensure instance directory exists (it should be created automatically)
             instance_path.mkdir(parents=True, exist_ok=True)
             
-            # Only sync the folders that are configured to be synced
-            for folder_name in self.config.folders_to_sync:
-                source_folder = source_path / folder_name
-                if source_folder.exists():
-                    dest_folder = instance_path / folder_name
-                    self._sync_directory(source_folder, dest_folder)
-                else:
-                    self.logger.warning(f"Source folder '{folder_name}' not found in update")
+            # Sync everything from the repo to the instance
+            for item in source_path.iterdir():
+                if item.is_dir():
+                    dest_folder = instance_path / item.name
+                    self._sync_directory(item, dest_folder)
+                elif item.is_file():
+                    dest_file = instance_path / item.name
+                    self._sync_file(item, dest_file)
             
             # After syncing files, check if we need to configure resource packs
             self._configure_resource_packs_after_sync(instance_path)
-            
-            # Perform post-sync verification of mods folder
-            self._verify_mods_folder_post_sync(source_path, instance_path)
             
             return True
             
