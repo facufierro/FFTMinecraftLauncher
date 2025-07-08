@@ -9,6 +9,7 @@ from ..services.github_service import GitHubService
 from ..services.update_service import UpdateService
 from ..services.minecraft_service import MinecraftService
 from ..services.launcher_version_service import LauncherVersionService
+from ..services.updater_download_service import UpdaterDownloadService
 from ..utils.logging_utils import get_logger, setup_logger
 from .events import LauncherEvents, EventType
 
@@ -35,6 +36,7 @@ class LauncherCore:
         self.update_service: Optional[UpdateService] = None
         self.minecraft_service: Optional[MinecraftService] = None
         self.launcher_version_service: Optional[LauncherVersionService] = None
+        self.updater_download_service: Optional[UpdaterDownloadService] = None
         
         # State
         self.is_updating = False
@@ -54,6 +56,14 @@ class LauncherCore:
             
             # Clean up old logs
             self.logger.cleanup_old_logs(max_logs=10)
+            
+            # Download updater first - this is the first thing we do
+            self.logger.info("Downloading updater...")
+            self.updater_download_service = UpdaterDownloadService()
+            updater_success = self.updater_download_service.download_updater_at_startup()
+            
+            if not updater_success:
+                self.logger.warning("Updater download failed, but continuing with launcher initialization")
             
             # Load configuration
             self.load_config()
