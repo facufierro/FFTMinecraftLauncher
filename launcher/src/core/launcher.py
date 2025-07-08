@@ -13,7 +13,7 @@ from ..utils.logging_utils import get_logger, setup_logger
 from .events import LauncherEvents, EventType
 
 # Version constant - updated automatically by build script
-LAUNCHER_VERSION = "0.0.0"
+LAUNCHER_VERSION = "1.0.66"
 
 
 class LauncherCore:

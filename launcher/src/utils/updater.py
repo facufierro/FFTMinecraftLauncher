@@ -63,11 +63,14 @@ def main():
     """Main entry point"""
     print("Starting file replacement...")
     
-    if replace_file():
-        print("File replacement completed successfully")
-        print("FFTLauncher.exe has been launched")
-    else:
-        print("File replacement failed")
+    try:
+        if replace_file():
+            print("File replacement completed successfully")
+            print("FFTLauncher.exe has been launched")
+        else:
+            print("File replacement failed")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
 
 
 if __name__ == "__main__":
