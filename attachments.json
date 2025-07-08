@@ -1,6 +1,6 @@
 {
     "files": [
         "dist/FFTLauncher.exe",
-        "dist/Update.exe"
+        "dist/Updater.exe"
     ]
 }
