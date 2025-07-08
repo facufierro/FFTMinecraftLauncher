@@ -190,7 +190,8 @@ class VersionCheckDialog:
                 self.dialog.update()
                 
                 # Start the updater
-                subprocess.Popen([str(updater_path)], creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+                subprocess.Popen([str(updater_path)], 
+                               creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW)
                 
                 # Final progress
                 self.status_label.configure(text="Update complete! Closing launcher...")
