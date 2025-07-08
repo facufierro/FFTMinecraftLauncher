@@ -30,6 +30,8 @@ hiddenimports = [
     'os',
     'sys',
     'subprocess',
+    'tkinter',
+    'tkinter.ttk',
 ]
 
 # No auto-discovery needed for simple updater
@@ -53,7 +55,6 @@ a = Analysis(
         'scipy',
         'PIL',
         'customtkinter',
-        'tkinter',
         'requests',
         'urllib3',
         'psutil',
