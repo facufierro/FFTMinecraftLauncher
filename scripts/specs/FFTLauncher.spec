@@ -11,10 +11,11 @@ from pathlib import Path
 # Project structure
 spec_dir = Path(SPEC).parent
 project_root = spec_dir.parent.parent
-src_dir = project_root / 'src'
-main_script = project_root / 'app.py'
+launcher_dir = project_root / 'launcher'
+src_dir = launcher_dir / 'src'
+main_script = launcher_dir / 'app.py'
 
-print(f"Building FFT Launcher from: {project_root}")
+print(f"Building FFT Launcher from: {launcher_dir}")
 print(f"Main script: {main_script}")
 
 # Application metadata
@@ -79,8 +80,8 @@ def collect_source_modules():
     modules = []
     for py_file in src_dir.rglob('*.py'):
         if py_file.name != '__init__.py':
-            # Convert to module path: src/launcher/core/launcher.py -> launcher.core.launcher
-            relative = py_file.relative_to(src_dir)
+            # Convert to module path: src/core/launcher.py -> src.core.launcher
+            relative = py_file.relative_to(launcher_dir)
             module = str(relative.with_suffix('')).replace(os.sep, '.')
             modules.append(module)
     return modules
@@ -91,7 +92,7 @@ hiddenimports.extend(collect_source_modules())
 # Build analysis
 a = Analysis(
     [str(main_script)],
-    pathex=[str(project_root), str(src_dir)],
+    pathex=[str(project_root), str(launcher_dir), str(src_dir)],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -108,6 +109,9 @@ a = Analysis(
         'pdb',
         'cProfile',
         'profile',
+        
+        # System monitoring (not needed for launcher)
+        'psutil',
         
         # Unix-specific modules (building for Windows)
         'pwd',

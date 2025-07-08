@@ -1,13 +1,14 @@
 #!/usr/bin/env pwsh
 # FFT Minecraft Launcher Build Script
-# Builds standalone FFTLauncher.exe executable
+# Builds FFTLauncher.exe and Updater.exe executables
 
-Write-Host "Building FFT Minecraft Launcher..." -ForegroundColor Green
-Write-Host "=================================" -ForegroundColor Green
-Write-Host "Standalone Launcher Build" -ForegroundColor Cyan
-Write-Host "- Single executable with all dependencies included" -ForegroundColor Cyan
-Write-Host "- No bootstrap or self-update complexity" -ForegroundColor Cyan
-Write-Host ""
+param(
+    [string]$Target = "all",  # "launcher", "updater", or "all"
+    [switch]$Clean = $false
+)
+
+Write-Host "Building FFT Applications..." -ForegroundColor Green
+Write-Host "===========================" -ForegroundColor Green
 
 # Change to project root
 Set-Location (Split-Path $PSScriptRoot -Parent)
@@ -25,12 +26,14 @@ if (Test-Path ".venv\Scripts\python.exe") {
     exit 1
 }
 
-# Clean build cache
-Write-Host "Cleaning build cache..." -ForegroundColor Yellow
-if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
-if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+# Clean build cache if requested
+if ($Clean) {
+    Write-Host "Cleaning build cache..." -ForegroundColor Yellow
+    if (Test-Path "build") { Remove-Item -Recurse -Force "build" }
+    if (Test-Path "dist") { Remove-Item -Recurse -Force "dist" }
+}
 
-# Get version from git tag first
+# Get version from git tag
 $gitVersion = git tag --list --sort=-version:refname | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } | Select-Object -First 1
 if (-not $gitVersion) {
     Write-Host "Warning: No valid git tags found, using default version" -ForegroundColor Yellow
@@ -41,7 +44,6 @@ Write-Host "Using version: $gitVersion" -ForegroundColor Cyan
 # Check if PyInstaller is installed
 try {
     & $pythonExe -c "import PyInstaller; print('PyInstaller found')"
-    Write-Host "PyInstaller found" -ForegroundColor Green
 } catch {
     Write-Host "PyInstaller not found. Installing..." -ForegroundColor Yellow
     & $pythonExe -m pip install pyinstaller
@@ -49,50 +51,85 @@ try {
         Write-Host "Error: Failed to install PyInstaller" -ForegroundColor Red
         exit 1
     }
-    Write-Host "PyInstaller installed successfully" -ForegroundColor Green
 }
 
-# Build standalone launcher executable
-Write-Host "Building standalone FFTLauncher.exe..." -ForegroundColor Yellow
-Write-Host "Using spec file: scripts\specs\FFTLauncher.spec" -ForegroundColor Gray
-
-$specFile = "scripts\specs\FFTLauncher.spec"
-if (-not (Test-Path $specFile)) {
-    Write-Host "Error: Spec file not found at $specFile" -ForegroundColor Red
-    exit 1
+function Build-Application {
+    param(
+        [string]$AppName,
+        [string]$SpecFile,
+        [string]$ExpectedExe,
+        [string]$Description
+    )
+    
+    Write-Host ""
+    Write-Host "Building $AppName..." -ForegroundColor Yellow
+    Write-Host "Using spec file: $SpecFile" -ForegroundColor Gray
+    
+    if (-not (Test-Path $SpecFile)) {
+        Write-Host "Error: Spec file not found at $SpecFile" -ForegroundColor Red
+        return $false
+    }
+    
+    & $pythonExe -m PyInstaller $SpecFile --noconfirm --clean
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: $AppName build failed" -ForegroundColor Red
+        return $false
+    }
+    
+    if (Test-Path $ExpectedExe) {
+        $fileInfo = Get-Item $ExpectedExe
+        Write-Host "✓ $AppName built successfully" -ForegroundColor Green
+        Write-Host "  File: $ExpectedExe" -ForegroundColor Cyan
+        Write-Host "  Size: $([math]::Round($fileInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
+        return $true
+    } else {
+        Write-Host "Error: $AppName executable not found at $ExpectedExe" -ForegroundColor Red
+        return $false
+    }
 }
 
-& $pythonExe -m PyInstaller $specFile --noconfirm --clean
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Error: PyInstaller build failed" -ForegroundColor Red
-    exit 1
+$buildResults = @()
+
+# Build Launcher
+if ($Target -eq "launcher" -or $Target -eq "all") {
+    $success = Build-Application -AppName "FFT Launcher" -SpecFile "scripts\specs\FFTLauncher.spec" -ExpectedExe "dist\FFTLauncher.exe" -Description "Main Minecraft launcher"
+    $buildResults += @{ Name = "FFT Launcher"; Success = $success; Path = "dist\FFTLauncher.exe" }
 }
 
-# Check if executable was created
-$exePath = "dist\FFTLauncher.exe"
-if (Test-Path $exePath) {
-    $fileInfo = Get-Item $exePath
-    Write-Host ""
-    Write-Host "==========================================" -ForegroundColor Green
-    Write-Host "BUILD COMPLETE!" -ForegroundColor Green
-    Write-Host "STANDALONE LAUNCHER" -ForegroundColor Green
-    Write-Host "==========================================" -ForegroundColor Green
-    Write-Host "Executable: $exePath" -ForegroundColor Cyan
-    Write-Host "Size: $([math]::Round($fileInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
-    Write-Host "Created: $($fileInfo.CreationTime)" -ForegroundColor Cyan
-    Write-Host "Version: $gitVersion" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "FEATURES:" -ForegroundColor Yellow
-    Write-Host "- Self-contained executable with all dependencies" -ForegroundColor White
-    Write-Host "- Downloads and updates Minecraft modpack files" -ForegroundColor White
-    Write-Host "- Launches Minecraft with FFT modpack" -ForegroundColor White
-    Write-Host "- Enhanced logging system with log rotation" -ForegroundColor White
-    Write-Host "- No bootstrap or self-update complexity" -ForegroundColor White
-    Write-Host ""
-    Write-Host "Ready to distribute!" -ForegroundColor Green
-    Write-Host "==========================================" -ForegroundColor Green
+# Build Updater
+if ($Target -eq "updater" -or $Target -eq "all") {
+    $success = Build-Application -AppName "Updater" -SpecFile "scripts\specs\Updater.spec" -ExpectedExe "dist\Updater.exe" -Description "GitHub-based app updater"
+    $buildResults += @{ Name = "Updater"; Success = $success; Path = "dist\Updater.exe" }
+}
+
+# Summary
+Write-Host ""
+Write-Host "==========================================" -ForegroundColor Green
+Write-Host "BUILD SUMMARY" -ForegroundColor Green
+Write-Host "==========================================" -ForegroundColor Green
+
+$allSuccessful = $true
+foreach ($result in $buildResults) {
+    if ($result.Success) {
+        Write-Host "✓ $($result.Name): SUCCESS" -ForegroundColor Green
+        if (Test-Path $result.Path) {
+            $fileInfo = Get-Item $result.Path
+            Write-Host "  Size: $([math]::Round($fileInfo.Length / 1MB, 2)) MB" -ForegroundColor Cyan
+        }
+    } else {
+        Write-Host "✗ $($result.Name): FAILED" -ForegroundColor Red
+        $allSuccessful = $false
+    }
+}
+
+Write-Host ""
+Write-Host "Version: $gitVersion" -ForegroundColor Cyan
+
+if ($allSuccessful) {
+    Write-Host "All builds completed successfully!" -ForegroundColor Green
 } else {
-    Write-Host "Error: Executable not found at $exePath" -ForegroundColor Red
-    Write-Host "Build may have failed - check the output above" -ForegroundColor Red
+    Write-Host "Some builds failed - check the output above" -ForegroundColor Red
     exit 1
 }
+
+Write-Host "==========================================" -ForegroundColor Green
