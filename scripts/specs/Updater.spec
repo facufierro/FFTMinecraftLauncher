@@ -114,5 +114,5 @@ exe = EXE(
 
 print(f"Built {APP_NAME} v{APP_VERSION}")
 print(f"Executable: {APP_NAME}.exe")
-print(f"Console mode: enabled")
+print(f"Console mode: disabled")
 print(f"Simple file replacement updater - minimal dependencies")
