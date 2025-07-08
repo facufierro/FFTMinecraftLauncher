@@ -68,8 +68,6 @@ def main():
         print("FFTLauncher.exe has been launched")
     else:
         print("File replacement failed")
-    
-    input("Press Enter to exit...")
 
 
 if __name__ == "__main__":
