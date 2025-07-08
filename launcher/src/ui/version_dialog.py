@@ -94,31 +94,19 @@ class VersionCheckDialog:
         button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         button_frame.pack(fill="x", padx=10)
         
-        # Update button
+        # Update button (opens updater and closes launcher)
         update_button = ctk.CTkButton(
             button_frame,
-            text="Update Now",
+            text="Update",
             width=120,
             height=35,
             command=self._on_update_clicked,
             fg_color="#2B8D2B",
             hover_color="#1F6A1F"
         )
-        update_button.pack(side="left", padx=(0, 5))
+        update_button.pack(side="left", padx=(0, 10))
         
-        # Open Updater button
-        updater_button = ctk.CTkButton(
-            button_frame,
-            text="Open Updater",
-            width=120,
-            height=35,
-            command=self._on_updater_clicked,
-            fg_color="#0066CC",
-            hover_color="#004499"
-        )
-        updater_button.pack(side="left", padx=(5, 5))
-        
-        # Cancel button
+        # Not Now button (closes dialog)
         cancel_button = ctk.CTkButton(
             button_frame,
             text="Not Now",
@@ -137,14 +125,7 @@ class VersionCheckDialog:
         self.dialog.focus()
     
     def _on_update_clicked(self):
-        """Handle update button click."""
-        self.result = "update"
-        if self.on_update:
-            self.on_update()
-        self.dialog.destroy()
-    
-    def _on_updater_clicked(self):
-        """Handle open updater button click."""
+        """Handle update button click - opens updater and closes launcher."""
         import subprocess
         import sys
         from pathlib import Path
@@ -159,7 +140,7 @@ class VersionCheckDialog:
                 subprocess.Popen([str(updater_path)], creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
                 
                 # Close the dialog
-                self.result = "updater"
+                self.result = "update"
                 self.dialog.destroy()
                 
                 # Exit the launcher completely
