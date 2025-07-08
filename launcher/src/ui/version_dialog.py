@@ -33,7 +33,7 @@ class VersionCheckDialog:
         # Create dialog window
         self.dialog = ctk.CTkToplevel(self.parent)
         self.dialog.title("Launcher Update Available")
-        self.dialog.geometry("550x250")
+        self.dialog.geometry("550x300")
         self.dialog.resizable(False, False)
         
         # Set window icon
