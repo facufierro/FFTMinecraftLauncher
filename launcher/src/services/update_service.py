@@ -56,8 +56,17 @@ class UpdateService:
             self.config.current_version
         )
         
-        # If version is the same, also check if files are different
+        # Check if instance exists and is properly set up
+        instance_exists = self.check_instance_exists()
+        
+        # If version is the same, also check if files are different or instance doesn't exist
         if not update_info.updates_available:
+            if not instance_exists:
+                # Instance doesn't exist - force update to install everything
+                self._update_progress("Instance not installed - update needed")
+                update_info.updates_available = True
+                return update_info
+            
             self._update_progress("Checking if files have changed...")
             files_need_update = self._check_files_need_update(update_info)
             if files_need_update:
@@ -507,16 +516,27 @@ class UpdateService:
         Returns:
             True if update was successful, False otherwise.
         """
-        if not force and not update_info.updates_available:
+        # Check if instance exists
+        instance_exists = self.check_instance_exists()
+        
+        # If no updates available and instance exists, nothing to do
+        if not force and not update_info.updates_available and instance_exists:
             self.logger.warning("No updates available")
             return False
         
         try:
-            # First, ensure the instance is properly set up
+            # First, ensure the instance is properly set up (installs NeoForge if needed)
             self._ensure_instance_setup()
             
-            # Then download and extract the release
-            return self._download_and_extract_release(update_info)
+            # If there are file updates available OR we just created a new instance, download and sync files
+            if update_info.updates_available or force or not instance_exists:
+                # Download and extract the release
+                return self._download_and_extract_release(update_info)
+            else:
+                # Instance was set up but no file updates needed
+                self.logger.info("Instance setup completed successfully")
+                return True
+                
         except UpdateError as e:
             self.logger.error(f"Update failed: {e}")
             return False
