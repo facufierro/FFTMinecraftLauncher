@@ -157,8 +157,8 @@ exe = EXE(
     uac_uiaccess=False,
 )
 
-print(f"✓ Built {APP_NAME} v{APP_VERSION}")
-print(f"✓ Executable: {APP_NAME}.exe")
-print(f"✓ Console mode: enabled")
-print(f"✓ Source modules: {len([m for m in hiddenimports if m.startswith('src.')])}")
-print(f"✓ Total dependencies: {len(hiddenimports)}")
+print(f"Built {APP_NAME} v{APP_VERSION}")
+print(f"Executable: {APP_NAME}.exe")
+print(f"Console mode: enabled")
+print(f"Source modules: {len([m for m in hiddenimports if m.startswith('src.')])}")
+print(f"Total dependencies: {len(hiddenimports)}")
