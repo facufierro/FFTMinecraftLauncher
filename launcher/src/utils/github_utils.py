@@ -1,6 +1,8 @@
 """Centralized GitHub API utilities for all launcher components."""
 
 import requests
+import subprocess
+import os
 from typing import Optional, Dict, Any, Callable
 from pathlib import Path
 from .logging_utils import get_logger
@@ -18,6 +20,56 @@ class GitHubAPIClient:
         self.base_url = "https://api.github.com"
         self.timeout = timeout
         self.logger = get_logger()
+        self._token = None
+        self._token_checked = False
+    
+    def _get_github_token(self) -> Optional[str]:
+        """Get GitHub token from CLI authentication or environment."""
+        if self._token_checked:
+            return self._token
+        
+        self._token_checked = True
+        
+        # First try environment variable
+        token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+        if token:
+            self.logger.debug("Using GitHub token from environment variable")
+            self._token = token
+            return self._token
+        
+        # Try to get token from GitHub CLI
+        try:
+            result = subprocess.run(
+                ['gh', 'auth', 'token'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                self.logger.debug("Using GitHub token from CLI authentication")
+                self._token = result.stdout.strip()
+                return self._token
+            else:
+                self.logger.debug("GitHub CLI not authenticated or not available")
+                
+        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
+            self.logger.debug(f"Could not get GitHub CLI token: {e}")
+        
+        return None
+    
+    def _get_headers(self) -> Dict[str, str]:
+        """Get headers for GitHub API requests."""
+        headers = {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'FFTMinecraftLauncher/1.0'
+        }
+        
+        token = self._get_github_token()
+        if token:
+            headers['Authorization'] = f'token {token}'
+        
+        return headers
     
     def get_latest_release(self, repo: str) -> Optional[Dict[str, Any]]:
         """Get the latest release from a GitHub repository.
@@ -32,7 +84,8 @@ class GitHubAPIClient:
             url = f"{self.base_url}/repos/{repo}/releases/latest"
             self.logger.debug(f"Fetching release from: {url}")
             
-            response = requests.get(url, timeout=self.timeout)
+            headers = self._get_headers()
+            response = requests.get(url, headers=headers, timeout=self.timeout)
             response.raise_for_status()
             
             return response.json()
@@ -130,7 +183,8 @@ class GitHubAPIClient:
             if progress_callback:
                 progress_callback("Starting download...", 0.0)
             
-            response = requests.get(url, timeout=self.timeout, stream=True)
+            headers = self._get_headers()
+            response = requests.get(url, headers=headers, timeout=self.timeout, stream=True)
             response.raise_for_status()
             
             total_size = int(response.headers.get('content-length', 0))
