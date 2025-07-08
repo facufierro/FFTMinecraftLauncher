@@ -118,8 +118,8 @@ class VersionCheckDialog:
             width=120,
             height=35,
             command=self._on_cancel_clicked,
-            fg_color="#8B4513",
-            hover_color="#6B3410"
+            fg_color="#5A5A5A",
+            hover_color="#494949"
         )
         self.cancel_button.pack(side="right")
         
