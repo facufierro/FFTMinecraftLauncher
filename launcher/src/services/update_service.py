@@ -164,16 +164,25 @@ class UpdateService:
         remote_files = set()
         local_files = set()
         
+        # Check if this is a mods folder to apply .connector exclusion
+        is_mods_folder = remote_folder.name.lower() == "mods" or local_folder.name.lower() == "mods"
+        
         if remote_folder.exists():
             for file_path in remote_folder.rglob('*'):
                 if file_path.is_file():
                     rel_path = file_path.relative_to(remote_folder)
+                    # Skip .connector folder and its contents for mods folder
+                    if is_mods_folder and (str(rel_path).startswith('.connector') or '.connector' in str(rel_path)):
+                        continue
                     remote_files.add(rel_path)
         
         if local_folder.exists():
             for file_path in local_folder.rglob('*'):
                 if file_path.is_file():
                     rel_path = file_path.relative_to(local_folder)
+                    # Skip .connector folder and its contents for mods folder
+                    if is_mods_folder and (str(rel_path).startswith('.connector') or '.connector' in str(rel_path)):
+                        continue
                     local_files.add(rel_path)
         
         # Check if file lists are different
@@ -237,12 +246,18 @@ class UpdateService:
             for file_path in remote_mods.rglob('*.jar'):
                 if file_path.is_file():
                     rel_path = file_path.relative_to(remote_mods)
+                    # Skip .connector folder and its contents
+                    if str(rel_path).startswith('.connector') or '.connector' in str(rel_path):
+                        continue
                     remote_mod_files.add((rel_path, file_path.stat().st_size))
             
             # Get all .jar files in local mods folder
             for file_path in local_mods.rglob('*.jar'):
                 if file_path.is_file():
                     rel_path = file_path.relative_to(local_mods)
+                    # Skip .connector folder and its contents
+                    if str(rel_path).startswith('.connector') or '.connector' in str(rel_path):
+                        continue
                     local_mod_files.add((rel_path, file_path.stat().st_size))
             
             # Check if mod file sets are different
@@ -367,8 +382,14 @@ class UpdateService:
                 self.logger.info("Mods folder: Does not exist")
                 return
             
-            mod_files = list(mods_folder.rglob('*.jar'))
-            self.logger.info(f"Mods folder: Contains {len(mod_files)} mod files")
+            mod_files = []
+            for file_path in mods_folder.rglob('*.jar'):
+                rel_path = file_path.relative_to(mods_folder)
+                # Skip .connector folder and its contents
+                if not (str(rel_path).startswith('.connector') or '.connector' in str(rel_path)):
+                    mod_files.append(file_path)
+            
+            self.logger.info(f"Mods folder: Contains {len(mod_files)} mod files (excluding .connector)")
             
             if mod_files:
                 for mod_file in sorted(mod_files):
@@ -397,17 +418,30 @@ class UpdateService:
                 self.logger.warning("Mods folder does not exist - will be created during next update")
                 return
             
-            # Count mod files
-            mod_files = list(mods_folder.rglob('*.jar'))
-            self.logger.info(f"Startup check: Found {len(mod_files)} mod files in mods folder")
+            # Count mod files (excluding .connector folder)
+            mod_files = []
+            for file_path in mods_folder.rglob('*.jar'):
+                rel_path = file_path.relative_to(mods_folder)
+                # Skip .connector folder and its contents
+                if not (str(rel_path).startswith('.connector') or '.connector' in str(rel_path)):
+                    mod_files.append(file_path)
+            
+            self.logger.info(f"Startup check: Found {len(mod_files)} mod files in mods folder (excluding .connector)")
             
             # Check for common issues
             if not mod_files:
                 self.logger.warning("Mods folder is empty - this may indicate synchronization issues")
             
-            # Check for non-jar files that might indicate corruption
-            all_files = list(mods_folder.rglob('*'))
-            non_jar_files = [f for f in all_files if f.is_file() and not f.name.endswith('.jar')]
+            # Check for non-jar files that might indicate corruption (excluding .connector)
+            all_files = []
+            for file_path in mods_folder.rglob('*'):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(mods_folder)
+                    # Skip .connector folder and its contents
+                    if not (str(rel_path).startswith('.connector') or '.connector' in str(rel_path)):
+                        all_files.append(file_path)
+            
+            non_jar_files = [f for f in all_files if not f.name.endswith('.jar')]
             
             if non_jar_files:
                 self.logger.warning(f"Found {len(non_jar_files)} non-jar files in mods folder:")
@@ -854,7 +888,13 @@ class UpdateService:
             return
         
         try:
-            if self.file_ops.sync_directories(source, destination):
+            # Set up exclusion patterns for mods folder
+            exclude_patterns = None
+            if source.name.lower() == "mods":
+                exclude_patterns = [".connector", ".connector/*"]
+                self.logger.info("Syncing mods folder with .connector exclusion")
+            
+            if self.file_ops.sync_directories(source, destination, exclude_patterns):
                 self.logger.info(f"Successfully synced directory: {source.name}")
             else:
                 raise Exception(f"Failed to sync directory {source.name}")
