@@ -11,74 +11,34 @@ from pathlib import Path
 # Project structure
 spec_dir = Path(SPEC).parent
 project_root = spec_dir.parent.parent
-updater_dir = project_root / 'updater'
-src_dir = updater_dir / 'src'
-main_script = updater_dir / 'app.py'
+launcher_dir = project_root / 'launcher'
+main_script = launcher_dir / 'src' / 'utils' / 'updater.py'
 
-print(f"Building Updater from: {updater_dir}")
-print(f"Main script: {main_script}")
+print(f"Building Simple Updater from: {main_script}")
 
 # Application metadata
 APP_NAME = 'Updater'
 APP_VERSION = '1.0.0'
-APP_DESCRIPTION = 'GitHub-based App Updater'
+APP_DESCRIPTION = 'Simple File Replacement Updater'
 
-# Data files to bundle (minimal for updater)
+# Data files to bundle (none needed for simple updater)
 datas = []
 
-# Core dependencies for simple updater
+# Minimal dependencies for simple updater
 hiddenimports = [
-    # GUI Framework (lightweight)
-    'tkinter',
-    'tkinter.ttk',
-    'tkinter.messagebox',
-    
-    # HTTP and networking
-    'requests',
-    'urllib3',
-    'certifi',
-    'charset_normalizer',
-    'idna',
-    
-    # Standard library essentials
-    'json',
-    'logging',
-    'threading',
-    'subprocess',
-    'pathlib',
-    'datetime',
-    'tempfile',
-    'shutil',
-    'zipfile',
-    'hashlib',
-    'argparse',
-    'importlib.util',
-    
-    # System operations
+    # Standard library essentials only
     'os',
     'sys',
-    'platform',
+    'subprocess',
 ]
 
-# Auto-discover updater modules
-def collect_updater_modules():
-    """Automatically collect all updater modules from src directory."""
-    modules = []
-    for py_file in src_dir.rglob('*.py'):
-        if py_file.name != '__init__.py':
-            # Convert to module path: src/models/app_updater.py -> src.models.app_updater
-            relative = py_file.relative_to(updater_dir)
-            module = str(relative.with_suffix('')).replace(os.sep, '.')
-            modules.append(module)
-    return modules
-
-# Add discovered modules to hidden imports
-hiddenimports.extend(collect_updater_modules())
+# No auto-discovery needed for simple updater
+# hiddenimports already contains everything we need
 
 # Build analysis
 a = Analysis(
     [str(main_script)],
-    pathex=[str(project_root), str(updater_dir), str(src_dir)],
+    pathex=[str(project_root), str(launcher_dir)],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -86,34 +46,29 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Exclude heavy libraries not needed for updater
+        # Exclude everything we don't need
         'matplotlib',
         'numpy',
         'pandas',
         'scipy',
         'PIL',
-        'customtkinter',  # Use basic tkinter instead
-        'psutil',         # Not needed for updater
-        
-        # Testing frameworks
+        'customtkinter',
+        'tkinter',
+        'requests',
+        'urllib3',
+        'psutil',
         'pytest',
         'unittest',
         'doctest',
-        
-        # Development tools
         'pdb',
         'cProfile',
         'profile',
-        
-        # Unix-specific modules
         'pwd',
         'grp',
         'termios',
         'fcntl',
         'resource',
         'readline',
-        
-        # Audio modules
         'audioop',
         'wave',
         'sunau',
@@ -160,5 +115,4 @@ exe = EXE(
 print(f"Built {APP_NAME} v{APP_VERSION}")
 print(f"Executable: {APP_NAME}.exe")
 print(f"Console mode: enabled")
-print(f"Source modules: {len([m for m in hiddenimports if m.startswith('src.')])}")
-print(f"Total dependencies: {len(hiddenimports)}")
+print(f"Simple file replacement updater - minimal dependencies")
