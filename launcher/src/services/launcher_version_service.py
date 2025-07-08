@@ -16,22 +16,44 @@ class LauncherVersionService:
         self.launcher_repo = "facufierro/FFTMinecraftLauncher"
     
     def get_current_launcher_version(self) -> str:
-        """Get the current launcher version from config or default."""
-        # This should match the version in the PyInstaller spec file
-        default_version = "2.0.0"
-        
-        # Try to read from a version file if it exists (for future builds)
+        """Get the current launcher version from config file or default."""
+        # Try to read from launcher_config.json file first
         try:
             from pathlib import Path
-            version_file = Path(__file__).parent.parent.parent.parent / "version.txt"
-            if version_file.exists():
-                with open(version_file, 'r') as f:
-                    version = f.read().strip()
-                    if version:
-                        return version
-        except Exception:
-            pass
+            import sys
+            import json
+            
+            # Try multiple locations for launcher_config.json
+            possible_locations = []
+            
+            if getattr(sys, 'frozen', False):
+                # Running as executable - look relative to exe
+                exe_dir = Path(sys.executable).parent
+                possible_locations.append(exe_dir / "launcher_config.json")
+                possible_locations.append(exe_dir.parent / "launcher_config.json")
+                possible_locations.append(exe_dir.parent / "launcher" / "launcher_config.json")
+            else:
+                # Running as script - look relative to project root
+                script_dir = Path(__file__).parent.parent.parent.parent
+                possible_locations.append(script_dir / "launcher" / "launcher_config.json")
+                possible_locations.append(script_dir / "launcher_config.json")
+            
+            for config_file in possible_locations:
+                if config_file.exists():
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        config_data = json.load(f)
+                        version = config_data.get('launcher_version')
+                        if version:
+                            self.logger.info(f"Found launcher version in config at {config_file}: {version}")
+                            return version
+            
+            self.logger.warning("No launcher_version found in config files, using default")
+            
+        except Exception as e:
+            self.logger.error(f"Error reading launcher version from config: {e}")
         
+        # Fallback to default version (should match the build spec)
+        default_version = "2.0.0"
         return default_version
     
     def get_latest_launcher_version(self) -> Optional[str]:
@@ -57,8 +79,13 @@ class LauncherVersionService:
             Tuple of (update_available, current_version, latest_version)
         """
         try:
-            # Get current version
-            current_version = config.launcher_version or self.get_current_launcher_version()
+            # Get current version (prefer from file, then config, then default)
+            current_version = self.get_current_launcher_version()
+            
+            # Update config if it's different or not set
+            if not config.launcher_version or config.launcher_version != current_version:
+                config.launcher_version = current_version
+                self.logger.info(f"Updated config launcher version to: {current_version}")
             
             # Get latest version from GitHub
             latest_version = self.get_latest_launcher_version()
@@ -66,10 +93,6 @@ class LauncherVersionService:
             if not latest_version:
                 self.logger.warning("Could not fetch latest launcher version")
                 return False, current_version, None
-            
-            # Update config with current version if not set
-            if not config.launcher_version:
-                config.launcher_version = current_version
             
             # Compare versions
             update_available = self._is_newer_version(latest_version, current_version)

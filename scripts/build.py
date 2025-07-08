@@ -60,19 +60,32 @@ class BuildScript:
             print(f"Warning: Could not get git version: {e}")
             return "v2.0.0"
     
-    def _create_version_file(self) -> None:
-        """Create version.txt file for the launcher."""
+    def _update_config_version(self) -> None:
+        """Update launcher_config.json with the current version."""
         try:
-            version_file = self.project_root / "version.txt"
+            import json
+            
+            config_file = self.project_root / "launcher" / "launcher_config.json"
             version_clean = self.version.lstrip('v')  # Remove 'v' prefix if present
             
-            with open(version_file, 'w') as f:
-                f.write(version_clean)
-            
-            print(f"Created version file: {version_file} ({version_clean})")
+            if config_file.exists():
+                # Read existing config
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+                
+                # Update launcher version
+                config_data['launcher_version'] = version_clean
+                
+                # Write back to file
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    json.dump(config_data, f, indent=4, ensure_ascii=False)
+                
+                print(f"Updated launcher version in config: {config_file} ({version_clean})")
+            else:
+                print(f"Warning: Config file not found: {config_file}")
             
         except Exception as e:
-            print(f"Warning: Could not create version file: {e}")
+            print(f"Warning: Could not update launcher version in config: {e}")
     
     def _check_pyinstaller(self) -> bool:
         """Check if PyInstaller is installed, install if needed."""
@@ -183,8 +196,8 @@ class BuildScript:
         
         print(f"Version: {self.version}")
         
-        # Create version file for the launcher
-        self._create_version_file()
+        # Update launcher_config.json with current version
+        self._update_config_version()
         
         # Check PyInstaller
         if not self._check_pyinstaller():
