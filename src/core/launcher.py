@@ -8,7 +8,7 @@ from ..models.update_info import UpdateInfo
 from ..services.github_service import GitHubService
 from ..services.update_service import UpdateService
 from ..services.minecraft_service import MinecraftService
-from ..utils.logger import get_logger, setup_logger
+from ..utils.logging_utils import get_logger, setup_logger
 from .events import LauncherEvents, EventType
 
 

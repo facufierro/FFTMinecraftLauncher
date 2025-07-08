@@ -3,7 +3,7 @@
 import requests
 from typing import Optional, Dict, Any, Callable
 from pathlib import Path
-from .logger import get_logger
+from .logging_utils import get_logger
 
 
 class GitHubAPIClient:

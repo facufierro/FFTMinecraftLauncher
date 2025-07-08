@@ -7,7 +7,7 @@ from ..models.config import LauncherConfig
 from ..models.update_info import UpdateInfo
 from ..services.github_service import GitHubService
 from ..utils.file_ops import get_file_ops
-from ..utils.logger import get_logger
+from ..utils.logging_utils import get_logger
 
 
 class UpdateService:

@@ -4,7 +4,7 @@ import subprocess
 import time
 import os
 from typing import List, Optional
-from .logger import get_logger
+from .logging_utils import get_logger
 
 
 class ProcessManager:

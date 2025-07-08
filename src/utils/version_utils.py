@@ -1,7 +1,7 @@
 """Version utilities for dynamic version management."""
 
 from .github_utils import get_github_client, compare_versions, is_newer_version
-from .logger import get_logger
+from .logging_utils import get_logger
 
 
 def get_launcher_version() -> str:

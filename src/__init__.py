@@ -6,6 +6,6 @@ __description__ = "A launcher that syncs specific folders from GitHub repo befor
 
 from .core.launcher import LauncherCore
 from .models.config import LauncherConfig
-from .utils.logger import setup_logger, get_logger
+from .utils.logging_utils import setup_logger, get_logger
 
 __all__ = ['LauncherCore', 'LauncherConfig', 'setup_logger', 'get_logger']
