@@ -2,6 +2,7 @@
 
 import customtkinter as ctk
 from typing import Optional, Callable
+from ..utils.ui_utils import UIUtils
 
 
 class VersionCheckDialog:
@@ -32,8 +33,11 @@ class VersionCheckDialog:
         # Create dialog window
         self.dialog = ctk.CTkToplevel(self.parent)
         self.dialog.title("Launcher Update Available")
-        self.dialog.geometry("450x250")
+        self.dialog.geometry("550x250")
         self.dialog.resizable(False, False)
+        
+        # Set window icon
+        UIUtils.set_window_icon(self.dialog)
         
         # Center the dialog
         self.dialog.transient(self.parent)
@@ -54,7 +58,7 @@ class VersionCheckDialog:
         # Title
         title_label = ctk.CTkLabel(
             main_frame,
-            text="🔄 Launcher Update Available",
+            text="Launcher Update Available",
             font=ctk.CTkFont(size=18, weight="bold")
         )
         title_label.pack(pady=(10, 20))
@@ -100,7 +104,19 @@ class VersionCheckDialog:
             fg_color="#2B8D2B",
             hover_color="#1F6A1F"
         )
-        update_button.pack(side="left", padx=(0, 10))
+        update_button.pack(side="left", padx=(0, 5))
+        
+        # Open Updater button
+        updater_button = ctk.CTkButton(
+            button_frame,
+            text="Open Updater",
+            width=120,
+            height=35,
+            command=self._on_updater_clicked,
+            fg_color="#0066CC",
+            hover_color="#004499"
+        )
+        updater_button.pack(side="left", padx=(5, 5))
         
         # Cancel button
         cancel_button = ctk.CTkButton(
@@ -126,6 +142,35 @@ class VersionCheckDialog:
         if self.on_update:
             self.on_update()
         self.dialog.destroy()
+    
+    def _on_updater_clicked(self):
+        """Handle open updater button click."""
+        import subprocess
+        import sys
+        from pathlib import Path
+        
+        try:
+            # Get the path to the updater executable
+            current_dir = Path(__file__).parent.parent.parent.parent  # Go up to project root
+            updater_path = current_dir / "dist" / "Updater.exe"
+            
+            if updater_path.exists():
+                # Start the updater
+                subprocess.Popen([str(updater_path)], creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+                
+                # Close the dialog
+                self.result = "updater"
+                self.dialog.destroy()
+                
+                # Exit the launcher completely
+                sys.exit(0)
+            else:
+                # Show error if updater not found
+                UIUtils.show_error_dialog("Updater Not Found", 
+                                         f"Could not find Updater.exe at:\n{updater_path}")
+        except Exception as e:
+            UIUtils.show_error_dialog("Error Opening Updater", 
+                                     f"Failed to open updater: {str(e)}")
     
     def _on_cancel_clicked(self):
         """Handle cancel button click."""
