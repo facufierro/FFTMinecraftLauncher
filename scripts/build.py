@@ -54,11 +54,11 @@ class BuildScript:
                         return tag
             
             print("Warning: No valid git tags found, using default version")
-            return "v2.0.0"
-            
+            return "v0.0.0"
+
         except Exception as e:
             print(f"Warning: Could not get git version: {e}")
-            return "v2.0.0"
+            return "v0.0.0"
     
     def _update_config_version(self) -> None:
         """Update launcher_config.json with the current version."""
