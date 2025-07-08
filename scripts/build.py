@@ -87,6 +87,36 @@ class BuildScript:
         except Exception as e:
             print(f"Warning: Could not update launcher version in config: {e}")
     
+    def _update_launcher_version_constant(self) -> None:
+        """Update the LAUNCHER_VERSION constant in launcher.py before building."""
+        try:
+            launcher_file = self.project_root / "launcher" / "src" / "core" / "launcher.py"
+            version_clean = self.version.lstrip('v')  # Remove 'v' prefix if present
+            
+            if launcher_file.exists():
+                # Read the current file
+                with open(launcher_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Replace the version constant
+                import re
+                new_content = re.sub(
+                    r'LAUNCHER_VERSION = "[^"]*"',
+                    f'LAUNCHER_VERSION = "{version_clean}"',
+                    content
+                )
+                
+                # Write back to file
+                with open(launcher_file, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                
+                print(f"Updated LAUNCHER_VERSION constant to: {version_clean}")
+            else:
+                print(f"Warning: Launcher file not found: {launcher_file}")
+            
+        except Exception as e:
+            print(f"Warning: Could not update launcher version constant: {e}")
+    
     def _check_pyinstaller(self) -> bool:
         """Check if PyInstaller is installed, install if needed."""
         try:
@@ -198,6 +228,9 @@ class BuildScript:
         
         # Update launcher_config.json with current version
         self._update_config_version()
+        
+        # Update launcher version constant before building
+        self._update_launcher_version_constant()
         
         # Check PyInstaller
         if not self._check_pyinstaller():

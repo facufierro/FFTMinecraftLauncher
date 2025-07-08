@@ -16,45 +16,16 @@ class LauncherVersionService:
         self.launcher_repo = "facufierro/FFTMinecraftLauncher"
     
     def get_current_launcher_version(self) -> str:
-        """Get the current launcher version from config file or default."""
-        # Try to read from launcher_config.json file first
+        """Get the current launcher version from the built-in constant."""
         try:
-            from pathlib import Path
-            import sys
-            import json
-            
-            # Try multiple locations for launcher_config.json
-            possible_locations = []
-            
-            if getattr(sys, 'frozen', False):
-                # Running as executable - look relative to exe
-                exe_dir = Path(sys.executable).parent
-                possible_locations.append(exe_dir / "launcher_config.json")
-                possible_locations.append(exe_dir.parent / "launcher_config.json")
-                possible_locations.append(exe_dir.parent / "launcher" / "launcher_config.json")
-            else:
-                # Running as script - look relative to project root
-                script_dir = Path(__file__).parent.parent.parent.parent
-                possible_locations.append(script_dir / "launcher" / "launcher_config.json")
-                possible_locations.append(script_dir / "launcher_config.json")
-            
-            for config_file in possible_locations:
-                if config_file.exists():
-                    with open(config_file, 'r', encoding='utf-8') as f:
-                        config_data = json.load(f)
-                        version = config_data.get('launcher_version')
-                        if version:
-                            self.logger.info(f"Found launcher version in config at {config_file}: {version}")
-                            return version
-            
-            self.logger.warning("No launcher_version found in config files, using default")
-            
-        except Exception as e:
-            self.logger.error(f"Error reading launcher version from config: {e}")
-        
-        # Fallback to default version (should be lower than any real release)
-        default_version = "0.0.0"
-        return default_version
+            from ..core.launcher import LAUNCHER_VERSION
+            self.logger.info(f"Found launcher version: {LAUNCHER_VERSION}")
+            return LAUNCHER_VERSION
+        except ImportError:
+            self.logger.warning("Could not import version constant, using fallback")
+            # Fallback to default version (should be lower than any real release)
+            default_version = "0.0.0"
+            return default_version
     
     def get_latest_launcher_version(self) -> Optional[str]:
         """Get the latest launcher version from GitHub releases."""

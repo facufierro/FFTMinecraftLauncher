@@ -12,6 +12,9 @@ from ..services.launcher_version_service import LauncherVersionService
 from ..utils.logging_utils import get_logger, setup_logger
 from .events import LauncherEvents, EventType
 
+# Version constant - updated automatically by build script
+LAUNCHER_VERSION = "0.0.0"
+
 
 class LauncherCore:
     """Core launcher logic and coordination."""
