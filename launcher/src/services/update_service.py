@@ -869,6 +869,10 @@ class UpdateService:
             return
         
         try:
+            # For mods folder, remove files that exist locally but not in the repo
+            if source.name.lower() == "mods" and destination.exists():
+                self._cleanup_unwanted_mods(source, destination)
+            
             # Set up exclusion patterns for mods folder
             exclude_patterns = None
             if source.name.lower() == "mods":
@@ -883,6 +887,51 @@ class UpdateService:
             self.logger.error(f"Failed to sync directory {source.name}: {e}")
             raise
     
+    def _cleanup_unwanted_mods(self, source: Path, destination: Path) -> None:
+        """Remove mods that exist locally but not in the repository.
+        
+        Args:
+            source: Source mods directory from repository
+            destination: Local mods directory
+        """
+        try:
+            # Get list of mod files in the repository
+            repo_mods = set()
+            for file_path in source.rglob('*.jar'):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(source)
+                    # Skip .connector folder
+                    if not (str(rel_path).startswith('.connector') or '.connector' in str(rel_path)):
+                        repo_mods.add(rel_path)
+            
+            # Get list of mod files in local directory
+            local_mods = []
+            for file_path in destination.rglob('*.jar'):
+                if file_path.is_file():
+                    rel_path = file_path.relative_to(destination)
+                    # Skip .connector folder
+                    if not (str(rel_path).startswith('.connector') or '.connector' in str(rel_path)):
+                        local_mods.append((rel_path, file_path))
+            
+            # Remove local mods that don't exist in the repository
+            removed_count = 0
+            for rel_path, full_path in local_mods:
+                if rel_path not in repo_mods:
+                    try:
+                        full_path.unlink()
+                        self.logger.info(f"Removed unwanted mod: {rel_path}")
+                        removed_count += 1
+                    except Exception as e:
+                        self.logger.warning(f"Failed to remove mod {rel_path}: {e}")
+            
+            if removed_count > 0:
+                self.logger.info(f"Removed {removed_count} unwanted mod(s)")
+            else:
+                self.logger.info("No unwanted mods to remove")
+                
+        except Exception as e:
+            self.logger.warning(f"Error during mod cleanup: {e}")
+
     def _sync_file(self, source: Path, destination: Path) -> None:
         """Sync a file from source to destination.
         
