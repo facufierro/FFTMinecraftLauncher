@@ -1,44 +1,44 @@
 {
-  "profiles" : {
-    "036c7fff3305fb12e45ae0f67e353d56" : {
-      "created" : "1970-01-02T00:00:00.000Z",
-      "icon" : "Grass",
-      "lastUsed" : "1970-01-02T00:00:00.000Z",
-      "lastVersionId" : "latest-release",
-      "name" : "",
-      "type" : "latest-release"
+  "profiles": {
+    "036c7fff3305fb12e45ae0f67e353d56": {
+      "created": "1970-01-02T00:00:00.000Z",
+      "icon": "Grass",
+      "lastUsed": "1970-01-02T00:00:00.000Z",
+      "lastVersionId": "latest-release",
+      "name": "",
+      "type": "latest-release"
     },
-    "4dad12d3f0f9060f932f11947010c88c" : {
-      "created" : "1970-01-01T00:00:00.000Z",
-      "icon" : "Dirt",
-      "lastUsed" : "1970-01-01T00:00:00.000Z",
-      "lastVersionId" : "latest-snapshot",
-      "name" : "",
-      "type" : "latest-snapshot"
+    "4dad12d3f0f9060f932f11947010c88c": {
+      "created": "1970-01-01T00:00:00.000Z",
+      "icon": "Dirt",
+      "lastUsed": "1970-01-01T00:00:00.000Z",
+      "lastVersionId": "latest-snapshot",
+      "name": "",
+      "type": "latest-snapshot"
     },
-    "6a5551cf97c944679dde959e4de06abf" : {
-      "created" : "2024-01-01T00:00:00.000Z",
-      "gameDir" : "D:\\Games\\Minecraft\\FFTLauncher\\instance",
-      "icon" : "Furnace",
-      "javaArgs" : "-Xmx8G -Xms8G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M",
-      "lastUsed" : "2025-07-11T12:44:59.040Z",
-      "lastVersionId" : "neoforge-21.1.190",
-      "name" : "FFTClient",
-      "type" : "custom"
+    "a4e7d1b6b0974c87bd556f8db97afda3": {
+      "created": "2024-01-01T00:00:00.000Z",
+      "gameDir": "D:\\Games\\Minecraft\\FFTLauncher\\instance",
+      "icon": "Furnace",
+      "javaArgs": "-Xmx8G -Xms4G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M",
+      "lastUsed": "2025-07-11T16:45:20.8297Z",
+      "lastVersionId": "neoforge-21.1.190",
+      "name": "FFTClient",
+      "type": "custom"
     }
   },
-  "settings" : {
-    "crashAssistance" : false,
-    "enableAdvanced" : false,
-    "enableAnalytics" : true,
-    "enableHistorical" : false,
-    "enableReleases" : true,
-    "enableSnapshots" : false,
-    "keepLauncherOpen" : false,
-    "profileSorting" : "ByLastPlayed",
-    "showGameLog" : false,
-    "showMenu" : false,
-    "soundOn" : false
+  "settings": {
+    "crashAssistance": false,
+    "enableAdvanced": false,
+    "enableAnalytics": true,
+    "enableHistorical": false,
+    "enableReleases": true,
+    "enableSnapshots": false,
+    "keepLauncherOpen": false,
+    "profileSorting": "ByLastPlayed",
+    "showGameLog": false,
+    "showMenu": false,
+    "soundOn": false
   },
-  "version" : 4
+  "version": 4
 }

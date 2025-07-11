@@ -1,1 +1,1 @@
-# Handles Minecraft profiles
+# handles minecraft profiles
