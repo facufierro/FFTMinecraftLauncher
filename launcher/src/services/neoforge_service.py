@@ -32,7 +32,7 @@ class NeoForgeService:
         """
         self.config = config
         self.logger = get_logger()
-        self.minecraft_version = "1.21.1"  # Base version - NeoForge 21.1.186 supports 1.21.1+
+        self.minecraft_version = "1.21.1"  # Base version - NeoForge 21.1.190 supports 1.21.1+
         self.neoforge_version = "21.1.190"  # Latest stable NeoForge for 1.21.x
         
     def get_available_instances(self) -> List[str]:
@@ -115,6 +115,9 @@ class NeoForgeService:
         try:
             self.logger.info(f"Installing NeoForge {self.neoforge_version} to path: {instance_path}")
             
+            # Clean up old NeoForge installations first
+            self._cleanup_old_neoforge_installations(instance_path)
+            
             # Download NeoForge installer
             installer_path = self._download_neoforge_installer()
             if not installer_path:
@@ -131,7 +134,7 @@ class NeoForgeService:
             install_cmd = [
                 java_exe,
                 "-jar", str(installer_path),
-                "--installClient", str(instance_path)
+                "--installClient"
             ]
             
             # Configure process creation flags to hide console on Windows
@@ -139,11 +142,16 @@ class NeoForgeService:
             if os.name == 'nt':  # Windows
                 creation_flags = subprocess.CREATE_NO_WINDOW
             
+            # Set MINECRAFT_LAUNCHER_HOME environment variable for the installer
+            env = os.environ.copy()
+            env['MINECRAFT_LAUNCHER_HOME'] = str(instance_path)
+            
             result = subprocess.run(
                 install_cmd, 
                 capture_output=True, 
                 text=True, 
                 cwd=str(instance_path),
+                env=env,
                 creationflags=creation_flags
             )
             
@@ -196,6 +204,9 @@ class NeoForgeService:
                 self.logger.error(f"Instance '{instance_name}' not found")
                 return False
             
+            # Clean up old NeoForge installations first
+            self._cleanup_old_neoforge_installations(instance_path)
+            
             # Download NeoForge installer
             installer_path = self._download_neoforge_installer()
             if not installer_path:
@@ -212,7 +223,7 @@ class NeoForgeService:
             install_cmd = [
                 java_exe,
                 "-jar", str(installer_path),
-                "--installClient", str(instance_path)
+                "--installClient"
             ]
             
             # Configure process creation flags to hide console on Windows
@@ -220,11 +231,16 @@ class NeoForgeService:
             if os.name == 'nt':  # Windows
                 creation_flags = subprocess.CREATE_NO_WINDOW
             
+            # Set MINECRAFT_LAUNCHER_HOME environment variable for the installer
+            env = os.environ.copy()
+            env['MINECRAFT_LAUNCHER_HOME'] = str(instance_path)
+            
             result = subprocess.run(
                 install_cmd, 
                 capture_output=True, 
                 text=True, 
                 cwd=str(instance_path),
+                env=env,
                 creationflags=creation_flags
             )
             
@@ -357,11 +373,20 @@ class NeoForgeService:
             installer_url = f"https://maven.neoforged.net/releases/net/neoforged/neoforge/{self.neoforge_version}/neoforge-{self.neoforge_version}-installer.jar"
             installer_path = temp_dir / f"neoforge-{self.neoforge_version}-installer.jar"
             
-            if not installer_path.exists():
-                self.logger.info(f"Downloading NeoForge {self.neoforge_version} installer...")
-                urllib.request.urlretrieve(installer_url, installer_path)
+            # Always download fresh installer to ensure we have the latest
+            if installer_path.exists():
+                self.logger.info(f"Removing existing installer: {installer_path}")
+                installer_path.unlink()
             
-            return installer_path
+            self.logger.info(f"Downloading NeoForge {self.neoforge_version} installer from {installer_url}")
+            urllib.request.urlretrieve(installer_url, installer_path)
+            
+            if installer_path.exists() and installer_path.stat().st_size > 0:
+                self.logger.info(f"Successfully downloaded installer: {installer_path}")
+                return installer_path
+            else:
+                self.logger.error("Downloaded installer is empty or missing")
+                return None
             
         except Exception as e:
             self.logger.error(f"Failed to download NeoForge installer: {e}")
@@ -423,26 +448,45 @@ class NeoForgeService:
         # Check for NeoForge version JSON
         versions_dir = instance_path / "versions"
         if not versions_dir.exists():
+            self.logger.debug(f"Versions directory not found: {versions_dir}")
             return False
         
-        # Look for NeoForge version directory
-        neoforge_version_name = f"neoforge-{self.neoforge_version}"
-        neoforge_version_dir = versions_dir / neoforge_version_name
+        # List all directories in versions to see what was actually installed
+        try:
+            version_dirs = [d.name for d in versions_dir.iterdir() if d.is_dir()]
+            self.logger.info(f"Found version directories: {version_dirs}")
+        except Exception as e:
+            self.logger.warning(f"Could not list version directories: {e}")
+            version_dirs = []
         
-        if neoforge_version_dir.exists():
-            version_json = neoforge_version_dir / f"{neoforge_version_name}.json"
-            if version_json.exists():
-                return True
+        # Look for NeoForge version directory - try multiple formats
+        possible_version_names = [
+            f"neoforge-{self.neoforge_version}",
+            f"{self.minecraft_version}-neoforge-{self.neoforge_version}",
+            f"{self.minecraft_version}-{self.neoforge_version}",
+            f"neoforge-{self.minecraft_version}-{self.neoforge_version}"
+        ]
         
-        # Also check for combined version names
-        combined_version_name = f"{self.minecraft_version}-{self.neoforge_version}"
-        combined_version_dir = versions_dir / combined_version_name
+        for version_name in possible_version_names:
+            version_dir = versions_dir / version_name
+            if version_dir.exists():
+                version_json = version_dir / f"{version_name}.json"
+                if version_json.exists():
+                    self.logger.info(f"Found NeoForge installation: {version_name}")
+                    return True
+                else:
+                    self.logger.debug(f"Version directory exists but no JSON: {version_dir}")
         
-        if combined_version_dir.exists():
-            version_json = combined_version_dir / f"{combined_version_name}.json"
-            if version_json.exists():
-                return True
+        # Check if any directory contains neoforge and our version
+        for version_dir_name in version_dirs:
+            if "neoforge" in version_dir_name.lower() and self.neoforge_version in version_dir_name:
+                version_dir = versions_dir / version_dir_name
+                version_json = version_dir / f"{version_dir_name}.json"
+                if version_json.exists():
+                    self.logger.info(f"Found NeoForge installation (pattern match): {version_dir_name}")
+                    return True
         
+        self.logger.error(f"NeoForge {self.neoforge_version} installation not found in {versions_dir}")
         return False
     
     def is_neoforge_installed(self, instance_name: str) -> bool:
@@ -561,3 +605,48 @@ class NeoForgeService:
         except Exception as e:
             self.logger.error(f"Failed to configure default resource pack: {e}")
             return False
+    
+    def _cleanup_old_neoforge_installations(self, instance_path: Path) -> None:
+        """Clean up old NeoForge installations to avoid conflicts.
+        
+        Args:
+            instance_path: Path to the instance directory
+        """
+        try:
+            versions_dir = instance_path / "versions"
+            if not versions_dir.exists():
+                return
+            
+            # Find and remove old NeoForge versions
+            for version_dir in versions_dir.iterdir():
+                if version_dir.is_dir() and "neoforge" in version_dir.name.lower():
+                    # Don't remove if it's already the version we want
+                    if self.neoforge_version in version_dir.name:
+                        continue
+                    
+                    self.logger.info(f"Removing old NeoForge installation: {version_dir.name}")
+                    try:
+                        shutil.rmtree(version_dir)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to remove old NeoForge version {version_dir.name}: {e}")
+                        
+            # Also clean up launcher profiles that might reference old versions
+            launcher_profiles = instance_path / "launcher_profiles.json"
+            if launcher_profiles.exists():
+                try:
+                    with open(launcher_profiles, 'r', encoding='utf-8') as f:
+                        profiles = json.load(f)
+                    
+                    modified = False
+                    for profile_id, profile_data in profiles.get("profiles", {}).items():
+                        if "lastVersionId" in profile_data and "neoforge" in profile_data["lastVersionId"].lower():
+                            if self.neoforge_version not in profile_data["lastVersionId"]:
+                                self.logger.info(f"Updating profile {profile_id} to use latest NeoForge")
+                                # Will be updated after successful installation
+                                modified = True
+                    
+                except Exception as e:
+                    self.logger.warning(f"Failed to clean up launcher profiles: {e}")
+                    
+        except Exception as e:
+            self.logger.warning(f"Failed to cleanup old NeoForge installations: {e}")
