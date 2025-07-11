@@ -705,9 +705,37 @@ class NeoForgeService:
             target_profiles = instance_path / "launcher_profiles.json"
             
             if default_profiles.exists() and not target_profiles.exists():
-                # Only copy if target doesn't exist to avoid overwriting custom configs
-                shutil.copy2(default_profiles, target_profiles)
-                self.logger.info("Copied launcher profiles")
+                # Copy and clean up profiles to avoid corrupted icon data
+                try:
+                    import json
+                    with open(default_profiles, 'r', encoding='utf-8') as f:
+                        profiles_data = json.load(f)
+                    
+                    # Fix corrupted/long icon strings in profiles before copying
+                    for profile_id, profile_data in profiles_data.get("profiles", {}).items():
+                        if "icon" in profile_data:
+                            icon_value = profile_data["icon"]
+                            # Check if icon is a very long string (likely base64 encoded image)
+                            if isinstance(icon_value, str) and len(icon_value) > 100:
+                                self.logger.info(f"Fixing corrupted long icon string in profile: {profile_data.get('name', profile_id)}")
+                                profile_data["icon"] = "Furnace"  # Use safe default icon
+                            # Also fix any other problematic icon formats
+                            elif icon_value is None or icon_value == "":
+                                profile_data["icon"] = "Furnace"
+                        elif profile_data.get("type") == "custom":
+                            # Add missing icon to custom profiles
+                            profile_data["icon"] = "Furnace"
+                    
+                    # Write the cleaned profiles to the target location
+                    with open(target_profiles, 'w', encoding='utf-8') as f:
+                        json.dump(profiles_data, f, indent=2)
+                    
+                    self.logger.info("Copied and cleaned launcher profiles")
+                except Exception as e:
+                    # Fallback to simple copy if JSON processing fails
+                    self.logger.warning(f"Failed to clean profiles during copy, using simple copy: {e}")
+                    shutil.copy2(default_profiles, target_profiles)
+                    self.logger.info("Copied launcher profiles")
             
             # Clean up the installation from default location to avoid confusion
             try:

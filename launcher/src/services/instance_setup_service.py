@@ -162,6 +162,10 @@ class InstanceSetupService:
             instance_path: Path to the instance directory
         """
         try:
+            # First, clean up any corrupted profiles in the instance and main .minecraft
+            self.cleanup_corrupted_launcher_profiles(instance_path)
+            self.cleanup_corrupted_launcher_profiles()  # Clean main .minecraft profiles too
+            
             # Create a minimal launcher_profiles.json in the instance directory itself
             instance_profiles_path = instance_path / "launcher_profiles.json"
             
@@ -195,6 +199,31 @@ class InstanceSetupService:
             if launcher_profiles_path.exists():
                 with open(launcher_profiles_path, 'r', encoding='utf-8') as f:
                     profiles_data = json.load(f)
+                
+                # Fix any corrupted/long icon strings in existing profiles
+                profiles_need_cleanup = False
+                for profile_id, profile_data in profiles_data.get("profiles", {}).items():
+                    if "icon" in profile_data:
+                        icon_value = profile_data["icon"]
+                        # Check if icon is a very long string (likely base64 encoded image)
+                        if isinstance(icon_value, str) and len(icon_value) > 100:
+                            self.logger.info(f"Fixing corrupted long icon string in profile: {profile_data.get('name', profile_id)}")
+                            profile_data["icon"] = "Furnace"  # Use safe default icon
+                            profiles_need_cleanup = True
+                        # Also fix any other problematic icon formats
+                        elif icon_value is None or icon_value == "":
+                            profile_data["icon"] = "Furnace"
+                            profiles_need_cleanup = True
+                    elif profile_data.get("type") == "custom":
+                        # Add missing icon to custom profiles
+                        profile_data["icon"] = "Furnace"
+                        profiles_need_cleanup = True
+                
+                # Save cleaned profiles if needed
+                if profiles_need_cleanup:
+                    with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
+                        json.dump(profiles_data, f, indent=2)
+                    self.logger.info("Cleaned up corrupted profile icons")
             else:
                 # Create a complete launcher_profiles.json structure that the Minecraft launcher expects
                 profiles_data = {
@@ -437,3 +466,68 @@ class InstanceSetupService:
             
         except Exception as e:
             self.logger.warning(f"Failed to create assets directory structure: {e}")
+    
+    def cleanup_corrupted_launcher_profiles(self, instance_path: Optional[Path] = None) -> bool:
+        """Clean up corrupted launcher profiles with extremely long icon strings.
+        
+        This fixes profiles that have corrupted icon data (like base64 encoded images)
+        by replacing them with safe default icons.
+        
+        Args:
+            instance_path: Optional path to instance directory. If None, cleans main .minecraft profiles.
+            
+        Returns:
+            True if cleanup was successful, False otherwise.
+        """
+        try:
+            if instance_path:
+                # Clean instance-specific launcher profiles
+                profiles_path = instance_path / "launcher_profiles.json"
+            else:
+                # Clean main .minecraft launcher profiles
+                minecraft_dir = Path(os.environ['APPDATA']) / ".minecraft"
+                profiles_path = minecraft_dir / "launcher_profiles.json"
+            
+            if not profiles_path.exists():
+                self.logger.info(f"No launcher profiles found at {profiles_path}")
+                return True
+            
+            # Load profiles
+            with open(profiles_path, 'r', encoding='utf-8') as f:
+                profiles_data = json.load(f)
+            
+            profiles_cleaned = False
+            
+            # Fix corrupted/long icon strings in profiles
+            for profile_id, profile_data in profiles_data.get("profiles", {}).items():
+                if "icon" in profile_data:
+                    icon_value = profile_data["icon"]
+                    # Check if icon is a very long string (likely base64 encoded image)
+                    if isinstance(icon_value, str) and len(icon_value) > 100:
+                        self.logger.info(f"Fixing corrupted long icon string in profile: {profile_data.get('name', profile_id)}")
+                        profile_data["icon"] = "Furnace"  # Use safe default icon
+                        profiles_cleaned = True
+                    # Also fix any other problematic icon formats
+                    elif icon_value is None or icon_value == "":
+                        self.logger.info(f"Fixing empty icon in profile: {profile_data.get('name', profile_id)}")
+                        profile_data["icon"] = "Furnace"
+                        profiles_cleaned = True
+                elif profile_data.get("type") == "custom":
+                    # Add missing icon to custom profiles
+                    self.logger.info(f"Adding missing icon to custom profile: {profile_data.get('name', profile_id)}")
+                    profile_data["icon"] = "Furnace"
+                    profiles_cleaned = True
+            
+            # Save cleaned profiles if changes were made
+            if profiles_cleaned:
+                with open(profiles_path, 'w', encoding='utf-8') as f:
+                    json.dump(profiles_data, f, indent=2)
+                self.logger.info(f"Successfully cleaned corrupted profiles in {profiles_path}")
+            else:
+                self.logger.info(f"No corrupted profiles found in {profiles_path}")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to cleanup launcher profiles: {e}")
+            return False
