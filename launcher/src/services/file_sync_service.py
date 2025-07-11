@@ -148,20 +148,54 @@ class FileSyncService:
             # Ensure instance directory exists (it should be created automatically)
             instance_path.mkdir(parents=True, exist_ok=True)
             
-            # Sync everything from the repo to the instance
+            # Define what should be synced
+            always_replace_folders = {'configureddefaults', 'kubejs', 'local', 'modflared'}
+            always_replace_files = {'servers.dat'}
+            conditional_sync_folders = {'mods'}  # Only sync if there are inconsistencies
+            skip_folders = {'shaderpacks'}  # Don't touch these
+            special_folders = {'resourcepacks'}  # Special handling
+            
+            # Sync items from the repo to the instance based on rules
             for item in source_path.iterdir():
+                item_name_lower = item.name.lower()
+                
                 if item.is_dir():
                     dest_folder = instance_path / item.name
-                    self.sync_directory(item, dest_folder)
+                    
+                    if item_name_lower in always_replace_folders:
+                        self._update_progress(f"Force replacing folder: {item.name}")
+                        self.logger.info(f"Force replacing folder {item.name} from repository")
+                        self.sync_directory_force(item, dest_folder)
+                    elif item_name_lower in conditional_sync_folders:
+                        # For mods, only sync if there are inconsistencies
+                        if self._should_sync_mods_folder(item, dest_folder):
+                            self._update_progress(f"Syncing mods folder due to inconsistencies")
+                            self.sync_directory(item, dest_folder)
+                        else:
+                            self.logger.info("Mods folder is consistent - skipping sync")
+                    elif item_name_lower in special_folders:
+                        # Special handling for resourcepacks
+                        self._handle_resourcepacks_folder(item, dest_folder)
+                    elif item_name_lower not in skip_folders:
+                        # For other folders, don't sync unless explicitly needed
+                        self.logger.debug(f"Skipping folder: {item.name}")
+                        
                 elif item.is_file():
-                    dest_file = instance_path / item.name
-                    self.sync_file(item, dest_file)
+                    if item_name_lower in always_replace_files:
+                        dest_file = instance_path / item.name
+                        self._update_progress(f"Force replacing file: {item.name}")
+                        self.logger.info(f"Force replacing file {item.name} from repository")
+                        self.sync_file_force(item, dest_file)
+                    else:
+                        # Skip other files unless they're critical
+                        self.logger.debug(f"Skipping file: {item.name}")
             
-            # After syncing files, check if we need to configure resource packs
-            self.configure_resource_packs_after_sync(instance_path)
+            # After syncing files, configure resource pack priority using NeoForge service
+            self._configure_resource_pack_priority(instance_path)
             
-            # Verify mods folder post-sync
-            self.mods_management.verify_mods_folder_post_sync(source_path, instance_path)
+            # Verify mods folder post-sync if it was synced
+            if (source_path / "mods").exists():
+                self.mods_management.verify_mods_folder_post_sync(source_path, instance_path)
             
             return True
             
@@ -176,11 +210,6 @@ class FileSyncService:
             destination: Destination directory path
         """
         self._update_progress(f"Syncing directory: {source.name}")
-        
-        # First check if the directory actually needs updating
-        if destination.exists() and not self.file_comparison.compare_folder_contents(source, destination):
-            self.logger.info(f"Directory {source.name} is already up to date - skipping sync")
-            return
         
         try:
             # For mods folder, remove files that exist locally but not in the repo
@@ -197,6 +226,7 @@ class FileSyncService:
                 self.logger.info(f"Successfully synced directory: {source.name}")
             else:
                 raise Exception(f"Failed to sync directory {source.name}")
+                
         except Exception as e:
             self.logger.error(f"Failed to sync directory {source.name}: {e}")
             raise
@@ -217,8 +247,111 @@ class FileSyncService:
             self.logger.error(f"Failed to sync file {source.name}: {e}")
             raise
     
-    def configure_resource_packs_after_sync(self, instance_path: Path) -> None:
-        """Configure resource packs after files have been synced.
+    def sync_file_force(self, source: Path, destination: Path) -> None:
+        """Force sync a file from source to destination, always overwriting.
+        
+        Args:
+            source: Source file path
+            destination: Destination file path
+        """
+        self._update_progress(f"Force replacing file: {source.name}")
+        
+        try:
+            if not self.file_ops.safe_copy(source, destination):
+                raise Exception(f"Failed to force copy file {source.name}")
+        except Exception as e:
+            self.logger.error(f"Failed to force sync file {source.name}: {e}")
+            raise
+
+    def sync_directory_force(self, source: Path, destination: Path) -> None:
+        """Force sync a directory from source to destination, always replacing.
+        
+        Args:
+            source: Source directory path
+            destination: Destination directory path
+        """
+        self._update_progress(f"Force replacing directory: {source.name}")
+        
+        try:
+            # Remove existing directory if it exists
+            if destination.exists():
+                self.file_ops.safe_delete(destination)
+            
+            # Copy the entire directory
+            if self.file_ops.sync_directories(source, destination):
+                self.logger.info(f"Successfully force synced directory: {source.name}")
+            else:
+                raise Exception(f"Failed to force sync directory {source.name}")
+                
+        except Exception as e:
+            self.logger.error(f"Failed to force sync directory {source.name}: {e}")
+            raise
+
+    def _should_sync_mods_folder(self, source: Path, destination: Path) -> bool:
+        """Check if mods folder should be synced due to inconsistencies.
+        
+        Args:
+            source: Source mods folder
+            destination: Destination mods folder
+            
+        Returns:
+            True if mods folder should be synced, False otherwise
+        """
+        try:
+            # If destination doesn't exist, we should sync
+            if not destination.exists():
+                self.logger.info("Mods folder doesn't exist - sync needed")
+                return True
+            
+            # Check if there are differences using file comparison
+            if self.file_comparison.compare_folder_contents(source, destination):
+                self.logger.info("Mods folder has inconsistencies - sync needed")
+                return True
+            
+            self.logger.info("Mods folder is consistent - no sync needed")
+            return False
+            
+        except Exception as e:
+            self.logger.warning(f"Error checking mods folder consistency: {e}")
+            # If we can't determine, err on the side of syncing
+            return True
+
+    def _handle_resourcepacks_folder(self, source: Path, destination: Path) -> None:
+        """Handle resourcepacks folder with special priority logic.
+        
+        Args:
+            source: Source resourcepacks folder
+            destination: Destination resourcepacks folder
+        """
+        try:
+            self._update_progress("Handling resourcepacks with priority...")
+            
+            # Ensure destination exists
+            destination.mkdir(parents=True, exist_ok=True)
+            
+            # Copy all resource packs from source to destination
+            # but don't overwrite existing ones (users might have their own packs)
+            for pack_file in source.iterdir():
+                if pack_file.is_file():
+                    dest_pack = destination / pack_file.name
+                    
+                    # For FFT resource packs, always update them
+                    if pack_file.name.lower().startswith(('fft-resourcepack', 'fft_resourcepack')):
+                        self.logger.info(f"Updating FFT resource pack: {pack_file.name}")
+                        self.file_ops.safe_copy(pack_file, dest_pack)
+                    elif not dest_pack.exists():
+                        # For other packs, only copy if they don't exist
+                        self.logger.info(f"Adding new resource pack: {pack_file.name}")
+                        self.file_ops.safe_copy(pack_file, dest_pack)
+                    else:
+                        self.logger.debug(f"Keeping existing resource pack: {pack_file.name}")
+                        
+        except Exception as e:
+            self.logger.warning(f"Error handling resourcepacks folder: {e}")
+            # Don't raise - this is not critical for the sync process
+
+    def _configure_resource_pack_priority(self, instance_path: Path) -> None:
+        """Configure resource pack priority to ensure FFT pack has highest priority.
         
         Args:
             instance_path: Path to the instance directory
@@ -232,23 +365,12 @@ class FileSyncService:
                 self.logger.debug("No resourcepacks directory found - skipping resource pack configuration")
                 return
             
-            self.logger.info(f"Checking for resource packs in: {resourcepacks_dir}")
+            self.logger.info(f"Configuring resource pack priority in: {resourcepacks_dir}")
             
-            # List all files in resourcepacks directory for debugging
-            pack_files = list(resourcepacks_dir.iterdir())
-            if pack_files:
-                self.logger.info(f"Found {len(pack_files)} files in resourcepacks directory:")
-                for pack_file in pack_files:
-                    self.logger.info(f"  - {pack_file.name}")
-            else:
-                self.logger.info("No files found in resourcepacks directory")
-                return
-            
-            # Look for FFT resource packs
-            fft_pack_found = False
-            for pack_file in pack_files:
-                if pack_file.name.startswith("fft-resourcepack") or pack_file.name.startswith("fft_resourcepack"):
-                    self._update_progress("Configuring resource pack...")
+            # Look for FFT resource packs and configure them with highest priority
+            for pack_file in resourcepacks_dir.iterdir():
+                if pack_file.is_file() and pack_file.name.lower().startswith(('fft-resourcepack', 'fft_resourcepack')):
+                    self._update_progress("Configuring FFT resource pack with highest priority...")
                     self.logger.info(f"Found FFT resource pack: {pack_file.name}")
                     
                     # Use NeoForge service to configure the resource pack
@@ -257,17 +379,12 @@ class FileSyncService:
                     
                     success = neoforge_service.configure_default_resource_pack(instance_path, pack_name)
                     if success:
-                        self.logger.info(f"Successfully configured resource pack: {pack_name}")
-                        self._update_progress("Resource pack configured successfully")
+                        self.logger.info(f"Successfully configured FFT resource pack with highest priority: {pack_name}")
+                        self._update_progress("FFT resource pack configured with highest priority")
                     else:
-                        self.logger.warning(f"Failed to configure resource pack: {pack_name}")
-                    
-                    fft_pack_found = True
+                        self.logger.warning(f"Failed to configure FFT resource pack: {pack_name}")
                     break
-            
-            if not fft_pack_found:
-                self.logger.info("No FFT resource packs found in resourcepacks directory")
-                
+                        
         except Exception as e:
-            self.logger.warning(f"Error configuring resource packs: {e}")
-            # Don't raise the error - this is not critical for the update process
+            self.logger.warning(f"Error configuring resource pack priority: {e}")
+            # Don't raise - this is not critical for the sync process
