@@ -3,11 +3,17 @@
 from PyQt6.QtWidgets import QPushButton
 
 class LaunchButton(QPushButton):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, color="#4CAF50"):
         super().__init__("Launch", parent)
         self.setFixedSize(160, 80)
         self.center_x = 0
         self.center_y = 0
+        self.color = color
+        self.set_color(self.color)
+
+    def set_color(self, color):
+        self.color = color
+        self.setStyleSheet(f"background-color: {self.color}; color: white; border-radius: 10px; font-size: 18px;")
 
     def set_center(self, x, y):
         self.center_x = x
