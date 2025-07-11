@@ -154,7 +154,6 @@ class InstanceSetupService:
                 
         except Exception as e:
             raise Exception(f"NeoForge installation failed: {e}")
-    
     def ensure_launcher_profile(self, instance_path: Path) -> None:
         """Ensure a Minecraft launcher profile exists for this instance.
         
@@ -162,164 +161,24 @@ class InstanceSetupService:
             instance_path: Path to the instance directory
         """
         try:
-            # First, clean up any corrupted profiles in the instance and main .minecraft
-            self.cleanup_corrupted_launcher_profiles(instance_path)
-            self.cleanup_corrupted_launcher_profiles()  # Clean main .minecraft profiles too
+            from .launcher_profiles_service import LauncherProfilesService
+            profiles_service = LauncherProfilesService(self.config)
             
-            # Create a minimal launcher_profiles.json in the instance directory itself
-            instance_profiles_path = instance_path / "launcher_profiles.json"
+            # Clean up any corrupted profiles first
+            profiles_service.cleanup_corrupted_profiles()
             
-            if not instance_profiles_path.exists():
-                # Create minimal launcher profile structure for NeoForge installer
-                minimal_profile = {
-                    "profiles": {
-                        "default": {
-                            "name": "FFT Launcher Instance",
-                            "type": "latest-release",
-                            "created": "2024-01-01T00:00:00.000Z",
-                            "lastUsed": "2024-01-01T00:00:00.000Z"
-                        }
-                    },
-                    "settings": {
-                        "enableHistorical": False,
-                        "enableSnapshots": False,
-                        "enableAdvanced": False
-                    },
-                    "version": 4
-                }
-                
-                with open(instance_profiles_path, 'w', encoding='utf-8') as f:
-                    json.dump(minimal_profile, f, indent=2)
+            # Create/update the profile for this instance
+            success = profiles_service.create_launcher_profile(instance_path, "FFTClient")
             
-            # Also ensure the main .minecraft launcher knows about this instance
-            minecraft_dir = Path(os.environ['APPDATA']) / ".minecraft"
-            launcher_profiles_path = minecraft_dir / "launcher_profiles.json"
-            
-            # Load existing profiles or create new structure
-            if launcher_profiles_path.exists():
-                with open(launcher_profiles_path, 'r', encoding='utf-8') as f:
-                    profiles_data = json.load(f)
-                
-                # Fix any corrupted/long icon strings in existing profiles
-                profiles_need_cleanup = False
-                for profile_id, profile_data in profiles_data.get("profiles", {}).items():
-                    if "icon" in profile_data:
-                        icon_value = profile_data["icon"]
-                        # Check if icon is a very long string (likely base64 encoded image)
-                        if isinstance(icon_value, str) and len(icon_value) > 100:
-                            self.logger.info(f"Fixing corrupted long icon string in profile: {profile_data.get('name', profile_id)}")
-                            profile_data["icon"] = "Furnace"  # Use safe default icon
-                            profiles_need_cleanup = True
-                        # Also fix any other problematic icon formats
-                        elif icon_value is None or icon_value == "":
-                            profile_data["icon"] = "Furnace"
-                            profiles_need_cleanup = True
-                    elif profile_data.get("type") == "custom":
-                        # Add missing icon to custom profiles
-                        profile_data["icon"] = "Furnace"
-                        profiles_need_cleanup = True
-                
-                # Save cleaned profiles if needed
-                if profiles_need_cleanup:
-                    with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
-                        json.dump(profiles_data, f, indent=2)
-                    self.logger.info("Cleaned up corrupted profile icons")
+            if success:
+                self.logger.info("Launcher profile ensured successfully")
             else:
-                # Create a complete launcher_profiles.json structure that the Minecraft launcher expects
-                profiles_data = {
-                    "profiles": {},
-                    "settings": {
-                        "crashAssistance": False,
-                        "enableAdvanced": False,
-                        "enableAnalytics": True,
-                        "enableHistorical": False,
-                        "enableReleases": True,
-                        "enableSnapshots": False,
-                        "keepLauncherOpen": False,
-                        "profileSorting": "ByLastPlayed",
-                        "showGameLog": False,
-                        "showMenu": False,
-                        "soundOn": False
-                    },
-                    "version": 4
-                }
-            
-            # Check if profile already exists for this instance
-            profile_name = "FFTClient"
-            profile_exists = False
-            profile_needs_update = False
-            
-            # Define optimized Java arguments for performance (only used for new profiles)
-            default_java_args = "-Xmx8G -Xms4G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M"
-            
-            for profile_id, profile_data in profiles_data.get("profiles", {}).items():
-                # Check by name OR by gameDir (to update existing instances)
-                if (profile_data.get("name") == profile_name or 
-                    profile_data.get("gameDir") == str(instance_path)):
-                    
-                    # Check if profile needs updating (but DON'T touch Java arguments if they exist)
-                    needs_update = False
-                    if profile_data.get("name") != profile_name:
-                        profile_data["name"] = profile_name
-                        needs_update = True
-                    if profile_data.get("gameDir") != str(instance_path):
-                        profile_data["gameDir"] = str(instance_path)
-                        needs_update = True
-                    # Get current NeoForge version dynamically
-                    current_neoforge_version = self.get_neoforge_version()
-                    if profile_data.get("lastVersionId") != current_neoforge_version:
-                        profile_data["lastVersionId"] = current_neoforge_version
-                        needs_update = True
-                    if profile_data.get("type") != "custom":
-                        profile_data["type"] = "custom"
-                        needs_update = True
-                    if profile_data.get("icon") != "Furnace":
-                        profile_data["icon"] = "Furnace"
-                        needs_update = True
-                    # NOTE: We intentionally DO NOT update javaArgs here - preserve user customizations
-                    
-                    profile_exists = True
-                    profile_needs_update = needs_update
-                    break
-            
-            # Only create new profile if it doesn't exist
-            if not profile_exists:
-                # Create new profile with optimized default Java arguments
-                profile_id = str(uuid.uuid4()).replace('-', '')
-                
-                # Get current NeoForge version dynamically
-                current_neoforge_version = self.get_neoforge_version()
-                
-                new_profile = {
-                    "created": "2024-01-01T00:00:00.000Z",
-                    "gameDir": str(instance_path),
-                    "icon": "Furnace",
-                    "javaArgs": default_java_args,
-                    "lastUsed": "2024-01-01T00:00:00.000Z",
-                    "lastVersionId": current_neoforge_version,
-                    "name": profile_name,
-                    "type": "custom"
-                }
-                
-                profiles_data["profiles"][profile_id] = new_profile
-                profile_needs_update = True
-            
-            # Only save if we made changes
-            if profile_needs_update:
-                # Ensure version field is always present before saving
-                if "version" not in profiles_data:
-                    profiles_data["version"] = 4
-                
-                with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
-                    json.dump(profiles_data, f, indent=2)
-                self.logger.info("Updated launcher profile")
-            else:
-                self.logger.info("Launcher profile already up to date")
+                self.logger.warning("Failed to ensure launcher profile")
                 
         except Exception as e:
-            self.logger.warning(f"Failed to create launcher profile: {e}")
+            self.logger.warning(f"Failed to ensure launcher profile: {e}")
             # Don't raise error - this is not critical for functionality
-    
+
     def check_and_configure_resource_packs(self, instance_path: Path) -> None:
         """Check if resource packs exist but aren't configured, and configure them.
         
@@ -467,67 +326,4 @@ class InstanceSetupService:
         except Exception as e:
             self.logger.warning(f"Failed to create assets directory structure: {e}")
     
-    def cleanup_corrupted_launcher_profiles(self, instance_path: Optional[Path] = None) -> bool:
-        """Clean up corrupted launcher profiles with extremely long icon strings.
-        
-        This fixes profiles that have corrupted icon data (like base64 encoded images)
-        by replacing them with safe default icons.
-        
-        Args:
-            instance_path: Optional path to instance directory. If None, cleans main .minecraft profiles.
-            
-        Returns:
-            True if cleanup was successful, False otherwise.
-        """
-        try:
-            if instance_path:
-                # Clean instance-specific launcher profiles
-                profiles_path = instance_path / "launcher_profiles.json"
-            else:
-                # Clean main .minecraft launcher profiles
-                minecraft_dir = Path(os.environ['APPDATA']) / ".minecraft"
-                profiles_path = minecraft_dir / "launcher_profiles.json"
-            
-            if not profiles_path.exists():
-                self.logger.info(f"No launcher profiles found at {profiles_path}")
-                return True
-            
-            # Load profiles
-            with open(profiles_path, 'r', encoding='utf-8') as f:
-                profiles_data = json.load(f)
-            
-            profiles_cleaned = False
-            
-            # Fix corrupted/long icon strings in profiles
-            for profile_id, profile_data in profiles_data.get("profiles", {}).items():
-                if "icon" in profile_data:
-                    icon_value = profile_data["icon"]
-                    # Check if icon is a very long string (likely base64 encoded image)
-                    if isinstance(icon_value, str) and len(icon_value) > 100:
-                        self.logger.info(f"Fixing corrupted long icon string in profile: {profile_data.get('name', profile_id)}")
-                        profile_data["icon"] = "Furnace"  # Use safe default icon
-                        profiles_cleaned = True
-                    # Also fix any other problematic icon formats
-                    elif icon_value is None or icon_value == "":
-                        self.logger.info(f"Fixing empty icon in profile: {profile_data.get('name', profile_id)}")
-                        profile_data["icon"] = "Furnace"
-                        profiles_cleaned = True
-                elif profile_data.get("type") == "custom":
-                    # Add missing icon to custom profiles
-                    self.logger.info(f"Adding missing icon to custom profile: {profile_data.get('name', profile_id)}")
-                    profile_data["icon"] = "Furnace"
-                    profiles_cleaned = True
-            
-            # Save cleaned profiles if changes were made
-            if profiles_cleaned:
-                with open(profiles_path, 'w', encoding='utf-8') as f:
-                    json.dump(profiles_data, f, indent=2)
-                self.logger.info(f"Successfully cleaned corrupted profiles in {profiles_path}")
-            else:
-                self.logger.info(f"No corrupted profiles found in {profiles_path}")
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Failed to cleanup launcher profiles: {e}")
-            return False
+
