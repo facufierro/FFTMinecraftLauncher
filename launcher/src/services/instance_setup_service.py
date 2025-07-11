@@ -180,7 +180,8 @@ class InstanceSetupService:
                         "enableHistorical": False,
                         "enableSnapshots": False,
                         "enableAdvanced": False
-                    }
+                    },
+                    "version": 4
                 }
                 
                 with open(instance_profiles_path, 'w', encoding='utf-8') as f:

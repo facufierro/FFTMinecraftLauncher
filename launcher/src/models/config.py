@@ -24,6 +24,7 @@ class LauncherConfig:
     # State
     current_version: Optional[str] = None
     last_check: Optional[str] = None
+    selected_instance: Optional[str] = None
     
     # Launcher version tracking
     launcher_version: Optional[str] = None

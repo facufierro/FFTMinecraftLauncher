@@ -1,5 +1,6 @@
 """Minecraft service for managing Minecraft launcher operations."""
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -88,6 +89,10 @@ class MinecraftService:
         try:
             self.logger.info("Launching Minecraft launcher...")
             
+            # Fix launcher profiles before launching to prevent "Unable to prepare assets" error
+            if not self.fix_launcher_profiles():
+                self.logger.warning("Failed to fix launcher profiles, but continuing with launch")
+            
             launcher_path = self._find_minecraft_launcher()
             if not launcher_path:
                 self.logger.error("Minecraft launcher not found")
@@ -174,13 +179,39 @@ class MinecraftService:
             if launcher_profiles_path.exists():
                 with open(launcher_profiles_path, 'r', encoding='utf-8') as f:
                     profiles_data = json.load(f)
+                
+                # Ensure version field exists
+                if "version" not in profiles_data:
+                    profiles_data["version"] = 4
+                
+                # Ensure complete settings structure exists
+                if "settings" not in profiles_data:
+                    profiles_data["settings"] = {}
+                
+                # Ensure all required settings fields exist
+                default_settings = {
+                    "enableHistorical": False,
+                    "enableSnapshots": False,
+                    "enableAdvanced": False,
+                    "crashAssistance": True,
+                    "enableReleases": True,
+                    "profileSorting": "byName"
+                }
+                
+                for key, value in default_settings.items():
+                    if key not in profiles_data["settings"]:
+                        profiles_data["settings"][key] = value
             else:
                 profiles_data = {
+                    "version": 4,
                     "profiles": {},
                     "settings": {
                         "enableHistorical": False,
                         "enableSnapshots": False,
-                        "enableAdvanced": False
+                        "enableAdvanced": False,
+                        "crashAssistance": True,
+                        "enableReleases": True,
+                        "profileSorting": "byName"
                     }
                 }
             
@@ -264,3 +295,73 @@ class MinecraftService:
             info['neoforge_installed'] = False
         
         return info
+    
+    def fix_launcher_profiles(self) -> bool:
+        """Fix launcher_profiles.json to ensure it has required fields.
+        
+        This fixes the "Unable to prepare assets for download" error by ensuring
+        the launcher_profiles.json has the correct version field and settings structure.
+        
+        Returns:
+            True if file was fixed or already correct, False if error occurred.
+        """
+        try:
+            minecraft_dir = Path(os.environ['APPDATA']) / ".minecraft"
+            launcher_profiles_path = minecraft_dir / "launcher_profiles.json"
+            
+            if not launcher_profiles_path.exists():
+                self.logger.info("launcher_profiles.json not found, will be created on next profile creation")
+                return True
+            
+            # Load existing profiles
+            with open(launcher_profiles_path, 'r', encoding='utf-8') as f:
+                profiles_data = json.load(f)
+            
+            needs_update = False
+            
+            # Check if version field exists
+            if "version" not in profiles_data:
+                self.logger.info("Adding missing version field to launcher_profiles.json")
+                profiles_data["version"] = 4
+                needs_update = True
+            
+            # Ensure profiles section exists
+            if "profiles" not in profiles_data:
+                profiles_data["profiles"] = {}
+                needs_update = True
+            
+            # Ensure complete settings structure exists
+            if "settings" not in profiles_data:
+                profiles_data["settings"] = {}
+                needs_update = True
+            
+            # Ensure all required settings fields exist
+            default_settings = {
+                "enableHistorical": False,
+                "enableSnapshots": False,
+                "enableAdvanced": False,
+                "crashAssistance": True,
+                "enableReleases": True,
+                "profileSorting": "byName"
+            }
+            
+            for key, value in default_settings.items():
+                if key not in profiles_data["settings"]:
+                    self.logger.info(f"Adding missing setting: {key}")
+                    profiles_data["settings"][key] = value
+                    needs_update = True
+            
+            # Save if changes were made
+            if needs_update:
+                self.logger.info("Updating launcher_profiles.json with required fields")
+                with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
+                    json.dump(profiles_data, f, indent=2)
+                self.logger.info("launcher_profiles.json successfully updated")
+            else:
+                self.logger.info("launcher_profiles.json already has all required fields")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to fix launcher_profiles.json: {e}")
+            return False
