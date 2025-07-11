@@ -14,7 +14,7 @@ from ..utils.github_utils import get_github_client, compare_versions, is_newer_v
 from .events import LauncherEvents, EventType
 
 # Version constant - updated automatically by build script
-LAUNCHER_VERSION = "1.1.1"
+LAUNCHER_VERSION = "1.1.2"
 
 
 class LauncherCore:

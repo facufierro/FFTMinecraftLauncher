@@ -134,7 +134,8 @@ class NeoForgeService:
             install_cmd = [
                 java_exe,
                 "-jar", str(installer_path),
-                "--installClient"
+                "--installClient",
+                "--targetDir", str(instance_path)
             ]
             
             # Configure process creation flags to hide console on Windows
@@ -223,7 +224,8 @@ class NeoForgeService:
             install_cmd = [
                 java_exe,
                 "-jar", str(installer_path),
-                "--installClient"
+                "--installClient",
+                "--targetDir", str(instance_path)
             ]
             
             # Configure process creation flags to hide console on Windows
