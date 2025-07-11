@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import QPushButton
 class LaunchButton(QPushButton):
     def __init__(self, parent=None):
         super().__init__("Launch", parent)
-        self.setFixedSize(120, 40)
+        self.setFixedSize(160, 80)
         self.center_x = 0
         self.center_y = 0
 
