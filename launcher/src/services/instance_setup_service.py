@@ -277,6 +277,10 @@ class InstanceSetupService:
             
             # Only save if we made changes
             if profile_needs_update:
+                # Ensure version field is always present before saving
+                if "version" not in profiles_data:
+                    profiles_data["version"] = 4
+                
                 with open(launcher_profiles_path, 'w', encoding='utf-8') as f:
                     json.dump(profiles_data, f, indent=2)
                 self.logger.info("Updated launcher profile")
