@@ -10,6 +10,11 @@ from ..utils.file_ops import get_file_ops
 from ..utils.logging_utils import get_logger
 
 
+class UpdateError(Exception):
+    """Exception raised for update-related errors."""
+    pass
+
+
 class UpdateService:
     """Service for managing updates and file synchronization."""
     
@@ -558,6 +563,12 @@ class UpdateService:
         if not instance_path:
             raise UpdateError("Instance path could not be determined")
         
+        # Check for NeoForge version change - if changed, perform clean installation
+        if self.check_for_neoforge_version_change():
+            self._update_progress("NeoForge version change detected - performing clean installation...")
+            self._perform_clean_installation(instance_path)
+            return
+        
         # Check if instance is already properly set up
         if self.check_instance_exists():
             self._update_progress("Instance already exists and is properly configured")
@@ -1032,8 +1043,75 @@ class UpdateService:
         from .neoforge_service import NeoForgeService
         neoforge_service = NeoForgeService(self.config)
         return f"neoforge-{neoforge_service.neoforge_version}"
-
-
-class UpdateError(Exception):
-    """Exception raised for update-related errors."""
-    pass
+    
+    def check_for_neoforge_version_change(self) -> bool:
+        """Check if the NeoForge version has changed.
+        
+        Returns:
+            True if version has changed and clean installation is needed
+        """
+        instance_path = self.config.get_selected_instance_path()
+        if not instance_path or not instance_path.exists():
+            return False
+        
+        expected_version = self._get_neoforge_version()
+        installed_version = self._get_installed_neoforge_version(instance_path)
+        
+        if installed_version is None:
+            # No NeoForge installed yet
+            return False
+        
+        version_changed = installed_version != expected_version
+        if version_changed:
+            self.logger.info(f"NeoForge version change detected: {installed_version} -> {expected_version}")
+        
+        return version_changed
+    
+    def _get_installed_neoforge_version(self, instance_path: Path) -> Optional[str]:
+        """Get the currently installed NeoForge version.
+        
+        Args:
+            instance_path: Path to the instance directory
+            
+        Returns:
+            Installed NeoForge version string or None if not found
+        """
+        versions_dir = instance_path / "versions"
+        if not versions_dir.exists():
+            return None
+        
+        # Look for NeoForge version directories
+        for version_dir in versions_dir.iterdir():
+            if version_dir.is_dir() and "neoforge" in version_dir.name.lower():
+                return version_dir.name
+        
+        return None
+    
+    def _perform_clean_installation(self, instance_path: Path) -> None:
+        """Perform a clean installation with backup and restore.
+        
+        Args:
+            instance_path: Path to the instance directory
+        """
+        try:
+            # Import here to avoid circular imports
+            from .backup_service import BackupService
+            
+            backup_service = BackupService(self.config)
+            if self.progress_callback:
+                backup_service.set_progress_callback(self.progress_callback)
+            
+            # Perform clean install (backup configs, clean instance, install fresh)
+            backup_path = backup_service.perform_clean_install(instance_path)
+            
+            # Restore configurations if backup was created
+            if backup_path:
+                self._update_progress("Restoring configurations...")
+                if backup_service.restore_instance_configs(backup_path, instance_path):
+                    self.logger.info("Configurations restored successfully")
+                else:
+                    self.logger.warning("Failed to restore some configurations")
+            
+        except Exception as e:
+            self.logger.error(f"Clean installation failed: {e}")
+            raise
