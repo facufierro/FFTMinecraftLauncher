@@ -701,8 +701,10 @@ class UpdateService:
                     if profile_data.get("gameDir") != str(instance_path):
                         profile_data["gameDir"] = str(instance_path)
                         needs_update = True
-                    if profile_data.get("lastVersionId") != "neoforge-21.1.186":
-                        profile_data["lastVersionId"] = "neoforge-21.1.186"
+                    # Get current NeoForge version dynamically
+                    current_neoforge_version = self._get_neoforge_version()
+                    if profile_data.get("lastVersionId") != current_neoforge_version:
+                        profile_data["lastVersionId"] = current_neoforge_version
                         needs_update = True
                     if profile_data.get("type") != "custom":
                         profile_data["type"] = "custom"
@@ -721,12 +723,15 @@ class UpdateService:
                 # Create new profile with optimized default Java arguments
                 profile_id = str(uuid.uuid4()).replace('-', '')
                 
+                # Get current NeoForge version dynamically
+                current_neoforge_version = self._get_neoforge_version()
+                
                 new_profile = {
                     "name": profile_name,
                     "type": "custom",
                     "created": "2024-01-01T00:00:00.000Z",
                     "lastUsed": "2024-01-01T00:00:00.000Z",
-                    "lastVersionId": "neoforge-21.1.186",
+                    "lastVersionId": current_neoforge_version,
                     "icon": "Furnace",
                     "gameDir": str(instance_path),
                     "javaArgs": default_java_args  # Set optimized defaults only for new profiles
@@ -1016,6 +1021,17 @@ class UpdateService:
         
         # Force the update
         return self.perform_update(update_info, force=True)
+    
+    def _get_neoforge_version(self) -> str:
+        """Get the current NeoForge version.
+        
+        Returns:
+            Current NeoForge version string
+        """
+        # Import here to avoid circular imports
+        from .neoforge_service import NeoForgeService
+        neoforge_service = NeoForgeService(self.config)
+        return f"neoforge-{neoforge_service.neoforge_version}"
 
 
 class UpdateError(Exception):
