@@ -351,6 +351,39 @@ class MinecraftService:
                     profiles_data["settings"][key] = value
                     needs_update = True
             
+            # Fix corrupted/long icon strings in profiles
+            for profile_id, profile_data in profiles_data.get("profiles", {}).items():
+                profile_needs_update = False
+                
+                # Fix icon issues
+                if "icon" in profile_data:
+                    icon_value = profile_data["icon"]
+                    # Check if icon is a very long string (likely base64 encoded image)
+                    if isinstance(icon_value, str) and len(icon_value) > 100:
+                        self.logger.info(f"Fixing corrupted long icon string in profile: {profile_data.get('name', profile_id)}")
+                        profile_data["icon"] = "Furnace"  # Use safe default icon
+                        profile_needs_update = True
+                    # Also fix any other problematic icon formats
+                    elif icon_value is None or icon_value == "":
+                        profile_data["icon"] = "Furnace"
+                        profile_needs_update = True
+                elif profile_data.get("type") == "custom":
+                    # Add missing icon to custom profiles (like NeoForge profiles)
+                    profile_data["icon"] = "Furnace"
+                    profile_needs_update = True
+                
+                # Ensure custom profiles have required timestamps
+                if profile_data.get("type") == "custom":
+                    if "created" not in profile_data:
+                        profile_data["created"] = "2024-01-01T00:00:00.000Z"
+                        profile_needs_update = True
+                    if "lastUsed" not in profile_data:
+                        profile_data["lastUsed"] = "2024-01-01T00:00:00.000Z"
+                        profile_needs_update = True
+                
+                if profile_needs_update:
+                    needs_update = True
+            
             # Save if changes were made
             if needs_update:
                 self.logger.info("Updating launcher_profiles.json with required fields")
