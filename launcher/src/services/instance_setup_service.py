@@ -108,12 +108,12 @@ class InstanceSetupService:
             instance_path.mkdir(parents=True, exist_ok=True)
             
             # Create necessary subdirectories
-            subdirs = ['mods', 'config', 'resourcepacks', 'kubejs', 'defaultconfigs', 'versions']
+            subdirs = ['mods', 'config', 'resourcepacks', 'kubejs', 'defaultconfigs', 'versions', 'libraries']
             for subdir in subdirs:
                 (instance_path / subdir).mkdir(exist_ok=True)
         else:
             # Instance directory exists, check if missing essential subdirectories
-            subdirs = ['mods', 'config', 'resourcepacks', 'kubejs', 'defaultconfigs', 'versions']
+            subdirs = ['mods', 'config', 'resourcepacks', 'kubejs', 'defaultconfigs', 'versions', 'libraries']
             for subdir in subdirs:
                 subdir_path = instance_path / subdir
                 if not subdir_path.exists():
@@ -122,6 +122,9 @@ class InstanceSetupService:
         
         # Create launcher profile BEFORE installing NeoForge
         self.ensure_launcher_profile(instance_path)
+        
+        # Ensure proper assets directory structure for Minecraft launcher
+        self.ensure_assets_structure(instance_path)
         
         # Check if NeoForge is installed
         if not self.is_neoforge_installed(instance_path):
@@ -192,13 +195,23 @@ class InstanceSetupService:
                 with open(launcher_profiles_path, 'r', encoding='utf-8') as f:
                     profiles_data = json.load(f)
             else:
+                # Create a complete launcher_profiles.json structure that the Minecraft launcher expects
                 profiles_data = {
                     "profiles": {},
                     "settings": {
+                        "crashAssistance": False,
+                        "enableAdvanced": False,
+                        "enableAnalytics": True,
                         "enableHistorical": False,
+                        "enableReleases": True,
                         "enableSnapshots": False,
-                        "enableAdvanced": False
-                    }
+                        "keepLauncherOpen": False,
+                        "profileSorting": "ByLastPlayed",
+                        "showGameLog": False,
+                        "showMenu": False,
+                        "soundOn": False
+                    },
+                    "version": 4
                 }
             
             # Check if profile already exists for this instance
@@ -248,14 +261,14 @@ class InstanceSetupService:
                 current_neoforge_version = self.get_neoforge_version()
                 
                 new_profile = {
-                    "name": profile_name,
-                    "type": "custom",
                     "created": "2024-01-01T00:00:00.000Z",
+                    "gameDir": str(instance_path),
+                    "icon": "Furnace",
+                    "javaArgs": default_java_args,
                     "lastUsed": "2024-01-01T00:00:00.000Z",
                     "lastVersionId": current_neoforge_version,
-                    "icon": "Furnace",
-                    "gameDir": str(instance_path),
-                    "javaArgs": default_java_args  # Set optimized defaults only for new profiles
+                    "name": profile_name,
+                    "type": "custom"
                 }
                 
                 profiles_data["profiles"][profile_id] = new_profile
@@ -386,3 +399,36 @@ class InstanceSetupService:
                 return version_dir.name
         
         return None
+    
+    def ensure_assets_structure(self, instance_path: Path) -> None:
+        """Ensure proper assets directory structure for Minecraft launcher.
+        
+        This creates the directory structure that Minecraft launcher expects
+        to prevent "Unable to prepare assets for download" errors.
+        
+        Args:
+            instance_path: Path to the instance directory
+        """
+        try:
+            # Create assets directory structure that Minecraft launcher expects
+            assets_dir = instance_path / "assets"
+            assets_dir.mkdir(exist_ok=True)
+            
+            # Create subdirectories that the launcher looks for
+            (assets_dir / "indexes").mkdir(exist_ok=True)
+            (assets_dir / "objects").mkdir(exist_ok=True)
+            (assets_dir / "virtual").mkdir(exist_ok=True)
+            (assets_dir / "log_configs").mkdir(exist_ok=True)
+            
+            # Ensure libraries directory exists (required for mod loading)
+            libraries_dir = instance_path / "libraries"
+            libraries_dir.mkdir(exist_ok=True)
+            
+            # Ensure versions directory exists (required for version management)
+            versions_dir = instance_path / "versions"
+            versions_dir.mkdir(exist_ok=True)
+            
+            self.logger.info("Assets directory structure created successfully")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to create assets directory structure: {e}")
