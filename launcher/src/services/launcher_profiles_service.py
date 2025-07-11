@@ -33,6 +33,10 @@ class LauncherProfilesService:
             True if profile was created/updated successfully, False otherwise
         """
         try:
+            # First, create the minimal profile in the instance directory for NeoForge installer
+            self._create_instance_launcher_profile(instance_path)
+            
+            # Then create/update the main profile in .minecraft directory
             minecraft_dir = Path(os.environ['APPDATA']) / ".minecraft"
             launcher_profiles_path = minecraft_dir / "launcher_profiles.json"
             
@@ -294,3 +298,45 @@ class LauncherProfilesService:
         except Exception as e:
             self.logger.error(f"Failed to remove profile: {e}")
             return False
+    
+    def _create_instance_launcher_profile(self, instance_path: Path) -> None:
+        """Create a minimal launcher_profiles.json in the instance directory for NeoForge installer.
+        
+        Args:
+            instance_path: Path to the instance directory
+        """
+        try:
+            instance_profiles_path = instance_path / "launcher_profiles.json"
+            
+            if not instance_profiles_path.exists():
+                # Create minimal launcher profile structure that NeoForge installer expects
+                minimal_profile = {
+                    "profiles": {
+                        "default": {
+                            "name": "FFT Launcher Instance",
+                            "type": "latest-release",
+                            "created": "2024-01-01T00:00:00.000Z",
+                            "lastUsed": "2024-01-01T00:00:00.000Z",
+                            "icon": "Grass"
+                        }
+                    },
+                    "settings": {
+                        "enableHistorical": False,
+                        "enableSnapshots": False,
+                        "enableAdvanced": False
+                    },
+                    "version": 4
+                }
+                
+                # Ensure instance directory exists
+                instance_path.mkdir(parents=True, exist_ok=True)
+                
+                with open(instance_profiles_path, 'w', encoding='utf-8') as f:
+                    json.dump(minimal_profile, f, indent=2)
+                
+                self.logger.info(f"Created minimal launcher profile in instance directory: {instance_profiles_path}")
+            else:
+                self.logger.info("Instance launcher profile already exists")
+                
+        except Exception as e:
+            self.logger.warning(f"Failed to create instance launcher profile: {e}")
