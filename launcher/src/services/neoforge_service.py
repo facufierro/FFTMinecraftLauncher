@@ -396,48 +396,15 @@ class NeoForgeService:
             return None
     
     def _find_java_executable(self) -> Optional[str]:
-        """Find Java executable on the system.
+        """Find Java executable, using portable Java if needed.
         
         Returns:
             Path to Java executable, or None if not found.
         """
-        # Check system Java first
-        java_candidates = ["java", "javaw"]
-        
-        # Add JAVA_HOME if available
-        java_home = os.environ.get("JAVA_HOME")
-        if java_home:
-            java_candidates.extend([
-                os.path.join(java_home, "bin", "java.exe"),
-                os.path.join(java_home, "bin", "java"),
-            ])
-        
-        # Add common Java installation directories on Windows
-        program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
-        program_files_x86 = os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")
-        
-        for base_path in [program_files, program_files_x86]:
-            java_base = os.path.join(base_path, "Java")
-            if os.path.exists(java_base):
-                try:
-                    for java_dir in sorted(os.listdir(java_base), reverse=True):
-                        if "jdk" in java_dir.lower() or "jre" in java_dir.lower():
-                            java_candidates.append(os.path.join(java_base, java_dir, "bin", "java.exe"))
-                except:
-                    continue
-        
-        # Test each candidate
-        for java_path in java_candidates:
-            try:
-                result = subprocess.run([java_path, "-version"], 
-                                      capture_output=True, text=True, timeout=10)
-                if result.returncode == 0:
-                    self.logger.info(f"Found Java executable: {java_path}")
-                    return java_path
-            except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
-                continue
-        
-        return None
+        # Use portable Java service
+        from .java_service import JavaService
+        java_service = JavaService()
+        return java_service.get_java_executable()
     
     def _verify_neoforge_installation(self, instance_path: Path) -> bool:
         """Verify that NeoForge was installed correctly.
