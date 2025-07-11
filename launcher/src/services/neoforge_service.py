@@ -129,30 +129,31 @@ class NeoForgeService:
                 self.logger.error("Java executable not found")
                 return False
             
-            # Run NeoForge installer on the instance
+            # Run NeoForge installer directly on the instance directory
             self.logger.info("Running NeoForge installer...")
             install_cmd = [
                 java_exe,
                 "-jar", str(installer_path),
-                "--installClient",
-                "--targetDir", str(instance_path)
+                "--installClient", str(instance_path)
             ]
+            
+            # Add any additional installer options
+            additional_options = self._get_installer_options()
+            if additional_options:
+                install_cmd.extend(additional_options)
+                self.logger.info(f"Using additional installer options: {additional_options}")
             
             # Configure process creation flags to hide console on Windows
             creation_flags = 0
             if os.name == 'nt':  # Windows
                 creation_flags = subprocess.CREATE_NO_WINDOW
             
-            # Set MINECRAFT_LAUNCHER_HOME environment variable for the installer
-            env = os.environ.copy()
-            env['MINECRAFT_LAUNCHER_HOME'] = str(instance_path)
-            
+            # Install directly to the instance path
+            # Remove the environment variable override to let it install to default location
             result = subprocess.run(
                 install_cmd, 
                 capture_output=True, 
                 text=True, 
-                cwd=str(instance_path),
-                env=env,
                 creationflags=creation_flags
             )
             
@@ -219,30 +220,30 @@ class NeoForgeService:
                 self.logger.error("Java executable not found")
                 return False
             
-            # Run NeoForge installer on the instance
+            # Run NeoForge installer directly on the instance directory
             self.logger.info("Running NeoForge installer...")
             install_cmd = [
                 java_exe,
                 "-jar", str(installer_path),
-                "--installClient",
-                "--targetDir", str(instance_path)
+                "--installClient", str(instance_path)
             ]
+            
+            # Add any additional installer options
+            additional_options = self._get_installer_options()
+            if additional_options:
+                install_cmd.extend(additional_options)
+                self.logger.info(f"Using additional installer options: {additional_options}")
             
             # Configure process creation flags to hide console on Windows
             creation_flags = 0
             if os.name == 'nt':  # Windows
                 creation_flags = subprocess.CREATE_NO_WINDOW
             
-            # Set MINECRAFT_LAUNCHER_HOME environment variable for the installer
-            env = os.environ.copy()
-            env['MINECRAFT_LAUNCHER_HOME'] = str(instance_path)
-            
+            # Install directly to the instance path
             result = subprocess.run(
                 install_cmd, 
                 capture_output=True, 
                 text=True, 
-                cwd=str(instance_path),
-                env=env,
                 creationflags=creation_flags
             )
             
@@ -652,3 +653,123 @@ class NeoForgeService:
                     
         except Exception as e:
             self.logger.warning(f"Failed to cleanup old NeoForge installations: {e}")
+
+    def _copy_neoforge_to_instance(self, instance_path: Path) -> bool:
+        """Copy NeoForge installation from default Minecraft directory to instance directory.
+        
+        Args:
+            instance_path: Target instance directory
+            
+        Returns:
+            True if copy was successful, False otherwise
+        """
+        try:
+            import os
+            import shutil
+            from ..utils.file_ops import get_file_ops
+            
+            # Get default Minecraft directory
+            default_minecraft_dir = Path.home() / "AppData" / "Roaming" / ".minecraft"
+            if not default_minecraft_dir.exists():
+                self.logger.error("Default Minecraft directory not found")
+                return False
+            
+            # Find the NeoForge version directory in default location
+            default_versions_dir = default_minecraft_dir / "versions"
+            if not default_versions_dir.exists():
+                self.logger.error("No versions directory found in default Minecraft installation")
+                return False
+            
+            # Look for NeoForge version directory
+            neoforge_version_dir = None
+            possible_version_names = [
+                f"neoforge-{self.neoforge_version}",
+                f"{self.minecraft_version}-neoforge-{self.neoforge_version}",
+                f"{self.minecraft_version}-{self.neoforge_version}",
+                f"neoforge-{self.minecraft_version}-{self.neoforge_version}"
+            ]
+            
+            for version_name in possible_version_names:
+                version_dir = default_versions_dir / version_name
+                if version_dir.exists():
+                    neoforge_version_dir = version_dir
+                    self.logger.info(f"Found NeoForge installation in default location: {version_name}")
+                    break
+            
+            if not neoforge_version_dir:
+                self.logger.error("NeoForge installation not found in default Minecraft directory")
+                return False
+            
+            # Ensure target directories exist
+            target_versions_dir = instance_path / "versions"
+            target_libraries_dir = instance_path / "libraries"
+            target_versions_dir.mkdir(parents=True, exist_ok=True)
+            target_libraries_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Copy the NeoForge version directory
+            target_version_dir = target_versions_dir / neoforge_version_dir.name
+            if target_version_dir.exists():
+                shutil.rmtree(target_version_dir)
+            
+            shutil.copytree(neoforge_version_dir, target_version_dir)
+            self.logger.info(f"Copied NeoForge version directory to: {target_version_dir}")
+            
+            # Copy NeoForge libraries
+            default_libraries_dir = default_minecraft_dir / "libraries"
+            if default_libraries_dir.exists():
+                # Copy NeoForge specific libraries
+                neoforge_lib_paths = [
+                    "net/neoforged",
+                    "cpw/mods",
+                    "net/minecraftforge"  # In case of old forge libraries
+                ]
+                
+                for lib_path in neoforge_lib_paths:
+                    source_lib_dir = default_libraries_dir / lib_path
+                    if source_lib_dir.exists():
+                        target_lib_dir = target_libraries_dir / lib_path
+                        if target_lib_dir.exists():
+                            shutil.rmtree(target_lib_dir)
+                        shutil.copytree(source_lib_dir, target_lib_dir)
+                        self.logger.info(f"Copied library directory: {lib_path}")
+            
+            # Copy launcher profiles if they exist and are relevant
+            default_profiles = default_minecraft_dir / "launcher_profiles.json"
+            target_profiles = instance_path / "launcher_profiles.json"
+            
+            if default_profiles.exists() and not target_profiles.exists():
+                # Only copy if target doesn't exist to avoid overwriting custom configs
+                shutil.copy2(default_profiles, target_profiles)
+                self.logger.info("Copied launcher profiles")
+            
+            # Clean up the installation from default location to avoid confusion
+            try:
+                shutil.rmtree(neoforge_version_dir)
+                self.logger.info("Cleaned up NeoForge installation from default Minecraft directory")
+            except Exception as e:
+                self.logger.warning(f"Failed to clean up default installation (this is not critical): {e}")
+            
+            self.logger.info("NeoForge installation copied successfully to instance directory")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to copy NeoForge installation to instance: {e}")
+            return False
+    
+    def _get_installer_options(self) -> List[str]:
+        """Get additional options for the NeoForge installer.
+        
+        Returns:
+            List of additional command line options for the installer.
+        """
+        options = []
+        
+        # Add debug mode if enabled in config
+        if hasattr(self.config, 'debug_mode') and self.config.debug_mode:
+            options.append('--debug')
+        
+        # Skip hash checks if network is unreliable
+        if hasattr(self.config, 'skip_hash_check') and self.config.skip_hash_check:
+            options.append('--skip-hash-check')
+        
+        return options
