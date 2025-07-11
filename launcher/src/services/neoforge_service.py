@@ -33,7 +33,7 @@ class NeoForgeService:
         self.config = config
         self.logger = get_logger()
         self.minecraft_version = "1.21.1"  # Base version - NeoForge 21.1.186 supports 1.21.1+
-        self.neoforge_version = "21.1.186"  # Latest stable NeoForge for 1.21.x
+        self.neoforge_version = "21.1.190"  # Latest stable NeoForge for 1.21.x
         
     def get_available_instances(self) -> List[str]:
         """Get list of available Minecraft launcher instances.
