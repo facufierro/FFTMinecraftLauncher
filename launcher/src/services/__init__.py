@@ -9,6 +9,7 @@ from .instance_setup_service import InstanceSetupService
 from .file_sync_service import FileSyncService
 from .file_comparison_service import FileComparisonService
 from .mods_management_service import ModsManagementService
+from .backup_service import BackupService
 
 __all__ = [
     'GitHubService', 
@@ -19,5 +20,6 @@ __all__ = [
     'InstanceSetupService',
     'FileSyncService',
     'FileComparisonService',
-    'ModsManagementService'
+    'ModsManagementService',
+    'BackupService'
 ]

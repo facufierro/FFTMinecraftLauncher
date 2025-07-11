@@ -8,13 +8,13 @@ from ..models.update_info import UpdateInfo
 from ..services.github_service import GitHubService
 from ..services.update_service import UpdateService
 from ..services.minecraft_service import MinecraftService
-from ..services.launcher_version_service import LauncherVersionService
 from ..services.updater_download_service import UpdaterDownloadService
 from ..utils.logging_utils import get_logger, setup_logger
+from ..utils.github_utils import get_github_client, compare_versions, is_newer_version
 from .events import LauncherEvents, EventType
 
 # Version constant - updated automatically by build script
-LAUNCHER_VERSION = "1.0.72"
+LAUNCHER_VERSION = "1.1.1"
 
 
 class LauncherCore:
@@ -35,7 +35,6 @@ class LauncherCore:
         self.github_service: Optional[GitHubService] = None
         self.update_service: Optional[UpdateService] = None
         self.minecraft_service: Optional[MinecraftService] = None
-        self.launcher_version_service: Optional[LauncherVersionService] = None
         self.updater_download_service: Optional[UpdaterDownloadService] = None
         
         # State
@@ -88,7 +87,6 @@ class LauncherCore:
         self.github_service = GitHubService(self.config.github_repo)
         self.update_service = UpdateService(self.config)
         self.minecraft_service = MinecraftService(self.config)
-        self.launcher_version_service = LauncherVersionService()
         
         # Set up progress callback for update service
         self.update_service.set_progress_callback(self._on_update_progress)
@@ -153,21 +151,34 @@ class LauncherCore:
         Args:
             callback: Optional callback with (update_available, current_version, latest_version)
         """
-        if not self.launcher_version_service or not self.config:
+        if not self.config:
             if callback:
                 callback(False, "Unknown", "Unknown")
             return
         
         def check_thread():
             try:
-                if self.launcher_version_service and self.config:
-                    update_available, current_version, latest_version = self.launcher_version_service.check_for_launcher_update(self.config)
-                    
+                # Get current version from constant
+                current_version = LAUNCHER_VERSION
+                
+                # Get latest version from GitHub
+                github_client = get_github_client()
+                release_data = github_client.get_latest_release("facufierro/FFTMinecraftLauncher")
+                
+                if not release_data:
                     if callback:
-                        callback(update_available, current_version or "Unknown", latest_version or "Unknown")
-                else:
-                    if callback:
-                        callback(False, "Unknown", "Unknown")
+                        callback(False, current_version, "Unknown")
+                    return
+                
+                latest_version = release_data.get('tag_name', '').lstrip('v')
+                update_available = is_newer_version(latest_version, current_version)
+                
+                # Update config if needed (with proper null check)
+                if self.config and (not self.config.launcher_version or self.config.launcher_version != current_version):
+                    self.config.launcher_version = current_version
+                
+                if callback:
+                    callback(update_available, current_version, latest_version)
                 
             except Exception as e:
                 self.logger.error(f"Launcher version check failed: {e}")
@@ -367,8 +378,10 @@ class LauncherCore:
                             callback(False, "Instance path not available")
                         return
                     
-                    # Verify mods folder
-                    is_valid = self.update_service._verify_mods_folder_integrity(extract_path, instance_path)
+                    # Verify mods folder using ModsManagementService
+                    from ..services.mods_management_service import ModsManagementService
+                    mods_service = ModsManagementService()
+                    is_valid = mods_service.verify_mods_folder_integrity(extract_path, instance_path)
                     
                     if is_valid:
                         message = "Mods folder is properly synchronized with repository"
