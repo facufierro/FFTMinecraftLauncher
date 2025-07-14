@@ -18,9 +18,13 @@ class LoaderService:
         if not self.instance.loader_version:
             logging.debug("Loader version not specified, assuming not installed")
             return False
-        
-       
+
         logging.debug(f"Checking Loader installation in {self.minecraft_dir}")
+
+    def get_version(self):
+        logging.debug("Getting Loader version")
+        # Logic to retrieve the installed Loader version
+        return self.loader_version
 
     def download_Loader(self):
         logging.debug("Downloading Loader...")
