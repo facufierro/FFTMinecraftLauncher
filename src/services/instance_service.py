@@ -3,33 +3,34 @@
 import logging
 import os
 
+from ..models.constants import Paths
+
 
 class InstanceService:
     def __init__(self):
         logging.debug("Initializing InstanceService")
+        self.instance_path = Paths.INSTANCE_DIR.value
         try:
-            root_dir = os.getcwd()
-            instance_dir = os.path.join(root_dir, "instance")
-            if not os.path.exists(instance_dir):
-                os.makedirs(instance_dir)
+            self.create_instance_folder()
+
         except Exception as e:
             logging.error("Failed to initialize InstanceService: %s", e)
             raise
 
-    def create_instance(self):
-        logging.info("Creating a new instance")
+    def create_instance_folder(self):
         try:
-            # Logic to create a new FFTClient instance
-            pass
+            if not os.path.exists(self.instance_path):
+                os.makedirs(self.instance_path)
         except Exception as e:
-            logging.error("Failed to create instance: %s", e)
+            logging.error("Failed to create instance folder: %s", e)
             raise
 
     def delete_instance(self):
+        import shutil
         logging.info("Deleting the instance")
         try:
-            # Logic to delete the FFTClient instance
-            pass
+            if os.path.exists(self.instance_path):
+                shutil.rmtree(self.instance_path)
         except Exception as e:
             logging.error("Failed to delete instance: %s", e)
             raise

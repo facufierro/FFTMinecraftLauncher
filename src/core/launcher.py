@@ -28,6 +28,7 @@ class Launcher:
         else:
             logging.warning("No profile found, creating a new one")
             self.profile_service.update_profile()
+        self.profile_service.add_profile_to_instance()
 
     def set_up_neoforge(self):
         logging.info("Setting up NeoForge")
