@@ -1,4 +1,5 @@
 # Simple main window component using PyQt6
+import logging
 from PyQt6.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QWidget
 from src.ui.components.launch_button import LaunchButton
 
@@ -19,6 +20,7 @@ class MainWindow(QMainWindow):
         # Add Launch button and position it
         self.launch_button = LaunchButton(central_widget)
         self.launch_button.show()
+        logging.debug("MainWindow initialized")
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
