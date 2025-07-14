@@ -14,7 +14,7 @@ from ..utils.github_utils import get_github_client, compare_versions, is_newer_v
 from .events import LauncherEvents, EventType
 
 # Version constant - updated automatically by build script
-LAUNCHER_VERSION = "1.1.5"
+LAUNCHER_VERSION = "1.1.18"
 
 
 class LauncherCore:
@@ -90,6 +90,28 @@ class LauncherCore:
         
         # Set up progress callback for update service
         self.update_service.set_progress_callback(self._on_update_progress)
+    
+    def ensure_neoforge_and_profile(self) -> bool:
+        """Ensure NeoForge is installed and launcher profile is configured.
+        
+        Returns:
+            True if everything is properly configured, False otherwise.
+        """
+        if not self.github_service:
+            self.logger.error("GitHub service not initialized")
+            return False
+        
+        return self.github_service.ensure_neoforge_and_profile()
+    
+    def get_neoforge_version(self) -> str:
+        """Get the NeoForge version that should be installed.
+        
+        Returns:
+            The NeoForge version string.
+        """
+        if not self.github_service:
+            return "Unknown"
+        return self.github_service.get_neoforge_version()
     
     def load_config(self) -> None:
         """Load the launcher configuration."""

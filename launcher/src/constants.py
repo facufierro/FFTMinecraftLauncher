@@ -3,6 +3,11 @@
 # GitHub Repository Configuration
 GITHUB_REPO = "facufierro/FFTClientMinecraft1211"
 
+# NeoForge Configuration
+NEOFORGE_VERSION = "21.1.192"
+MINECRAFT_VERSION = "1.21.1"
+LAUNCHER_PROFILE_NAME = "FFTClient"
+
 # Default Sync Folders
 DEFAULT_SYNC_FOLDERS = [
     "config", 

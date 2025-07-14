@@ -316,6 +316,9 @@ class MainWindow:
         # First check if instance is installed
         self._check_instance_status()
         
+        # Check NeoForge installation and launcher profiles
+        self._check_neoforge_and_profiles()
+        
         # Then check for updates
         self.launcher_core.check_for_updates()
     
@@ -338,6 +341,25 @@ class MainWindow:
                 self._add_launcher_log("warning", "Instance directory found but setup is incomplete", timestamp)
             else:
                 self._add_launcher_log("warning", "Instance directory not found", timestamp)
+    
+    def _check_neoforge_and_profiles(self) -> None:
+        """Check NeoForge installation and launcher profiles."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        try:
+            neoforge_version = self.launcher_core.get_neoforge_version()
+            self._add_launcher_log("info", f"Checking NeoForge {neoforge_version} installation...", timestamp)
+            
+            # Check and ensure NeoForge installation and profile
+            success = self.launcher_core.ensure_neoforge_and_profile()
+            
+            if success:
+                self._add_launcher_log("success", "NeoForge and launcher profile are properly configured", timestamp)
+            else:
+                self._add_launcher_log("error", "Failed to configure NeoForge and launcher profile", timestamp)
+        
+        except Exception as e:
+            self._add_launcher_log("error", f"Error checking NeoForge: {str(e)}", timestamp)
     
     # Main action handler
     def _handle_launch_action(self) -> None:
