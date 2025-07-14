@@ -24,7 +24,7 @@ class GitHubService:
     @staticmethod
     def extract_version_number(version_str):
         """
-        Extracts the numeric part of a version string, e.g. 'neoforge-21.1.190' -> '21.1.190'.
+        Extracts the numeric part of a version string, e.g. 'neoforge-21.1.192' -> '21.1.192'.
         If no numeric part is found, returns the original string.
         """
         import re

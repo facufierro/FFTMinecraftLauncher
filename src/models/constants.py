@@ -24,7 +24,7 @@ PROFILE_DATA = {
         "icon": "Furnace",
         "javaArgs": "-Xmx8G -Xms4G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M",
         "lastUsed": "2025-07-11T16:45:20.8297Z",
-        "lastVersionId": "neoforge-21.1.190",
+        "lastVersionId": "neoforge-21.1.192",
         "name": "FFTClient",
         "type": "custom",
     }
