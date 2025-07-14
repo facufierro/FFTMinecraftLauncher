@@ -1,5 +1,7 @@
 import logging
 import json
+import os
+import shutil
 from ..models.profile import Profile
 from ..models.constants import Paths, PROFILE_DATA
 
@@ -8,6 +10,7 @@ class ProfileService:
     def __init__(self):
         logging.debug("Initializing ProfileService")
         self.default_profile = Paths.DEFAULT_PROFILE_FILE.value
+        self.instance_dir = Paths.INSTANCE_DIR.value
 
     def get_profile_data(self):
         try:
@@ -53,6 +56,25 @@ class ProfileService:
             logging.error("Failed to update profile data: %s", e)
             raise
 
-    def delete_profile(self):
-        # Logic to delete the profile
-        self.profile = None
+    def add_profile_to_instance(self):
+
+        logging.info("Adding profile to instance")
+        try:
+            profile = self.get_profile_data()
+            if profile:
+                instance_dir = self.instance_dir
+                default_profile_path = self.default_profile
+                # Ensure the instance directory exists
+                os.makedirs(instance_dir, exist_ok=True)
+                # Define the destination path
+                dest_path = os.path.join(
+                    instance_dir, os.path.basename(default_profile_path)
+                )
+                # Copy the profile file
+                shutil.copy(default_profile_path, dest_path)
+                logging.info(f"Profile {profile.name} added to instance at {dest_path}")
+            else:
+                logging.warning("No profile data available to add to instance")
+        except Exception as e:
+            logging.error("Failed to add profile to instance: %s", e)
+            raise

@@ -1,14 +1,16 @@
 import logging
 
+from ..services.ui_service import UIService, Window
+from ..services.instance_service import InstanceService
 from ..services.profile_service import ProfileService
 from ..services.loader_service import LoaderService
-from ..services.ui_service import UIService, Window
 
 
 class Launcher:
     def __init__(self):
         logging.debug("Initializing all services")
         self.ui = UIService()
+        self.instance_service = InstanceService()
         self.profile_service = ProfileService()
         logging.debug("All services initialized")
 
