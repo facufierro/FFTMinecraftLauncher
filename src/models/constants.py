@@ -1,3 +1,5 @@
+
+import os
 from enum import Enum
 
 
@@ -9,7 +11,7 @@ class Window(Enum):
 class Paths(Enum):
     MINECRAFT_DIR = "C:\\Users\\fierr\\AppData\\Roaming\\.minecraft"
     DEFAULT_PROFILE_FILE = f"{MINECRAFT_DIR}\\launcher_profiles.json"
-    INSTANCE_DIR = "D:\\Games\\Minecraft\\FFTLauncher\\instance"
+    INSTANCE_DIR = f"{os.getcwd()}\\instance"
 
 
 PROFILE_DATA = {
