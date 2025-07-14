@@ -43,6 +43,9 @@ class InstanceService:
 
     def get_current_versions(self):
         logging.info("Retrieving current versions")
+        if not os.path.exists(self.version_file):
+            logging.warning("Versions file not found, using default versions")
+            return {"launcher": "0.0.0", "loader": "0.0.0", "minecraft": "0.0.0"}
         try:
             # get versions from the versions.json file
             if os.path.exists(self.version_file):
