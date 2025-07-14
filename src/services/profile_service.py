@@ -10,7 +10,7 @@ class ProfileService:
     def __init__(self):
         logging.debug("Initializing ProfileService")
         self.default_profile = Paths.DEFAULT_PROFILE_FILE.value
-        self.instance_dir = Paths.INSTANCE_DIR.value
+        self.instance_dir = Paths.INSTANCE_DIR.value 
 
     def get_profile_data(self):
         try:
@@ -67,9 +67,7 @@ class ProfileService:
                 # Ensure the instance directory exists
                 os.makedirs(instance_dir, exist_ok=True)
                 # Define the destination path
-                dest_path = os.path.join(
-                    instance_dir, os.path.basename(default_profile_path)
-                )
+                dest_path = os.path.join(instance_dir, os.path.basename(default_profile_path))
                 # Copy the profile file
                 shutil.copy(default_profile_path, dest_path)
                 logging.info(f"Profile {profile.name} added to instance at {dest_path}")
