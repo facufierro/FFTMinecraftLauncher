@@ -2,14 +2,20 @@
 
 from PyQt6.QtWidgets import QPushButton
 
+
 class LaunchButton(QPushButton):
-    def __init__(self, parent=None, color="#4CAF50"):
-        super().__init__("Launch", parent)
+    def __init__(self, parent=None, color="#4CAF50", label="Launch"):
+        super().__init__(label, parent)
         self.setFixedSize(160, 80)
         self.center_x = 0
         self.center_y = 0
         self.color = color
+        self.label = label
         self.set_color(self.color)
+
+    def set_label(self, label):
+        self.label = label
+        self.setText(label)
 
     def set_color(self, color):
         self.color = color
