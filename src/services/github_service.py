@@ -1,4 +1,6 @@
 import logging
+import os
+import json
 from ..models.constants import Urls
 
 
@@ -6,23 +8,58 @@ class GitHubService:
     def __init__(self):
         self.repo_url = Urls.GITHUB_REPO.value
         self.versions_file = "versions.json"
+        self.launcher_version, self.loader_version, self.minecraft_version = (
+            self.get_versions()
+        )
         logging.debug("Initializing GitHubService with repo URL: %s", self.repo_url)
         # Initialize any necessary attributes or configurations
         pass
 
-    def get_minecraft_version(self):
-        logging.debug("Fetching Minecraft version from GitHub")
-        # Logic to fetch the latest Minecraft version from GitHub
-        # This could involve making an API call to the GitHub repository
-        # and parsing the response to get the version number.
-        return "1.20.2"
+    def get_versions(self):
+        logging.debug("Fetching versions from GitHub")
+        with open(self.versions_file, "r") as f:
+            data = json.load(f)
+            return data["launcher"], data["loader"], data["minecraft"]
 
-    def get_loader_version(self):
-        logging.debug("Fetching Loader version from GitHub")
-        # Logic to fetch the latest Loader version from GitHub
-        # This could involve making an API call to the GitHub repository
-        # and parsing the response to get the version number.
-        return "1.0.0"
+    @staticmethod
+    def extract_version_number(version_str):
+        """
+        Extracts the numeric part of a version string, e.g. 'neoforge-21.1.190' -> '21.1.190'.
+        If no numeric part is found, returns the original string.
+        """
+        import re
+
+        match = re.search(r"(\d+(?:\.\d+)+)", version_str)
+        return match.group(1) if match else version_str
+
+    def check_for_updates(self, current_versions):
+        logging.debug("Checking for updates")
+        try:
+
+            def version_tuple(v):
+                vnum = self.extract_version_number(v)
+                return tuple(int(x) for x in vnum.split("."))
+
+            if version_tuple(self.launcher_version) > version_tuple(
+                current_versions["launcher"]
+            ):
+                logging.info("Launcher update available: %s", self.launcher_version)
+                return True
+            if version_tuple(self.loader_version) > version_tuple(
+                current_versions["loader"]
+            ):
+                logging.info("Loader update available: %s", self.loader_version)
+                return True
+            if version_tuple(self.minecraft_version) > version_tuple(
+                current_versions["minecraft"]
+            ):
+                logging.info("Minecraft update available: %s", self.minecraft_version)
+                return True
+            logging.info("No updates available")
+            return False
+        except Exception as e:
+            logging.error("Failed to check for updates: %s", e)
+            raise
 
     def get_mods(self):
         logging.debug("Fetching mods from GitHub")

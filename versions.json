@@ -1,5 +1,5 @@
 {
     "launcher": "2.0.0",
     "minecraft": "1.21.2",
-    "neo_forge": "21.1.192"
+    "loader": "neoforge-21.1.190"
 }
