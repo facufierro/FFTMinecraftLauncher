@@ -10,7 +10,7 @@ from datetime import datetime
 src_path = Path(__file__).parent / "src"
 sys.path.insert(0, str(src_path))
 
-from src.core.launcher import LauncherCore, LauncherError
+from core.launcher import LauncherCore, LauncherError
 from src.ui.main_window import MainWindow
 from src.utils.logging_utils import setup_logger, get_logger
 import logging

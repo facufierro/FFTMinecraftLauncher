@@ -1,10 +1,12 @@
-# handle launcher operations
-from PyQt6.QtWidgets import QApplication
-from src.ui.components.main_window import MainWindow
-import sys
+import logging
+from ..services.ui_service import UIService, Window
 
-def run_launcher():
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+
+class Launcher:
+    def __init__(self):
+        logging.debug("Initializing Launcher")
+        self.ui = UIService()
+
+    def run(self):
+        logging.info("Running Launcher")
+        self.ui.show(Window.MAIN)
