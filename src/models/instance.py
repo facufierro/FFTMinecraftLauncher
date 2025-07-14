@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Optional, List, Dict
 
 
 @dataclass
@@ -10,9 +10,11 @@ class Instance:
     java_dir: Optional[str] = None
     mods_dir: Optional[str] = None
     mod_list: List[str] = field(default_factory=list)
-    config_defaults_dir: Optional[str] = None
+    default_configs_dir: Optional[str] = None
     kubejs_dir: Optional[str] = None
     local_dir: Optional[str] = None
     modflared_dir: Optional[str] = None
     resourcepacks_dir: Optional[str] = None
-    resourcepacks: List[str] = field(default_factory=list)
+    resourcepacks: List[Dict[str, str]] = field(default_factory=list)
+    shaderpacks_dir: Optional[str] = None
+    shaders: List[Dict[str, str]] = field(default_factory=list)
