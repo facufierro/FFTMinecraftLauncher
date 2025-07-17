@@ -16,22 +16,18 @@ class VersionService:
         try:
             with open(self.versions_file, "r") as file:
                 versions = json.load(file)
-                logging.debug("Versions retrieved: %s", versions)
 
                 launcher_version = versions.get("launcher", {})
-
-                loader_version = self._extract_version_number(
-                    versions.get("loader", {})
-                )
-
+                loader_version = versions.get("loader", {})
                 minecraft_version = versions.get("minecraft", {})
-
+                logging.debug(
+                    "Current Versions: \nLauncher version: %s, \nLoader version: %s, \nMinecraft version: %s",
+                    launcher_version,
+                    loader_version,
+                    minecraft_version,
+                )
                 return launcher_version, loader_version, minecraft_version
 
         except FileNotFoundError:
             logging.error("Versions file not found: %s", self.versions_file)
             return None, None, None
-
-    def _extract_version_number(self, version_str):
-        match = re.search(r"(\d+(?:\.\d+)+)", version_str)
-        return match.group(1) if match else version_str
