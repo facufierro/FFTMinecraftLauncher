@@ -48,3 +48,5 @@ class LoaderService:
 
     def get_installed_version(self):
         logging.debug("Getting Loader version")
+
+
