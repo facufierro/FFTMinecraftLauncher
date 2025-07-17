@@ -85,3 +85,35 @@ class GitHubService:
             logging.info(f"Saved folder (zip) to {dest_path}")
         except Exception as e:
             logging.error(f"Failed to save folder to {dest_path}: {e}")
+
+    def get_release_file(self, asset_name):
+        """
+        Download a file (asset) from the latest GitHub release by asset name.
+        Returns the file content as bytes if found, else None.
+        """
+        repo_url = self.repo_url.rstrip("/")
+        owner_repo = repo_url.replace("https://github.com/", "")
+        api_url = f"https://api.github.com/repos/{owner_repo}/releases/latest"
+        try:
+            response = requests.get(api_url, timeout=15)
+            if response.status_code != 200:
+                logging.error(
+                    f"Failed to fetch release info, status code: {response.status_code}"
+                )
+                return None
+            release = response.json()
+            for asset in release.get("assets", []):
+                if asset.get("name") == asset_name:
+                    download_url = asset.get("browser_download_url")
+                    asset_resp = requests.get(download_url, timeout=30)
+                    if asset_resp.status_code == 200:
+                        logging.info(f"Downloaded release asset: {asset_name}")
+                        return asset_resp.content
+                    logging.error(
+                        f"Failed to download asset {asset_name}, status code: {asset_resp.status_code}"
+                    )
+                    return None
+            logging.error(f"Asset {asset_name} not found in latest release.")
+        except Exception as e:
+            logging.error(f"Error fetching release asset {asset_name}: {e}")
+        return None
