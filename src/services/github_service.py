@@ -6,51 +6,82 @@ from ..models.constants import Urls
 
 
 class GitHubService:
+    BRANCH = "refactor"
+
     def __init__(self):
-        self.repo_url = Urls.GITHUB_REPO.value
-        logging.debug("Initializing GitHubService with repo URL: %s", self.repo_url)
-        self.launcher_version, self.loader_version, self.minecraft_version = (
-            self._get_versions()
-        )
+        try:
+            self.repo_url = Urls.GITHUB_REPO.value
+            logging.debug("GitHubService initialized with repo URL: %s", self.repo_url)
+        except Exception as e:
+            logging.error("Failed to initialize GitHubService: %s", e)
+            self.repo_url = None
 
-    def _get_versions(self):
-        logging.info("Fetching versions from GitHub repository: %s", self.repo_url)
+    def get_file(self, file_path):
+        """
+        Download a file from the GitHub repo, searching main, dev, refactor branches.
+        Returns the file content as text if found, else None.
+        """
         repo_url = self.repo_url.rstrip("/")
-        for branch in ["main", "dev", "refactor"]:
-            raw_url = (
-                repo_url.replace("github.com", "raw.githubusercontent.com")
-                + f"/{branch}/versions.json"
-            )
-            try:
-                response = requests.get(raw_url, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    launcher_version = data.get("launcher")
-                    loader_version = data.get("loader")
-                    minecraft_version = data.get("minecraft")
-                    logging.debug(
-                        "Current Versions: \nLauncher version: %s, \nLoader version: %s, \nMinecraft version: %s",
-                        launcher_version,
-                        loader_version,
-                        minecraft_version,
-                    )
-                    return (
-                        launcher_version,
-                        loader_version,
-                        minecraft_version,
-                    )
-                else:
-                    logging.warning(
-                        f"Failed to fetch versions.json from {branch}, status code: {response.status_code}"
-                    )
-            except Exception as e:
-                logging.error(f"Error fetching versions.json from {raw_url}: {e}")
-        logging.error("Could not fetch versions.json from any known branch.")
-        return (None, None, None)
+        branch = self.BRANCH
+        raw_url = (
+            repo_url.replace("github.com", "raw.githubusercontent.com")
+            + f"/{branch}/{file_path.lstrip('/')}"
+        )
+        try:
+            response = requests.get(raw_url, timeout=10)
+            if response.status_code == 200:
+                logging.debug(f"Downloaded {file_path} from {branch} branch.")
+                return response.text
+            else:
+                logging.warning(
+                    f"Failed to fetch {file_path} from {branch}, status code: {response.status_code}"
+                )
+        except Exception as e:
+            logging.error(f"Error fetching {file_path} from {raw_url}: {e}")
+        logging.error(f"Could not fetch {file_path} from branch {branch}.")
+        return None
 
-    def get_mods(self):
-        logging.debug("Fetching mods from GitHub")
-        # Logic to fetch the list of mods from GitHub
-        # This could involve making an API call to the GitHub repository
-        # and parsing the response to get the list of mods.
-        return ["mod1", "mod2", "mod3"]
+    def get_folder(self, folder_path):
+        """
+        Download a zip archive of a folder from the GitHub repo, searching main, dev, refactor branches.
+        Returns the zip file content as bytes if found, else None.
+        """
+        repo_url = self.repo_url.rstrip("/")
+        folder_path = folder_path.strip("/")
+        branch = self.BRANCH
+        zip_url = repo_url + f"/archive/refs/heads/{branch}.zip"
+        try:
+            response = requests.get(zip_url, timeout=20)
+            if response.status_code == 200:
+                logging.debug(f"Downloaded zip for branch {branch}.")
+                return response.content
+            else:
+                logging.warning(
+                    f"Failed to fetch zip from {branch}, status code: {response.status_code}"
+                )
+        except Exception as e:
+            logging.error(f"Error fetching zip from {zip_url}: {e}")
+        logging.error(f"Could not fetch zip for branch {branch}.")
+        return None
+
+    def save_file(self, content, dest_path):
+        """
+        Save text content to a file on disk.
+        """
+        try:
+            with open(dest_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            logging.info(f"Saved file to {dest_path}")
+        except Exception as e:
+            logging.error(f"Failed to save file to {dest_path}: {e}")
+
+    def save_folder(self, content, dest_path):
+        """
+        Save binary content (e.g., zip) to a file on disk.
+        """
+        try:
+            with open(dest_path, "wb") as f:
+                f.write(content)
+            logging.info(f"Saved folder (zip) to {dest_path}")
+        except Exception as e:
+            logging.error(f"Failed to save folder to {dest_path}: {e}")
