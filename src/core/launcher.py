@@ -6,7 +6,6 @@ from ..services.instance_service import InstanceService
 from ..services.profile_service import ProfileService
 from ..services.github_service import GitHubService
 from ..services.loader_service import LoaderService
-from ..services.launcher_service import LauncherService
 
 
 class Launcher:
@@ -14,7 +13,6 @@ class Launcher:
         self.ui_service = UIService()
         self.github_service = GitHubService()
         self.version_service = VersionService()
-        self.launcher_service = LauncherService()
         # self.instance_service = InstanceService()
         # self.profile_service = ProfileService()
 
