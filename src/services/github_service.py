@@ -6,11 +6,11 @@ from ..models.constants import Urls
 
 
 class GitHubService:
-    BRANCH = "refactor"
 
     def __init__(self):
         try:
             self.repo_url = Urls.GITHUB_REPO.value
+            self.branch = "refactor"
             logging.debug("GitHubService initialized with repo URL: %s", self.repo_url)
         except Exception as e:
             logging.error("Failed to initialize GitHubService: %s", e)
@@ -22,7 +22,7 @@ class GitHubService:
         Returns the file content as text if found, else None.
         """
         repo_url = self.repo_url.rstrip("/")
-        branch = self.BRANCH
+        branch = self.branch
         raw_url = (
             repo_url.replace("github.com", "raw.githubusercontent.com")
             + f"/{branch}/{file_path.lstrip('/')}"
@@ -48,7 +48,7 @@ class GitHubService:
         """
         repo_url = self.repo_url.rstrip("/")
         folder_path = folder_path.strip("/")
-        branch = self.BRANCH
+        branch = self.branch
         zip_url = repo_url + f"/archive/refs/heads/{branch}.zip"
         try:
             response = requests.get(zip_url, timeout=20)
