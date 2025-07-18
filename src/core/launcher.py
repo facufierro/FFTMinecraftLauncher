@@ -147,9 +147,10 @@ class Launcher:
             if hasattr(main_window, 'progress_bar'):
                 main_window.progress_bar.set_progress(progress, status, details)
             
-            # Update console using signal
-            if hasattr(main_window, 'console'):
-                main_window.console.append_message.emit(f"[{progress:3d}%] {status}", "INFO")
+            # Only log important progress milestones, not every update
+            if progress in [0, 25, 50, 75, 90, 100] or "complete" in status.lower() or "error" in status.lower():
+                if hasattr(main_window, 'console'):
+                    main_window.console.append_message.emit(f"[{progress:3d}%] {status}", "INFO")
     
     def _on_update_finished(self, success):
         """Handle update completion"""
