@@ -23,14 +23,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
 
         # Add Launch button
-        self.launch_button = LaunchButton("Launch Minecraft", central_widget)
+        self.launch_button = LaunchButton("Launch", central_widget)
         self.launch_button.clicked.connect(self.on_launch_button_clicked)
         layout.addWidget(self.launch_button, alignment=Qt.AlignmentFlag.AlignCenter)
         logging.debug("MainWindow initialized")
 
     def on_launch_button_clicked(self):
         current_time = time.time()
-        if current_time - self.last_click_time > 0.5:  # Debounce interval of 0.5 seconds
+        if (
+            current_time - self.last_click_time > 0.5
+        ):  # Debounce interval of 0.5 seconds
             logging.info("Launch button clicked")
             self.last_click_time = current_time
             self.launch_requested.emit()  # Emit the custom signal
