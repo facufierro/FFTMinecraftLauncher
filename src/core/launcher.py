@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from PySide6.QtCore import QThread, QObject, Signal
 
 
@@ -45,7 +46,29 @@ class Launcher:
         self._check_loader_update()
 
     def launch(self):
-        logging.info("Launching the game")
+        """Launch the game directly"""
+        logging.info("Launching the game directly...")
+        
+        # Disable button and change text during launch
+        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+            main_window = self.ui_service.main_window
+            if hasattr(main_window, 'launch_button'):
+                main_window.launch_button.setEnabled(False)
+                main_window.launch_button.setText("Launching...")
+        
+        game_launched = self.launcher_service.launch_game()
+        
+        # Re-enable button after launch attempt
+        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+            main_window = self.ui_service.main_window
+            if hasattr(main_window, 'launch_button'):
+                main_window.launch_button.setEnabled(True)
+                main_window.launch_button.setText("Launch")
+        
+        if game_launched:
+            logging.info("Minecraft launched successfully")
+        else:
+            logging.error("Failed to launch Minecraft")
 
     def exit(self):
         logging.info("Exiting the launcher")
@@ -100,12 +123,84 @@ class Launcher:
             if self.version_service.check_for_updates(Component.LOADER):
                 logging.info("Loader update is needed.")
                 self.loader_service.connect_update_finished(self.update_instance)
-                self.main_window.on_launch_button_clicked(self.loader_service.update)
+                self.main_window.on_launch_button_clicked(self.smart_launch)
             else:
                 logging.info("Loader is up to date.")
-                self.main_window.on_launch_button_clicked(self.update_instance)
+                self.main_window.on_launch_button_clicked(self.smart_launch)
         except Exception as e:
             logging.error(f"Failed to check Loader update: {e}")
+
+    def smart_launch(self):
+        """Smart launch that checks for updates first, then launches if everything is up to date"""
+        try:
+            logging.info("Smart launch initiated...")
+            
+            # Get UI components for button management
+            main_window = None
+            if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+                main_window = self.ui_service.main_window
+            
+            # Check if any updates are needed
+            needs_loader_update = self.version_service.check_for_updates(Component.LOADER)
+            needs_instance_update = self._needs_instance_update()
+            
+            if needs_loader_update:
+                logging.info("Loader update needed - starting loader update...")
+                # Disable button and update text
+                if main_window and hasattr(main_window, 'launch_button'):
+                    main_window.launch_button.setEnabled(False)
+                    main_window.launch_button.setText("Updating Loader...")
+                self.loader_service.update()
+            elif needs_instance_update:
+                logging.info("Instance update needed - starting instance update...")
+                self.update_instance()  # This already handles button state
+            else:
+                logging.info("Everything up to date - launching game directly...")
+                self.launch()  # This already handles button state
+                
+        except Exception as e:
+            logging.error(f"Smart launch failed: {e}")
+            # Re-enable button on error
+            if main_window and hasattr(main_window, 'launch_button'):
+                main_window.launch_button.setEnabled(True)
+                main_window.launch_button.setText("Launch")
+    
+    def _needs_instance_update(self):
+        """Check if instance files need updating"""
+        try:
+            instance_dir = Path(self.instance.instance_path)
+            
+            # Check if instance directory exists
+            if not instance_dir.exists():
+                logging.info("Instance update needed - instance directory doesn't exist")
+                return True
+            
+            # Check for essential folders and files
+            required_folders = ['mods', 'configs']
+            for folder in required_folders:
+                folder_path = instance_dir / folder
+                if not folder_path.exists():
+                    logging.info(f"Instance update needed - {folder} folder missing")
+                    return True
+                    
+                # Check if folder is empty (might need content)
+                if not any(folder_path.iterdir()):
+                    logging.info(f"Instance update needed - {folder} folder is empty")
+                    return True
+            
+            # For now, assume if basic folders exist with content, we're good
+            # You could add more sophisticated checks here like:
+            # - Version file comparisons
+            # - File timestamps
+            # - Checksums, etc.
+            
+            logging.info("Instance appears to be up to date")
+            return False
+            
+        except Exception as e:
+            logging.error(f"Error checking instance update status: {e}")
+            # If we can't determine, assume update is needed for safety
+            return True
 
     def _set_up_profile(self):
         try:
@@ -128,9 +223,10 @@ class Launcher:
                 main_window.progress_bar.reset()
                 main_window.progress_bar.start_multi_step(2, "Preparing instance update...")
                 
-                # Disable launch button during update
+                # Disable launch button during update and change text
                 if hasattr(main_window, 'launch_button'):
                     main_window.launch_button.setEnabled(False)
+                    main_window.launch_button.setText("Updating...")
         
         # Create and start worker thread
         self.update_worker = UpdateWorker(self)
@@ -157,10 +253,6 @@ class Launcher:
         if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
             main_window = self.ui_service.main_window
             
-            # Re-enable launch button
-            if hasattr(main_window, 'launch_button'):
-                main_window.launch_button.setEnabled(True)
-            
             # Update progress bar
             if hasattr(main_window, 'progress_bar'):
                 if success:
@@ -168,7 +260,36 @@ class Launcher:
                 else:
                     main_window.progress_bar.set_error("Update failed - check console for details")
         
-        logging.info(f"Instance update {'completed successfully' if success else 'failed'}")
+        if success:
+            logging.info("Instance update completed successfully - launching Minecraft...")
+            # Update progress to show launching state and change button text
+            if hasattr(main_window, 'progress_bar'):
+                main_window.progress_bar.set_progress(100, "Launching Minecraft...", "Starting game with updated files")
+            if hasattr(main_window, 'launch_button'):
+                main_window.launch_button.setText("Launching...")
+            
+            # Launch the game after successful update
+            game_launched = self.launcher_service.launch_game()
+            
+            # Re-enable launch button and update text after game launch attempt
+            if hasattr(main_window, 'launch_button'):
+                main_window.launch_button.setEnabled(True)
+                main_window.launch_button.setText("Launch")
+            
+            if game_launched:
+                logging.info("Minecraft launched successfully")
+                if hasattr(main_window, 'progress_bar'):
+                    main_window.progress_bar.set_progress(100, "Game launched!", "Minecraft is starting...")
+            else:
+                logging.error("Failed to launch Minecraft")
+                if hasattr(main_window, 'progress_bar'):
+                    main_window.progress_bar.set_error("Launch failed - check console for details")
+        else:
+            logging.info("Instance update failed")
+            # Re-enable launch button on failure
+            if hasattr(main_window, 'launch_button'):
+                main_window.launch_button.setEnabled(True)
+                main_window.launch_button.setText("Launch")
 
 
 class UpdateWorker(QThread):
