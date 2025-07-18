@@ -188,7 +188,9 @@ class UpdateWorker(QThread):
             def progress_callback(progress, status, details=""):
                 try:
                     self.progress_update.emit(progress, status, details)
-                    logging.debug(f"Progress update emitted: {progress}% - {status} - {details}")
+                    # Only log important milestones to reduce log spam
+                    if progress in [0, 25, 50, 75, 90, 100] or "complete" in status.lower() or "error" in status.lower():
+                        logging.debug(f"Progress milestone: {progress}% - {status}")
                 except Exception as e:
                     logging.error(f"Progress callback error: {e}")
             
