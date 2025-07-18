@@ -24,10 +24,10 @@ class Launcher:
     def start(self):
         self.ui_service.show(Window.MAIN)
         self._check_launcher_update()
-        self._set_up_profile()
         # self._check_for_updates()
 
     def update(self):
+        self._set_up_profile()
         logging.info("Updating...")
 
     def launch(self):
