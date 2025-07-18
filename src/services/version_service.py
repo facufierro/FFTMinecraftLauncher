@@ -12,9 +12,9 @@ class VersionService:
         try:
             with open(self.versions_file, "r") as file:
                 versions = json.load(file)
-                launcher_version = versions.get("launcher", {})
-                loader_version = self._extract_version(versions.get("loader", ""))
-                minecraft_version = versions.get("minecraft", {})
+                launcher_version = self._extract_version(str(versions.get("launcher", "")))
+                loader_version = self._extract_version(str(versions.get("loader", "")))
+                minecraft_version = self._extract_version(str(versions.get("minecraft", "")))
                 logging.info("Current Versions:")
                 logging.info(f"  Launcher: {launcher_version}")
                 logging.info(f"  Loader: {loader_version}")
@@ -32,9 +32,9 @@ class VersionService:
         if content:
             try:
                 versions = json.loads(content)
-                launcher_version = versions.get("launcher", {})
-                loader_version = self._extract_version(versions.get("loader", ""))
-                minecraft_version = versions.get("minecraft", {})
+                launcher_version = self._extract_version(str(versions.get("launcher", "")))
+                loader_version = self._extract_version(str(versions.get("loader", "")))
+                minecraft_version = self._extract_version(str(versions.get("minecraft", "")))
                 logging.info("GitHub Versions:")
                 logging.info(f"  Launcher: {launcher_version}")
                 logging.info(f"  Loader: {loader_version}")
@@ -44,7 +44,6 @@ class VersionService:
                     "loader": loader_version,
                     "minecraft": minecraft_version,
                 }
-
             except json.JSONDecodeError as e:
                 logging.error("Error decoding JSON from GitHub: %s", e)
         return {"launcher": None, "loader": None, "minecraft": None}
@@ -53,20 +52,18 @@ class VersionService:
         try:
             github_versions = self.get_github_versions(content)
             current_versions = self.get_current_versions()
-            launcher_missmatch = (
-                current_versions["launcher"] != github_versions["launcher"]
-            )
-            loader_missmatch = current_versions["loader"] != github_versions["loader"]
-            minecraft_missmatch = (
-                current_versions["minecraft"] != github_versions["minecraft"]
-            )
-            return {
-                "launcher": launcher_missmatch,
-                "loader": loader_missmatch,
-                "minecraft": minecraft_missmatch,
+            if not current_versions or not github_versions:
+                logging.warning("Current or GitHub versions are not available.")
+                raise ValueError("Versions not available")
+            updates_available = {
+                "launcher": current_versions["launcher"] != github_versions["launcher"],
+                "loader": current_versions["loader"] != github_versions["loader"],
+                "minecraft": current_versions["minecraft"] != github_versions["minecraft"],
             }
+            logging.info("Updates available: %s", updates_available)
+            return updates_available
         except Exception as e:
-            logging.error(f"Error checking for updates: {e}")
+            logging.error("Error checking for updates: %s", e)
             return {"launcher": False, "loader": False, "minecraft": False}
 
     def _extract_version(self, version_string):
