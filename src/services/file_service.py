@@ -1,7 +1,9 @@
+
 import logging
 import os
 import shutil
 import zipfile
+import io
 
 
 class FileService:
@@ -12,7 +14,8 @@ class FileService:
         # replace files with the same name in target_folder with files from zip_file
         try:
             logging.debug(f"Replacing files in {target_folder} with {zip_file}")
-            with zipfile.ZipFile(zip_file, "r") as zip_ref:
+            zf = io.BytesIO(zip_file) if isinstance(zip_file, bytes) else zip_file
+            with zipfile.ZipFile(zf, "r") as zip_ref:
                 for file_info in zip_ref.infolist():
                     if file_info.is_dir():
                         continue
@@ -32,7 +35,8 @@ class FileService:
             logging.debug(f"Replacing folder {target_folder} with {zip_file}")
             if os.path.exists(target_folder):
                 shutil.rmtree(target_folder)
-            with zipfile.ZipFile(zip_file, "r") as zip_ref:
+            zf = io.BytesIO(zip_file) if isinstance(zip_file, bytes) else zip_file
+            with zipfile.ZipFile(zf, "r") as zip_ref:
                 zip_ref.extractall(target_folder)
             logging.debug(f"Replaced folder: {target_folder}")
         except Exception as e:
@@ -57,7 +61,8 @@ class FileService:
             os.makedirs(target_folder)
         try:
             logging.debug(f"Adding files from {zip_file} to {target_folder}")
-            with zipfile.ZipFile(zip_file, "r") as zip_ref:
+            zf = io.BytesIO(zip_file) if isinstance(zip_file, bytes) else zip_file
+            with zipfile.ZipFile(zf, "r") as zip_ref:
                 for file_info in zip_ref.infolist():
                     if file_info.is_dir():
                         continue
