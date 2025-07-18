@@ -1,29 +1,35 @@
 import logging
 
 
-from ..models.constants import Component
+from ..models.constants import INSTANCE_NAME, Component
+from ..models.instance import Instance
+
 from ..ui.components.update_dialog import UpdateDialog
 
 from ..services.ui_service import UIService, Window
 from ..services.github_service import GitHubService
-from ..services.version_service import VersionService
+from ..services.versions_service import VersionsService
 from ..services.launcher_service import LauncherService
 from ..services.profile_service import ProfileService
 from ..services.java_service import JavaService
+from ..services.loader_service import LoaderService
+from ..services.instance_service import InstanceService
 
 
 class Launcher:
     def __init__(self):
         logging.info("Initializing Launcher...")
+        self.instance = Instance(INSTANCE_NAME)
         self.ui_service = UIService()
         self.github_service = GitHubService()
-        self.version_service = VersionService(self.github_service)
+        self.version_service = VersionsService(self.instance, self.github_service)
         self.launcher_service = LauncherService(
             self.version_service, self.github_service
         )
         self.profile_service = ProfileService()
         self.java_service = JavaService(self.version_service)
-        # self.instance_service = InstanceService()
+        self.loader_service = LoaderService(self.instance)
+        self.instance_service = InstanceService()
 
     def start(self):
         self.main_window = self.ui_service.show(Window.MAIN)
@@ -33,9 +39,6 @@ class Launcher:
         self._check_loader_update()
 
         # self._check_for_updates()
-
-    def update(self):
-        logging.info("Updating...")
 
     def launch(self):
         logging.info("Launching the game")
@@ -60,7 +63,7 @@ class Launcher:
                 self.ui_service.close(Window.MAIN)
                 update_dialog.accept_pressed.connect(self.java_service.update)
                 update_dialog.label.setText(
-                    f"Java {self.version_service.required_versions.get(Component.JAVA.value)}+ is needed. A browser window will open to the Java download page."
+                    f"Java {self.version_service.required_versions.get(Component.JAVA.value)}+ is needed. \nA browser window will open to the Java download page."
                 )
                 update_dialog.exec()
             else:
@@ -71,7 +74,9 @@ class Launcher:
     def _check_loader_update(self):
         try:
             if self.version_service.check_for_updates(Component.LOADER):
-                self.main_window.launch_button.text = "Update"
+                logging.info("Loader update is needed.")
+                self.main_window.launch_button.setText("Update")
+                self.main_window.on_launch_button_clicked(self.loader_service.update)
             else:
                 logging.info("Loader is up to date.")
         except Exception as e:
