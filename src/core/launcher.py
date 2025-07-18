@@ -2,10 +2,7 @@ import logging
 
 from ..services.ui_service import UIService, Window
 from ..services.version_service import VersionService
-from ..services.instance_service import InstanceService
-from ..services.profile_service import ProfileService
 from ..services.github_service import GitHubService
-from ..services.loader_service import LoaderService
 
 
 class Launcher:
@@ -22,9 +19,10 @@ class Launcher:
         self.ui_service.show(Window.MAIN)
         self.versions_content = self.github_service.get_file("versions.json")
 
-        launcher_mismatch, loader_mismatch, minecraft_mismatch = (
-            self.version_service.check_for_updates(self.versions_content)
-        )
+        updates = self.version_service.check_for_updates(self.versions_content)
+        launcher_mismatch = updates["launcher"]
+        loader_mismatch = updates["loader"]
+        minecraft_mismatch = updates["minecraft"]
         if launcher_mismatch:
             logging.info("Launcher version mismatch detected.")
             self._update_launcher()
