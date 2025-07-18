@@ -7,3 +7,6 @@ class SettingsWindow:
 
     def show(self):
         logging.debug("Showing settings window")
+
+    def close(self):
+        logging.debug("Closing settings window")
