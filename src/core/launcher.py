@@ -237,7 +237,6 @@ class UpdateWorker(QThread):
             else:
                 logging.warning("Failed to download servers.dat")
             
-            logging.info("Instance update completed successfully")
             self.update_finished.emit(True)
             
         except Exception as e:
