@@ -6,7 +6,6 @@ from src.core.launcher import Launcher
 
 def main():
     set_logging()
-    logging.info("Starting FFT Minecraft Launcher")
     app = QApplication([])
     launcher = Launcher()
     launcher.start()
