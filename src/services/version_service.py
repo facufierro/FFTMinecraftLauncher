@@ -21,7 +21,7 @@ class VersionService:
             raise e
 
     def check_for_updates(self, component: Component, current_version=None):
-        if current_version == Component.JAVA.value:
+        if component == Component.JAVA:
             current_version = self._get_java_current_version()
         if current_version is None:
             current_version = self.current_versions.get(component.value)
@@ -80,10 +80,14 @@ class VersionService:
             minecraft_version = self._extract_version(
                 str(versions.get(Component.MINECRAFT.value, ""))
             )
+            java_version = self._extract_major_version(
+                str(versions.get(Component.JAVA.value, ""))
+            )
             return {
                 Component.LAUNCHER.value: launcher_version,
                 Component.LOADER.value: loader_version,
                 Component.MINECRAFT.value: minecraft_version,
+                Component.JAVA.value: java_version,
             }
         except json.JSONDecodeError as e:
             logging.error("Error decoding JSON from GitHub: %s", e)
@@ -91,14 +95,19 @@ class VersionService:
             Component.LAUNCHER.value: None,
             Component.LOADER.value: None,
             Component.MINECRAFT.value: None,
+            Component.JAVA.value: None,
         }
 
     def _get_java_current_version(self):
-        # run 'java -version' command and parse the output
         result = subprocess.run(
             ["java", "-version"], capture_output=True, text=True, check=False
         )
-        return result
+        if result.stderr:
+            version_output = result.stderr.splitlines()[0]
+            match = re.search(r"\d+\.\d+\.\d+", version_output)
+            if match:
+                return self._extract_major_version(match.group(0))
+        return None
 
     def _extract_version(self, version_string):
         match = re.search(
