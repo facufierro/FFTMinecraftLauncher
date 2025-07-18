@@ -3,7 +3,6 @@ import os
 import json
 import re
 import subprocess
-
 from ..models.constants import Component
 from ..services.github_service import GitHubService
 
@@ -21,28 +20,36 @@ class VersionService:
             raise e
 
     def check_for_updates(self, component: Component, current_version=None):
-        if component == Component.JAVA:
-            self.check_java_update()
-            return
-        if current_version is None:
-            current_version = self.current_versions.get(component.value)
+        try:
+            if component == Component.JAVA:
+                self._check_java_update()
+            if current_version is None:
+                current_version = self.current_versions.get(component.value)
 
-        required_version = self.required_versions.get(component.value)
-        logging.info(
-            "Checking for updates for %s: %s vs %s",
-            component.value,
-            current_version,
-            required_version,
-        )
-        return current_version != required_version
+            required_version = self.required_versions.get(component.value)
+            logging.info(
+                "Checking for updates for %s: %s vs %s",
+                component.value,
+                current_version,
+                required_version,
+            )
+            return current_version != required_version
+        except Exception as e:
+            logging.error("Error checking for updates: %s", e)
+            return False
 
-    def check_java_update(self):
-        current_version = self._get_java_current_version()
-        required_version = self.required_versions.get(Component.JAVA.value)
-        logging.info(
-            "Checking Java update: %s vs %s", current_version, required_version
-        )
-        return int(current_version) < int(required_version)
+    def _check_java_update(self):
+        try:
+            current_version = self._get_java_current_version()
+            required_version = self.required_versions.get(Component.JAVA.value)
+            if not current_version or not required_version:
+                logging.error("Current or required Java version is not set.")
+                yield True
+            else:
+                yield int(current_version) < int(required_version)
+        except Exception as e:
+            logging.error("Error checking Java update: %s", e)
+            yield False
 
     def _get_current_versions(self):
         try:
@@ -108,30 +115,43 @@ class VersionService:
         }
 
     def _get_java_current_version(self):
-        result = subprocess.run(
-            ["java", "-version"], capture_output=True, text=True, check=False
-        )
-        if result.stderr:
-            version_output = result.stderr.splitlines()[0]
-            match = re.search(r"\d+\.\d+\.\d+", version_output)
-            if match:
-                return self._extract_major_version(match.group(0))
-        return None
+        try:
+            result = subprocess.run(
+                ["java", "-version"], capture_output=True, text=True, check=False
+            )
+            if result.stderr:
+                version_output = result.stderr.splitlines()[0]
+                match = re.search(r"\d+\.\d+\.\d+", version_output)
+                if match:
+                    return self._extract_major_version(match.group(0))
+            return None
+        except FileNotFoundError:
+
+            logging.error("Java executable not found.")
+            return None
 
     def _extract_version(self, version_string):
-        match = re.search(
-            r"(?:[a-zA-Z0-9]+-)?(\d+\.\d+(?:\.\d+)?)(?:-pre\d+)?", version_string
-        )
-        if match:
-            return match.group(1)
-        logging.warning("Could not extract version from string: %s", version_string)
-        return None
+        try:
+            match = re.search(
+                r"(?:[a-zA-Z0-9]+-)?(\d+\.\d+(?:\.\d+)?)(?:-pre\d+)?", version_string
+            )
+            if match:
+                return match.group(1)
+            logging.warning("Could not extract version from string: %s", version_string)
+            return None
+        except Exception as e:
+            logging.error("Error extracting version: %s", e)
+            return None
 
     def _extract_major_version(self, version_string):
-        match = re.search(r"(\d+)(?:\.\d+)?", version_string)
-        if match:
-            return match.group(1)
-        logging.warning(
-            "Could not extract major version from string: %s", version_string
-        )
-        return None
+        try:
+            match = re.search(r"(\d+)(?:\.\d+)?", version_string)
+            if match:
+                return match.group(1)
+            logging.warning(
+                "Could not extract major version from string: %s", version_string
+            )
+            return None
+        except Exception as e:
+            logging.error("Error extracting major version: %s", e)
+            return None
