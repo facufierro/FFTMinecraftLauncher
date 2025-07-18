@@ -3,19 +3,20 @@ import os
 
 import requests
 from ..models.instance import Instance
-from ..models.constants import Paths, Urls, Component, LOADER_FILE_NAME
+from ..models.constants import Path, Url, Component, LOADER_FILE_NAME
 
 
 class LoaderService:
     def __init__(self, instance: Instance):
         logging.debug("Initializing LoaderService")
         self.instance = instance
-        self.minecraft_dir = Paths.MINECRAFT_DIR.value
-        self.downloads_dir = Paths.DOWNLOADS_DIR.value
-        self.loader_url = Urls.LOADER_DOWNLOAD.value % (
+        self.minecraft_dir = Path.MINECRAFT_DIR.value
+        self.downloads_dir = Path.DOWNLOADS_DIR.value
+        self.loader_url = Url.LOADER_DOWNLOAD.value % (
             self.instance.required_versions.get(Component.LOADER.value),
             self.instance.required_versions.get(Component.LOADER.value),
         )
+        self.update_finished_callbacks = []
         logging.debug("LoaderService initialized")
 
     def update(self):
@@ -26,6 +27,7 @@ class LoaderService:
             logging.debug("Download required for Loader")
             self._download()
         self._install()
+        self._emit_update_finished()
 
     def _is_download_required(self):
         loader_jar = os.path.join(
@@ -60,7 +62,8 @@ class LoaderService:
         logging.debug("Installing Loader...")
         loader_jar = os.path.join(
             self.downloads_dir,
-            LOADER_FILE_NAME % self.instance.required_versions.get(Component.LOADER.value),
+            LOADER_FILE_NAME
+            % self.instance.required_versions.get(Component.LOADER.value),
         )
         if not os.path.exists(loader_jar):
             logging.error(f"Loader JAR not found at {loader_jar}")
@@ -80,3 +83,10 @@ class LoaderService:
         except subprocess.CalledProcessError as e:
             logging.error(f"Failed to install Loader: {e.stderr}")
             raise
+
+    def connect_update_finished(self, callback):
+        self.update_finished_callbacks.append(callback)
+
+    def _emit_update_finished(self):
+        for cb in self.update_finished_callbacks:
+            cb()
