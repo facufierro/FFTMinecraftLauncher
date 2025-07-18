@@ -1,22 +1,16 @@
 import logging
+from ..services.version_service import VersionService
 
 
 class JavaService:
-    def __init__(self):
+    def __init__(self, version_service: VersionService):
         logging.debug("Initializing JavaService")
+        self.version_service = version_service
 
-    def check_java_installation(self):
-        logging.info("Checking Java installation")
+    def update(self):
+        logging.info("Updating Java")
         try:
             pass
         except Exception as e:
-            logging.error("Failed to check Java installation: %s", e)
-            raise
-
-    def install_java(self):
-        logging.info("Installing Java")
-        try:
-            pass
-        except Exception as e:
-            logging.error("Failed to install Java: %s", e)
+            logging.error("Failed to update Java: %s", e)
             raise
