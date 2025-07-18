@@ -8,7 +8,6 @@ class UIService:
     def __init__(self):
         self.main_window = MainWindow()
         self.settings_window = SettingsWindow()
-        logging.debug("UIService initialized")
 
     def show(self, window: Window):
         try:

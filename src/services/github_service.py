@@ -1,26 +1,15 @@
 import logging
-import os
-import json
 import requests
 from ..models.constants import Urls
 
 
 class GitHubService:
-
     def __init__(self):
-        try:
-            self.repo_url = Urls.GITHUB_REPO.value
-            self.branch = "refactor"
-            logging.debug("GitHubService initialized")
-        except Exception as e:
-            logging.error("Failed to initialize GitHubService: %s", e)
-            self.repo_url = None
+        self.repo_url = Urls.GITHUB_REPO.value
+        self.branch = "refactor"
+        logging.debug("GitHubService initialized")
 
     def get_file(self, file_path):
-        """
-        Download a file from the GitHub repo, searching main, dev, refactor branches.
-        Returns the file content as text if found, else None.
-        """
         repo_url = self.repo_url.rstrip("/")
         branch = self.branch
         raw_url = (

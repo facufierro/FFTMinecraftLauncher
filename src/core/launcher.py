@@ -1,38 +1,18 @@
 import logging
 
 from ..services.ui_service import UIService, Window
-from ..services.version_service import VersionService
-from ..services.github_service import GitHubService
+from ..services import launcher_service
 
 
 class Launcher:
     def __init__(self):
-        logging.info("Initializing services...")
         self.ui_service = UIService()
-        self.github_service = GitHubService()
-        self.version_service = VersionService()
         # self.instance_service = InstanceService()
         # self.profile_service = ProfileService()
-        logging.info("All services initialized")
 
     def start(self):
         self.ui_service.show(Window.MAIN)
-        self.versions_content = self.github_service.get_file("versions.json")
-
-        updates = self.version_service.check_for_updates(self.versions_content)
-        launcher_mismatch = updates["launcher"]
-        loader_mismatch = updates["loader"]
-        minecraft_mismatch = updates["minecraft"]
-        if launcher_mismatch:
-            logging.info("Launcher version mismatch detected.")
-            self._update_launcher()
-        elif loader_mismatch:
-            logging.info("Loader version mismatch detected.")
-        elif minecraft_mismatch:
-            logging.info("Minecraft version mismatch detected.")
-        else:
-            logging.info("No version mismatches detected.")
-
+        launcher_service.check_for_updates()
         # self._set_up_profile()
         # self._check_for_updates()
 
@@ -46,22 +26,18 @@ class Launcher:
         logging.info("Exiting the launcher")
         self.ui_service.main_window.close()
 
-    def _replace_updater(self):
-        try:
-            updater_content = self.github_service.get_release_file("updater.exe")
-            if updater_content:
-                self.github_service.save_file(updater_content, "updater.exe")
-                logging.info("Updater replaced successfully.")
-        except Exception as e:
-            logging.error(f"Failed to replace updater: {e}")
+    # def _replace_updater(self):
+    #     try:
+    #         updater_content = self.github_service.get_release_file("updater.exe")
+    #         if updater_content:
+    #             self.github_service.save_file(updater_content, "updater.exe")
+    #             logging.info("Updater replaced successfully.")
+    #     except Exception as e:
+    #         logging.error(f"Failed to replace updater: {e}")
 
-    def _check_for_updates(self):
-        logging.info("Checking for updates...")
-        self.version_service.check_for_updates(self.versions_content)
-
-    def _update_launcher(self):
-        logging.info("Updating launcher...")
-        self.ui_service.show(Window.UPDATE)
+    # def _update_launcher(self):
+    #     logging.info("Updating launcher...")
+    #     self.ui_service.show(Window.UPDATE)
 
     # def _set_up_profile(self):
     #     logging.info("Setting up profile...")
