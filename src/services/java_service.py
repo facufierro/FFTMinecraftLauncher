@@ -1,10 +1,10 @@
 import logging
 import webbrowser
-from ..services.version_service import VersionService
+from .versions_service import VersionsService
 
 
 class JavaService:
-    def __init__(self, version_service: VersionService):
+    def __init__(self, version_service: VersionsService):
         logging.debug("Initializing JavaService")
         self.version_service = version_service
 
