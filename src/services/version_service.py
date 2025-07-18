@@ -15,14 +15,18 @@ class VersionService:
                 launcher_version = versions.get("launcher", {})
                 loader_version = self._extract_version(versions.get("loader", ""))
                 minecraft_version = versions.get("minecraft", {})
+                logging.info("Current Versions:")
+                logging.info(f"  Launcher: {launcher_version}")
+                logging.info(f"  Loader: {loader_version}")
+                logging.info(f"  Minecraft: {minecraft_version}")
                 return {
-                    launcher_version,
-                    loader_version,
-                    minecraft_version,
+                    "launcher": launcher_version,
+                    "loader": loader_version,
+                    "minecraft": minecraft_version,
                 }
         except FileNotFoundError:
             logging.error("Versions file not found: %s", self.versions_file)
-            return {None, None, None}
+            return {"launcher": None, "loader": None, "minecraft": None}
 
     def get_github_versions(self, content):
         if content:
@@ -31,14 +35,19 @@ class VersionService:
                 launcher_version = versions.get("launcher", {})
                 loader_version = self._extract_version(versions.get("loader", ""))
                 minecraft_version = versions.get("minecraft", {})
+                logging.info("GitHub Versions:")
+                logging.info(f"  Launcher: {launcher_version}")
+                logging.info(f"  Loader: {loader_version}")
+                logging.info(f"  Minecraft: {minecraft_version}")
                 return {
-                    launcher_version,
-                    loader_version,
-                    minecraft_version,
+                    "launcher": launcher_version,
+                    "loader": loader_version,
+                    "minecraft": minecraft_version,
                 }
+
             except json.JSONDecodeError as e:
                 logging.error("Error decoding JSON from GitHub: %s", e)
-        return {None, None, None}
+        return {"launcher": None, "loader": None, "minecraft": None}
 
     def check_for_updates(self, content):
         try:
