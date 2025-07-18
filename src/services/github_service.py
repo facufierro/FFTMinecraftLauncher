@@ -1,13 +1,13 @@
 import logging
 import requests
-from ..models.constants import Urls
+from ..models.constants import Url
 import json
 
 
 class GitHubService:
     def __init__(self):
         try:
-            self.repo_url = Urls.GITHUB_REPO.value
+            self.repo_url = Url.GITHUB_REPO.value
             self.branch = "refactor"
             logging.debug("GitHubService initialized")
         except Exception as e:
