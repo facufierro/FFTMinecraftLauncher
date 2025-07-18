@@ -1,4 +1,3 @@
-
 import logging
 import os
 import shutil
@@ -87,4 +86,24 @@ class FileService:
             logging.debug(f"Replaced file: {file_path} in {target_folder}")
         except Exception as e:
             logging.error(f"Failed to replace file: {e}")
+            raise
+
+    def save_file_content(self, content, file_path):
+        """Save content (bytes or text) to a file"""
+        try:
+            logging.debug(f"Saving content to {file_path}")
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            # Write content based on type
+            if isinstance(content, bytes):
+                with open(file_path, "wb") as f:
+                    f.write(content)
+            else:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+            
+            logging.debug(f"Saved content to {file_path}")
+        except Exception as e:
+            logging.error(f"Failed to save content to {file_path}: {e}")
             raise
