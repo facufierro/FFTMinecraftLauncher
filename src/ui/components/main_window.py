@@ -20,7 +20,6 @@ class MainWindow(QMainWindow):
         # Add Launch button and position it
         self.launch_button = LaunchButton(central_widget)
         self.launch_button.show()
-        logging.debug("MainWindow initialized")
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
