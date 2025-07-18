@@ -16,7 +16,9 @@ class LauncherService:
                 "updater.exe", Url.LAUNCHER_REPO.value
             )
             if not self.updater_file:
-                logging.warning("updater.exe not found in latest release - updater functionality will be disabled")
+                logging.warning(
+                    "updater.exe not found in latest release - updater functionality will be disabled"
+                )
             logging.debug("LauncherService initialized")
         except Exception as e:
             logging.critical("Error initializing LauncherService: %s", e)
@@ -38,3 +40,6 @@ class LauncherService:
     def _launch_updater(self):
         logging.info("Launching updater...")
         # subprocess.Popen(["updater.exe"], cwd=".")
+
+    def launch_game(self):
+        logging.info("Launching game...")
