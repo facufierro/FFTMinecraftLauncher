@@ -8,8 +8,26 @@ import json
 
 
 class GitHubService:
-    def __init__(self):
+    def __init__(self, progress_callback=None):
         logging.debug("GitHubService initialized")
+        self._repo_cache = {}  # Cache for downloaded repository zips
+        self.progress_callback = progress_callback  # Callback for progress updates
+        
+        # Create optimized session for faster downloads
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'FFT-Minecraft-Launcher/2.0.0',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive'
+        })
+        # Configure connection pooling for better performance
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=20,
+            max_retries=3
+        )
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
 
     def get_file(self, file_path, branch, repo_url):
         repo_url = repo_url.rstrip("/")
@@ -24,7 +42,7 @@ class GitHubService:
             + f"/{branch}/{filename}"
         )
         try:
-            response = requests.get(raw_url, timeout=10)
+            response = self.session.get(raw_url, timeout=10)
             if response.status_code == 200:
                 logging.debug(f"Downloaded {filename} from {branch} branch.")
                 
@@ -47,62 +65,32 @@ class GitHubService:
         Download a specific folder from the GitHub repo.
         Returns a zip file containing only the requested folder content, else None.
         """
-        repo_url = repo_url.rstrip("/")
+        # For single folder requests, use a temporary directory approach
+        import tempfile
         
-        # folder_name should now be the actual repository folder name
-        # e.g., "configureddefaults", "mods", etc.
-        
-        branch = branch
-        zip_url = repo_url + f"/archive/refs/heads/{branch}.zip"
-        
-        try:
-            response = requests.get(zip_url, timeout=20)
-            if response.status_code == 200:
-                logging.debug(f"Downloaded zip for branch {branch}.")
-                
-                # Extract the repository name from the URL
-                repo_name = repo_url.split("/")[-1]
-                expected_root = f"{repo_name}-{branch}/"
-                target_folder_in_zip = f"{expected_root}{folder_name}/"
-                
-                logging.debug(f"Looking for folder: {target_folder_in_zip}")
-                
-                # Create a new zip containing only the requested folder
-                output_zip = io.BytesIO()
-                files_found = 0
-                
-                with zipfile.ZipFile(io.BytesIO(response.content), 'r') as input_zip:
-                    # Log all files to see what's actually in the zip
-                    logging.debug(f"Files in zip: {[f.filename for f in input_zip.filelist[:10]]}")  # Show first 10
-                    
-                    with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED) as output_zip_file:
-                        for file_info in input_zip.filelist:
-                            if file_info.filename.startswith(target_folder_in_zip):
-                                # Remove the repository root and folder path from the filename
-                                relative_path = file_info.filename[len(target_folder_in_zip):]
-                                if relative_path and not file_info.is_dir():  # Skip directories and empty paths
-                                    file_data = input_zip.read(file_info.filename)
-                                    output_zip_file.writestr(relative_path, file_data)
-                                    files_found += 1
-                                    logging.debug(f"Added file: {relative_path}")
-                
-                output_zip.seek(0)
-                result = output_zip.getvalue()
-                
-                if files_found > 0:
-                    logging.debug(f"Extracted {files_found} files from folder {folder_name} from {branch} branch.")
-                    return result
-                else:
-                    logging.warning(f"No files found in folder {folder_name} from {branch} branch.")
-                    return None
-            else:
-                logging.warning(
-                    f"Failed to fetch zip from {branch}, status code: {response.status_code}"
-                )
-        except Exception as e:
-            logging.error(f"Error fetching zip from {zip_url}: {e}")
-        logging.error(f"Could not fetch zip for branch {branch}.")
-        return None
+        with tempfile.TemporaryDirectory() as temp_dir:
+            success = self.extract_folders_directly([folder_name], branch, repo_url, temp_dir)
+            if not success:
+                return None
+            
+            # Create a zip from the extracted folder
+            local_folder_name = self._get_local_folder_name(folder_name)
+            folder_path = os.path.join(temp_dir, local_folder_name)
+            
+            if not os.path.exists(folder_path):
+                return None
+            
+            # Create zip in memory
+            output_zip = io.BytesIO()
+            with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for root, dirs, files in os.walk(folder_path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, folder_path)
+                        zip_file.write(file_path, arcname)
+            
+            output_zip.seek(0)
+            return output_zip.getvalue()
 
     def save_file(self, content, dest_path):
         """
@@ -135,9 +123,9 @@ class GitHubService:
         owner_repo = repo_url.replace("https://github.com/", "")
         api_url = f"https://api.github.com/repos/{owner_repo}/releases/latest"
         try:
-            response = requests.get(api_url, timeout=15)
+            response = self.session.get(api_url, timeout=15)
             if response.status_code != 200:
-                logging.error(
+                logging.warning(
                     f"Failed to fetch release info, status code: {response.status_code}"
                 )
                 return None
@@ -145,7 +133,7 @@ class GitHubService:
             for asset in release.get("assets", []):
                 if asset.get("name") == asset_name:
                     download_url = asset.get("browser_download_url")
-                    asset_resp = requests.get(download_url, timeout=30)
+                    asset_resp = self.session.get(download_url, timeout=30)
                     if asset_resp.status_code == 200:
                         logging.info(f"Downloaded release asset: {asset_name}")
                         return asset_resp.content
@@ -153,7 +141,190 @@ class GitHubService:
                         f"Failed to download asset {asset_name}, status code: {asset_resp.status_code}"
                     )
                     return None
-            logging.error(f"Asset {asset_name} not found in latest release.")
+            logging.warning(f"Asset {asset_name} not found in latest release.")
         except Exception as e:
             logging.error(f"Error fetching release asset {asset_name}: {e}")
         return None
+
+    def _get_repo_zip(self, branch, repo_url):
+        """
+        Download and cache the repository zip file.
+        Returns the zip content as bytes, cached for subsequent calls.
+        """
+        cache_key = f"{repo_url}#{branch}"
+        
+        if cache_key in self._repo_cache:
+            logging.debug(f"Using cached zip for {repo_url} branch {branch}")
+            self._update_progress(10, "Using cached repository data")
+            return self._repo_cache[cache_key]
+        
+        repo_url = repo_url.rstrip("/")
+        zip_url = repo_url + f"/archive/refs/heads/{branch}.zip"
+        
+        try:
+            logging.info(f"Downloading repository zip from {zip_url}")
+            self._update_progress(0, "Starting download...", "Connecting to GitHub")
+            
+            # Optimized for faster downloads using session
+            response = self.session.get(zip_url, timeout=60, stream=True)
+            if response.status_code == 200:
+                # Get total size if available
+                total_size = int(response.headers.get('content-length', 0))
+                if total_size > 0:
+                    size_mb = total_size / 1024 / 1024
+                    logging.info(f"Repository size: {size_mb:.1f}MB")
+                    self._update_progress(5, f"Downloading {size_mb:.1f}MB repository", "Download started")
+                else:
+                    logging.info("Repository size unknown, starting download...")
+                    self._update_progress(5, "Downloading repository", "Download started")
+                
+                # Use much larger chunks for better performance - 1MB chunks
+                content = b""
+                chunk_size = 1048576  # 1MB chunks instead of 32KB
+                downloaded = 0
+                last_progress_update = 0
+                
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        content += chunk
+                        downloaded += len(chunk)
+                        
+                        # Update progress less frequently to reduce overhead
+                        if total_size > 0:
+                            progress = 5 + int((downloaded / total_size) * 85)  # 5-90% for download
+                            current_mb = downloaded / 1024 / 1024
+                            
+                            # Update only every 10MB or on significant progress change (5%) to reduce UI overhead
+                            if current_mb >= last_progress_update + 10 or progress >= last_progress_update + 5 or downloaded == total_size:
+                                last_progress_update = max(current_mb, progress)
+                                mb_total = total_size / 1024 / 1024
+                                self._update_progress(
+                                    progress, 
+                                    f"Downloading repository ({current_mb:.1f}/{mb_total:.1f}MB)",
+                                    f"{progress-5:.1f}% complete"
+                                )
+                        else:
+                            # If we don't know the total size, update every 10MB downloaded
+                            current_mb = downloaded / 1024 / 1024
+                            if current_mb >= last_progress_update + 10:
+                                last_progress_update = current_mb
+                                progress = min(5 + int(current_mb * 5), 85)  # Estimate progress
+                                self._update_progress(
+                                    progress, 
+                                    f"Downloading repository ({current_mb:.1f}MB)",
+                                    "Download in progress..."
+                                )
+                
+                download_mb = len(content) / 1024 / 1024
+                logging.info(f"Downloaded and cached {download_mb:.1f}MB for branch {branch}")
+                self._update_progress(90, "Download complete, caching...", "Processing repository data")
+                self._repo_cache[cache_key] = content
+                return content
+            else:
+                logging.warning(f"Failed to fetch zip from {branch}, status code: {response.status_code}")
+                self._update_progress(0, "Download failed", f"HTTP {response.status_code}")
+        except Exception as e:
+            logging.error(f"Error fetching zip from {zip_url}: {e}")
+            self._update_progress(0, "Download error", str(e))
+        
+        return None
+
+    def extract_folders_directly(self, folder_names, branch, repo_url, base_extract_path):
+        """
+        Download repo once and extract folders directly to filesystem.
+        Much more efficient than creating intermediate zip files.
+        """
+        repo_content = self._get_repo_zip(branch, repo_url)
+        if repo_content is None:
+            logging.error("Failed to download repository")
+            return False
+        
+        repo_name = repo_url.split("/")[-1]
+        expected_root = f"{repo_name}-{branch}/"
+        
+        try:
+            self._update_progress(92, "Processing zip file...", "Reading repository structure")
+            with zipfile.ZipFile(io.BytesIO(repo_content), 'r') as zip_ref:
+                logging.info(f"Extracting {len(folder_names)} folders directly to filesystem...")
+                self._update_progress(95, "Extracting folders...", f"Processing {len(folder_names)} folders")
+                
+                for i, folder_name in enumerate(folder_names):
+                    folder_progress = 95 + int((i / len(folder_names)) * 5)  # 95-100%
+                    self._update_progress(folder_progress, f"Extracting {folder_name}...", f"Folder {i+1}/{len(folder_names)}")
+                    
+                    target_folder_in_zip = f"{expected_root}{folder_name}/"
+                    files_extracted = 0
+                    
+                    # Determine local folder mapping
+                    local_folder_name = self._get_local_folder_name(folder_name)
+                    extract_path = os.path.join(base_extract_path, local_folder_name)
+                    
+                    # Clear existing folder for clean update
+                    if os.path.exists(extract_path):
+                        import shutil
+                        shutil.rmtree(extract_path)
+                        logging.debug(f"Cleared existing folder: {local_folder_name}")
+                    
+                    # Create directory
+                    os.makedirs(extract_path, exist_ok=True)
+                    
+                    # Extract files directly
+                    for file_info in zip_ref.filelist:
+                        if file_info.filename.startswith(target_folder_in_zip) and not file_info.is_dir():
+                            # Get relative path within the folder
+                            relative_path = file_info.filename[len(target_folder_in_zip):]
+                            if relative_path:
+                                # Full local path
+                                local_file_path = os.path.join(extract_path, relative_path)
+                                
+                                # Create subdirectories if needed
+                                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                                
+                                # Extract file directly
+                                with zip_ref.open(file_info) as source:
+                                    with open(local_file_path, 'wb') as target:
+                                        # Copy in chunks for memory efficiency
+                                        while True:
+                                            chunk = source.read(8192)
+                                            if not chunk:
+                                                break
+                                            target.write(chunk)
+                                
+                                files_extracted += 1
+                    
+                    if files_extracted > 0:
+                        logging.info(f"Extracted {files_extracted} files to {local_folder_name}/")
+                    else:
+                        logging.warning(f"No files found for folder {folder_name}")
+                
+                self._update_progress(100, "Extraction complete!", f"Successfully processed {len(folder_names)} folders")
+                return True
+                
+        except Exception as e:
+            logging.error(f"Error extracting folders: {e}")
+            return False
+
+    def _get_local_folder_name(self, repo_folder_name):
+        """Map repository folder names to local folder names"""
+        folder_mapping = {
+            "configureddefaults": "configs",
+            "kubejs": "kubejs", 
+            "modflared": "modflared",
+            "mods": "mods",
+            "resourcepacks": "resourcepacks",
+            "shaderpacks": "shaderpacks"
+        }
+        return folder_mapping.get(repo_folder_name, repo_folder_name)
+
+    def clear_cache(self):
+        """Clear the repository cache to force fresh downloads"""
+        self._repo_cache.clear()
+        logging.debug("Repository cache cleared")
+
+    def _update_progress(self, progress, status, details=None):
+        """Update progress if callback is available"""
+        if self.progress_callback:
+            try:
+                self.progress_callback(progress, status, details)
+            except Exception as e:
+                logging.warning(f"Progress callback failed: {e}")
