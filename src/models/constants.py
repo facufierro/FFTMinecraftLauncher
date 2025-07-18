@@ -6,6 +6,11 @@ INSTANCE_NAME = "instance"
 LOADER_FILE_NAME = "neoforge-%s-installer.jar"
 
 
+class Branch(Enum):
+    CLIENT = "main"
+    LAUNCHER = "refactor"
+
+
 class Window(Enum):
     MAIN = "MAIN"
     SETTINGS = "SETTINGS"
@@ -20,18 +25,29 @@ class Path(Enum):
 
 
 class Folder(Enum):
-    DEFAULTCONFIGS = f"{Path.INSTANCE_DIR.value}defaultconfigs"
-    CONFIGS = f"{Path.INSTANCE_DIR.value}configs"
-    KUBEJS = f"{Path.INSTANCE_DIR.value}kubejs"
-    MODFLARED = f"{Path.INSTANCE_DIR.value}modflared"
-    MODS = f"{Path.INSTANCE_DIR.value}mods"
-    RESOURCEPACKS = f"{Path.INSTANCE_DIR.value}resourcepacks"
-    SHADERPACKS = f"{Path.INSTANCE_DIR.value}shaderpacks"
+    DEFAULTCONFIGS = f"{Path.INSTANCE_DIR.value}\\defaultconfigs"
+    CONFIGS = f"{Path.INSTANCE_DIR.value}\\configs"
+    KUBEJS = f"{Path.INSTANCE_DIR.value}\\kubejs"
+    MODFLARED = f"{Path.INSTANCE_DIR.value}\\modflared"
+    MODS = f"{Path.INSTANCE_DIR.value}\\mods"
+    RESOURCEPACKS = f"{Path.INSTANCE_DIR.value}\\resourcepacks"
+    SHADERPACKS = f"{Path.INSTANCE_DIR.value}\\shaderpacks"
+
+
+class RepoFolder(Enum):
+    """Repository folder names (what exists in the GitHub repo)"""
+    DEFAULTCONFIGS = "configureddefaults"
+    CONFIGS = "configs"  
+    KUBEJS = "kubejs"
+    MODFLARED = "modflared"
+    MODS = "mods"
+    RESOURCEPACKS = "resourcepacks" 
+    SHADERPACKS = "shaderpacks"
 
 
 class File(Enum):
     VERSIONS = "versions.json"
-    SERVERS = f"{Path.INSTANCE_DIR.value}servers.dat"
+    SERVERS = f"{Path.INSTANCE_DIR.value}\\servers.dat"
 
 
 class Url(Enum):
