@@ -1,4 +1,5 @@
 import logging
+from PySide6.QtCore import QThread, QObject, Signal
 
 
 from ..models.constants import INSTANCE_NAME, Component, Folder, File, Url, Branch, RepoFolder
@@ -22,7 +23,10 @@ class Launcher:
         logging.info("Initializing Launcher...")
         self.instance = Instance(INSTANCE_NAME)
         self.ui_service = UIService()
+        
+        # Initialize GitHub service after UI is ready
         self._set_up_github_service()
+        
         self.version_service = VersionsService(self.instance, self.github_service)
         self.launcher_service = LauncherService(
             self.version_service, self.github_service
@@ -48,7 +52,20 @@ class Launcher:
         self.ui_service.main_window.close()
 
     def _set_up_github_service(self):
-        self.github_service = GitHubService()
+        # Create progress callback that updates the UI
+        def progress_callback(progress, status, details=None):
+            logging.debug(f"Progress update: {progress}% - {status} - {details}")
+            if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+                main_window = self.ui_service.main_window
+                if hasattr(main_window, 'progress_bar'):
+                    main_window.progress_bar.set_progress(progress, status, details)
+                    logging.debug(f"Progress bar updated: {progress}%")
+                else:
+                    logging.warning("No progress bar found in main window")
+            else:
+                logging.warning("UI service or main window not available for progress update")
+        
+        self.github_service = GitHubService(progress_callback)
         self.launcher_repo = Url.LAUNCHER_REPO.value
         self.client_repo = Url.CLIENT_REPO.value
         self.launcher_branch = Branch.LAUNCHER.value
@@ -104,39 +121,122 @@ class Launcher:
             logging.error(f"Failed to set up profile: {e}")
 
     def update_instance(self):
-        self.instance_service.update_config(
-            self.github_service.get_folder(
-                RepoFolder.DEFAULTCONFIGS.value, self.client_branch, self.client_repo
+        # Show progress bar and reset it
+        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+            main_window = self.ui_service.main_window
+            if hasattr(main_window, 'progress_bar'):
+                main_window.progress_bar.reset()
+                main_window.progress_bar.start_multi_step(2, "Preparing instance update...")
+                
+                # Disable launch button during update
+                if hasattr(main_window, 'launch_button'):
+                    main_window.launch_button.setEnabled(False)
+        
+        # Create and start worker thread
+        self.update_worker = UpdateWorker(self)
+        self.update_worker.progress_update.connect(self._on_progress_update)
+        self.update_worker.update_finished.connect(self._on_update_finished)
+        self.update_worker.start()
+    
+    def _on_progress_update(self, progress, status, details):
+        """Handle progress updates from worker thread"""
+        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+            main_window = self.ui_service.main_window
+            
+            # Update progress bar
+            if hasattr(main_window, 'progress_bar'):
+                main_window.progress_bar.set_progress(progress, status, details)
+            
+            # Update console using signal
+            if hasattr(main_window, 'console'):
+                main_window.console.append_message.emit(f"[{progress:3d}%] {status}", "INFO")
+    
+    def _on_update_finished(self, success):
+        """Handle update completion"""
+        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+            main_window = self.ui_service.main_window
+            
+            # Re-enable launch button
+            if hasattr(main_window, 'launch_button'):
+                main_window.launch_button.setEnabled(True)
+            
+            # Update progress bar
+            if hasattr(main_window, 'progress_bar'):
+                if success:
+                    main_window.progress_bar.set_progress(100, "Update completed!", "All folders updated successfully")
+                else:
+                    main_window.progress_bar.set_error("Update failed - check console for details")
+        
+        logging.info(f"Instance update {'completed successfully' if success else 'failed'}")
+
+
+class UpdateWorker(QThread):
+    """Worker thread for instance updates to prevent UI freezing"""
+    progress_update = Signal(int, str, str)  # progress, status, details
+    update_finished = Signal(bool)  # success
+    
+    def __init__(self, launcher):
+        super().__init__()
+        self.launcher = launcher
+    
+    def run(self):
+        """Run the update process in background thread"""
+        try:
+            logging.info("UpdateWorker started")
+            # Connect progress callback to emit signals
+            def progress_callback(progress, status, details=""):
+                try:
+                    self.progress_update.emit(progress, status, details)
+                    logging.debug(f"Progress update emitted: {progress}% - {status} - {details}")
+                except Exception as e:
+                    logging.error(f"Progress callback error: {e}")
+            
+            # Set up progress callback for GitHub service
+            self.launcher.github_service.progress_callback = progress_callback
+            
+            # Clear cache to force fresh download with optimizations
+            self.launcher.github_service.clear_cache()
+            
+            # Initial progress update
+            self.progress_update.emit(0, "Starting update...", "Preparing to download files")
+            
+            # Extract all folders directly to filesystem - much faster!
+            folder_names = [
+                RepoFolder.DEFAULTCONFIGS.value,
+                RepoFolder.KUBEJS.value, 
+                RepoFolder.MODFLARED.value,
+                RepoFolder.MODS.value,
+                RepoFolder.RESOURCEPACKS.value,
+                RepoFolder.SHADERPACKS.value
+            ]
+            
+            logging.info("Updating instance folders...")
+            success = self.launcher.github_service.extract_folders_directly(
+                folder_names, 
+                self.launcher.client_branch, 
+                self.launcher.client_repo,
+                self.launcher.instance.instance_path  # Extract directly to instance folder
             )
-        )
-        self.instance_service.update_kubejs(
-            self.github_service.get_folder(
-                RepoFolder.KUBEJS.value, self.client_branch, self.client_repo
+            
+            if not success:
+                logging.error("Failed to update instance folders")
+                self.update_finished.emit(False)
+                return
+            
+            # Download and save the servers.dat file
+            self.progress_update.emit(95, "Downloading server list...", "Getting servers.dat")
+            servers_content = self.launcher.github_service.get_file(
+                File.SERVERS.value, self.launcher.client_branch, self.launcher.client_repo
             )
-        )
-        self.instance_service.update_modflared(
-            self.github_service.get_folder(
-                RepoFolder.MODFLARED.value, self.client_branch, self.client_repo
-            )
-        )
-        self.instance_service.update_mods(
-            self.github_service.get_folder(
-                RepoFolder.MODS.value, self.client_branch, self.client_repo
-            )
-        )
-        self.instance_service.update_resourcepacks(
-            self.github_service.get_folder(
-                RepoFolder.RESOURCEPACKS.value, self.client_branch, self.client_repo
-            )
-        )
-        self.instance_service.update_shaderpacks(
-            self.github_service.get_folder(
-                RepoFolder.SHADERPACKS.value, self.client_branch, self.client_repo
-            )
-        )
-        # Download and save the servers.dat file
-        servers_content = self.github_service.get_file(
-            File.SERVERS.value, self.client_branch, self.client_repo
-        )
-        if servers_content:
-            self.file_service.save_file_content(servers_content, File.SERVERS.value)
+            if servers_content:
+                self.launcher.file_service.save_file_content(servers_content, File.SERVERS.value)
+                logging.info("servers.dat downloaded successfully")
+            else:
+                logging.warning("Failed to download servers.dat")
+            
+            logging.info("Instance update completed successfully")
+            self.update_finished.emit(True)
+            
+        except Exception as e:
+            logging.error(f"Update failed with exception: {e}")
+            self.update_finished.emit(False)
