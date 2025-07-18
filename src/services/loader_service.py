@@ -4,27 +4,14 @@ from ..models.constants import Paths
 
 
 class LoaderService:
-    def __init__(self, instance: Instance):
+    def __init__(self):
         logging.debug("Initializing LoaderService")
-        self.instance = instance
         self.minecraft_dir = Paths.MINECRAFT_DIR.value
-        self.minecraft_version = instance.minecraft_version
-        self.loader_version = instance.loader_version
         logging.debug("LoaderService initialized")
 
     def check_installation(self):
         logging.debug("Checking Loader installation...")
         # check if neoforge is installed at self.minecraft_dir
-        if not self.instance.loader_version:
-            logging.debug("Loader version not specified, assuming not installed")
-            return False
-
-        logging.debug(f"Checking Loader installation in {self.minecraft_dir}")
-
-    def get_version(self):
-        logging.debug("Getting Loader version")
-        # Logic to retrieve the installed Loader version
-        return self.loader_version
 
     def download_Loader(self):
         logging.debug("Downloading Loader...")
@@ -48,5 +35,3 @@ class LoaderService:
 
     def get_installed_version(self):
         logging.debug("Getting Loader version")
-
-
