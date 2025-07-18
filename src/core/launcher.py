@@ -75,7 +75,7 @@ class Launcher:
         try:
             if self.version_service.check_for_updates(Component.LOADER):
                 logging.info("Loader update is needed.")
-                self.loader_service.update_finished.connect(self.update_instance)
+                self.loader_service.connect_update_finished(self.update_instance)
                 self.main_window.on_launch_button_clicked(self.loader_service.update)
             else:
                 logging.info("Loader is up to date.")
