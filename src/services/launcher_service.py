@@ -1,15 +1,20 @@
 import logging
 import json
-from ..services import version_service
+from ..services.version_service import VersionService
 
 
 class LauncherService:
-    def __init__(self):
-        logging.debug("Initializing LauncherService")
+    def __init__(self, version_service: VersionService):
+        try:
+            self.version_service = version_service
+            logging.debug("LauncherService initialized")
+        except Exception as e:
+            logging.critical("Error initializing LauncherService: %s", e)
+            raise e
 
     def check_for_updates(self):
         logging.info("Checking for updates...")
-        version_service.check_for_updates("launcher")
+        self.version_service.check_for_updates("launcher")
 
     def update(self):
         logging.info("Updating the application")
