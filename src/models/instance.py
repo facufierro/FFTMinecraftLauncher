@@ -1,20 +1,15 @@
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
+from ..models.constants import Paths
 
 
 @dataclass
 class Instance:
     name: str
-    minecraft_version: str
-    loader_version: str
-    java_dir: Optional[str] = None
-    mods_dir: Optional[str] = None
+    current_versions: Dict[str, str] = field(default_factory=dict)
+    required_versions: Dict[str, str] = field(default_factory=dict)
+    instance_path: str = Paths.INSTANCE_DIR.value
+    versions_file: str = Paths.VERSIONS_FILE.value
     mod_list: List[str] = field(default_factory=list)
-    default_configs_dir: Optional[str] = None
-    kubejs_dir: Optional[str] = None
-    local_dir: Optional[str] = None
-    modflared_dir: Optional[str] = None
-    resourcepacks_dir: Optional[str] = None
     resourcepacks: List[Dict[str, str]] = field(default_factory=list)
-    shaderpacks_dir: Optional[str] = None
     shaders: List[Dict[str, str]] = field(default_factory=list)
