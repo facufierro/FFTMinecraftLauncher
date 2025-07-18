@@ -11,7 +11,7 @@ class GitHubService:
         try:
             self.repo_url = Urls.GITHUB_REPO.value
             self.branch = "refactor"
-            logging.debug("GitHubService initialized with repo URL: %s", self.repo_url)
+            logging.debug("GitHubService initialized")
         except Exception as e:
             logging.error("Failed to initialize GitHubService: %s", e)
             self.repo_url = None
