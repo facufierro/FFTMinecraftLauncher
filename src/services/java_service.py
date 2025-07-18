@@ -1,4 +1,5 @@
 import logging
+import webbrowser
 from ..services.version_service import VersionService
 
 
@@ -8,7 +9,7 @@ class JavaService:
         self.version_service = version_service
 
     def update(self):
-        logging.info("Updating Java")
+        webbrowser.open("https://www.oracle.com/java/technologies/downloads/")
         try:
             pass
         except Exception as e:
