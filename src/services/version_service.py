@@ -70,11 +70,9 @@ class VersionService:
             return {"launcher": False, "loader": False, "minecraft": False}
 
     def _extract_version(self, version_string):
-        """
-        Extracts the version number from a version string.
-        The version string can be in the format '1.16.5', '1.17', or '1.18.2-pre1'.
-        """
-        match = re.match(r"(\d+\.\d+(\.\d+)?)(?:-pre\d+)?", version_string)
+        match = re.search(
+            r"(?:[a-zA-Z0-9]+-)?(\d+\.\d+(?:\.\d+)?)(?:-pre\d+)?", version_string
+        )
         if match:
             return match.group(1)
         logging.warning("Could not extract version from string: %s", version_string)
