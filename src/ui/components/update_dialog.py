@@ -7,11 +7,11 @@ from PyQt6.QtCore import pyqtSignal
 class UpdateDialog(QDialog):
     accept_pressed = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, label_text="An update is needed."):
         super().__init__(parent)
-        self.setWindowTitle("Update Available")
+        self.setWindowTitle("Update Needed")
         layout = QVBoxLayout()
-        self.label = QLabel("An update is available.")
+        self.label = QLabel(label_text)
         layout.addWidget(self.label)
         self.accept_button = QPushButton("Accept")
         layout.addWidget(self.accept_button)
