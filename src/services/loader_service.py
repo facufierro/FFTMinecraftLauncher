@@ -1,37 +1,82 @@
 import logging
+import os
+
+import requests
 from ..models.instance import Instance
-from ..models.constants import Paths
+from ..models.constants import Paths, Urls, Component, LOADER_FILE_NAME
 
 
 class LoaderService:
-    def __init__(self):
+    def __init__(self, instance: Instance):
         logging.debug("Initializing LoaderService")
+        self.instance = instance
         self.minecraft_dir = Paths.MINECRAFT_DIR.value
+        self.downloads_dir = Paths.DOWNLOADS_DIR.value
+        self.loader_url = Urls.LOADER_DOWNLOAD.value % (
+            self.instance.required_versions.get(Component.LOADER.value),
+            self.instance.required_versions.get(Component.LOADER.value),
+        )
         logging.debug("LoaderService initialized")
 
-    def check_installation(self):
-        logging.debug("Checking Loader installation...")
-        # check if neoforge is installed at self.minecraft_dir
-
-    def download_Loader(self):
-        logging.debug("Downloading Loader...")
-        # Simulate download process
-        logging.debug("Loader downloaded successfully")
-
-    def install_Loader(self):
-        logging.debug("Installing Loader")
-        logging.debug("Loader installation complete")
-
-    def uninstall_Loader(self):
-        logging.debug("Uninstalling Loader")
-        logging.debug("Loader uninstallation complete")
-
-    def update_Loader(self):
+    def update(self):
         logging.debug("Updating Loader")
-        logging.debug("Loader update complete")
+        if not self._is_download_required():
+            logging.debug("No download needed for Loader")
+        else:
+            logging.debug("Download required for Loader")
+            self._download()
+        self._install()
 
-    def check_for_updates(self):
-        logging.debug("Checking for Loader updates...")
+    def _is_download_required(self):
+        loader_jar = os.path.join(
+            self.downloads_dir,
+            LOADER_FILE_NAME
+            % self.instance.required_versions.get(Component.LOADER.value),
+        )
+        if not os.path.exists(loader_jar):
+            logging.debug("Loader JAR not found, download needed")
+            return True
+        logging.debug("Loader JAR already exists, no download needed")
+        return False
 
-    def get_installed_version(self):
-        logging.debug("Getting Loader version")
+    def _download(self):
+        try:
+            logging.debug("Downloading Loader...")
+            os.makedirs(self.downloads_dir, exist_ok=True)
+            filename = os.path.basename(self.loader_url)
+            target_path = os.path.join(self.downloads_dir, filename)
+            response = requests.get(self.loader_url, stream=True)
+            response.raise_for_status()
+            with open(target_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            logging.debug(f"Loader downloaded to {target_path}")
+        except requests.RequestException as e:
+            logging.error(f"Failed to download Loader: {e}")
+            raise
+
+    def _install(self):
+        logging.debug("Installing Loader...")
+        loader_jar = os.path.join(
+            self.downloads_dir,
+            LOADER_FILE_NAME % self.instance.required_versions.get(Component.LOADER.value),
+        )
+        if not os.path.exists(loader_jar):
+            logging.error(f"Loader JAR not found at {loader_jar}")
+            raise FileNotFoundError(f"Loader JAR not found at {loader_jar}")
+        # Run the loader JAR using java -jar with --installClient to avoid GUI
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["java", "-jar", loader_jar, "--installClient"],
+                cwd=self.minecraft_dir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            logging.debug(f"Loader installed successfully: {result.stdout}")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Failed to install Loader: {e.stderr}")
+            raise
