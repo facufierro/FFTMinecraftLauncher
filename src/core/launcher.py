@@ -1,7 +1,7 @@
 import logging
 
 
-from ..models.constants import INSTANCE_NAME, Component
+from ..models.constants import INSTANCE_NAME, Component, Folder, File
 from ..models.instance import Instance
 
 from ..ui.components.update_dialog import UpdateDialog
@@ -14,6 +14,7 @@ from ..services.profile_service import ProfileService
 from ..services.java_service import JavaService
 from ..services.loader_service import LoaderService
 from ..services.instance_service import InstanceService
+from ..services.file_service import FileService
 
 
 class Launcher:
@@ -29,7 +30,8 @@ class Launcher:
         self.profile_service = ProfileService()
         self.java_service = JavaService(self.version_service)
         self.loader_service = LoaderService(self.instance)
-        self.instance_service = InstanceService()
+        self.file_service = FileService()
+        self.instance_service = InstanceService(self.instance, self.file_service)
 
     def start(self):
         self.main_window = self.ui_service.show(Window.MAIN)
@@ -37,8 +39,6 @@ class Launcher:
         self._set_up_profile()
         self._check_java_update()
         self._check_loader_update()
-
-        # self._check_for_updates()
 
     def launch(self):
         logging.info("Launching the game")
@@ -63,7 +63,7 @@ class Launcher:
                 self.ui_service.close(Window.MAIN)
                 update_dialog.accept_pressed.connect(self.java_service.update)
                 update_dialog.label.setText(
-                    f"Java {self.version_service.required_versions.get(Component.JAVA.value)}+ is needed. \nA browser window will open to the Java download page."
+                    f"Java {self.instance.required_versions.get(Component.JAVA.value)}+ is needed. \nA browser window will open to the Java download page."
                 )
                 update_dialog.exec()
             else:
@@ -75,10 +75,11 @@ class Launcher:
         try:
             if self.version_service.check_for_updates(Component.LOADER):
                 logging.info("Loader update is needed.")
-                self.main_window.launch_button.setText("Update")
+                self.loader_service.update_finished.connect(self.update_instance)
                 self.main_window.on_launch_button_clicked(self.loader_service.update)
             else:
                 logging.info("Loader is up to date.")
+                self.main_window.on_launch_button_clicked(self.update_instance)
         except Exception as e:
             logging.error(f"Failed to check Loader update: {e}")
 
@@ -95,3 +96,26 @@ class Launcher:
             self.profile_service.add_profile_to_instance()
         except Exception as e:
             logging.error(f"Failed to set up profile: {e}")
+
+    def update_instance(self):
+        self.instance_service.update_config(
+            self.github_service.get_folder(Folder.DEFAULTCONFIGS.value)
+        )
+        self.instance_service.update_kubejs(
+            self.github_service.get_folder(Folder.KUBEJS.value)
+        )
+        self.instance_service.update_modflared(
+            self.github_service.get_folder(Folder.MODFLARED.value)
+        )
+        self.instance_service.update_mods(
+            self.github_service.get_folder(Folder.MODS.value)
+        )
+        self.instance_service.update_resourcepacks(
+            self.github_service.get_folder(Folder.RESOURCEPACKS.value)
+        )
+        self.instance_service.update_shaderpacks(
+            self.github_service.get_folder(Folder.SHADERPACKS.value)
+        )
+        self.file_service.replace_file(
+            File.SERVERS.value, self.github_service.get_file(File.SERVERS.value)
+        )
