@@ -5,6 +5,7 @@ from enum import Enum
 class Window(Enum):
     MAIN = "MAIN"
     SETTINGS = "SETTINGS"
+    UPDATE = "UPDATE"
 
 
 class Paths(Enum):

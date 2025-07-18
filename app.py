@@ -9,7 +9,7 @@ def main():
     logging.info("Starting FFT Minecraft Launcher")
     app = QApplication([])
     launcher = Launcher()
-    launcher.run()
+    launcher.start()
     app.exec()
 
 

@@ -16,7 +16,7 @@ class Launcher:
         # self.instance_service = InstanceService()
         # self.profile_service = ProfileService()
 
-    def run(self):
+    def start(self):
         self.ui_service.show(Window.MAIN)
         self._replace_updater()
 
@@ -41,6 +41,10 @@ class Launcher:
                 logging.info("Updater replaced successfully.")
         except Exception as e:
             logging.error(f"Failed to replace updater: {e}")
+
+    def _update_launcher(self):
+        logging.info("Updating launcher...")
+        self.ui_service.show(Window.UPDATE)
 
     # def _set_up_profile(self):
     #     logging.info("Setting up profile...")
