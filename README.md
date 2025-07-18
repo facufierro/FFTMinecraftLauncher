@@ -36,7 +36,7 @@
 ### 8. Folder Integrity Checks
 - **Check `kubejs` folder for anomalies**
   - Replace if necessary.
-- **Check `modflared` folder for anomalies**
+- **Check ``modflared`` folder for anomalies**
   - Replace if necessary.
 - **Check `mods` folder for anomalies**
   - Replace if necessary.
