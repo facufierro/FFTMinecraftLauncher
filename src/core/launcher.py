@@ -1,18 +1,24 @@
 import logging
 
 from ..services.ui_service import UIService, Window
-from ..services import launcher_service
+from ..services.github_service import GitHubService
+from ..services.version_service import VersionService
+from ..services.launcher_service import LauncherService
 
 
 class Launcher:
     def __init__(self):
+        logging.info("Initializing Launcher...")
         self.ui_service = UIService()
+        self.github_service = GitHubService()
+        self.version_service = VersionService(self.github_service)
+        self.launcher_service = LauncherService(self.version_service)
         # self.instance_service = InstanceService()
         # self.profile_service = ProfileService()
 
     def start(self):
         self.ui_service.show(Window.MAIN)
-        launcher_service.check_for_updates()
+        self.launcher_service.check_for_updates()
         # self._set_up_profile()
         # self._check_for_updates()
 
