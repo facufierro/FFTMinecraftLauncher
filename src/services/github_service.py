@@ -1,13 +1,18 @@
 import logging
 import requests
 from ..models.constants import Urls
+import json
 
 
 class GitHubService:
     def __init__(self):
-        self.repo_url = Urls.GITHUB_REPO.value
-        self.branch = "refactor"
-        logging.debug("GitHubService initialized")
+        try:
+            self.repo_url = Urls.GITHUB_REPO.value
+            self.branch = "refactor"
+            logging.debug("GitHubService initialized")
+        except Exception as e:
+            logging.critical(f"Error initializing GitHubService: {e}")
+            raise e
 
     def get_file(self, file_path):
         repo_url = self.repo_url.rstrip("/")
@@ -20,7 +25,7 @@ class GitHubService:
             response = requests.get(raw_url, timeout=10)
             if response.status_code == 200:
                 logging.debug(f"Downloaded {file_path} from {branch} branch.")
-                return response.text
+                return json.loads(response.text)  # Parse response as JSON
             else:
                 logging.warning(
                     f"Failed to fetch {file_path} from {branch}, status code: {response.status_code}"
