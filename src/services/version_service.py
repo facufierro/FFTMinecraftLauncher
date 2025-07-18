@@ -21,11 +21,10 @@ class VersionService:
 
     def check_for_updates(self, component: Component, current_version=None):
         try:
-            if component == Component.JAVA:
-                self._check_java_update()
             if current_version is None:
                 current_version = self.current_versions.get(component.value)
-
+            if component == Component.JAVA:
+                return next(self._check_java_update())
             required_version = self.required_versions.get(component.value)
             logging.info(
                 "Checking for updates for %s: %s vs %s",
@@ -42,6 +41,11 @@ class VersionService:
         try:
             current_version = self._get_java_current_version()
             required_version = self.required_versions.get(Component.JAVA.value)
+            logging.info(
+                "Checking for updates for java: %s vs %s",
+                current_version,
+                required_version,
+            )
             if not current_version or not required_version:
                 logging.error("Current or required Java version is not set.")
                 yield True
