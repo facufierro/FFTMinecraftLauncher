@@ -1,11 +1,11 @@
 import logging
 import sys
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
-from PyQt6.QtCore import pyqtSignal
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
 
 
 class UpdateDialog(QDialog):
-    accept_pressed = pyqtSignal()
+    accept_pressed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
