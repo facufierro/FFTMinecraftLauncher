@@ -10,15 +10,30 @@ from ..services.loader_service import LoaderService
 
 class Launcher:
     def __init__(self):
+        logging.info("Initializing services...")
         self.ui_service = UIService()
         self.github_service = GitHubService()
         self.version_service = VersionService()
         # self.instance_service = InstanceService()
         # self.profile_service = ProfileService()
+        logging.info("All services initialized")
 
     def start(self):
         self.ui_service.show(Window.MAIN)
-        self._replace_updater()
+        self.versions_content = self.github_service.get_file("versions.json")
+
+        launcher_mismatch, loader_mismatch, minecraft_mismatch = (
+            self.version_service.check_for_updates(self.versions_content)
+        )
+        if launcher_mismatch:
+            logging.info("Launcher version mismatch detected.")
+            self._update_launcher()
+        elif loader_mismatch:
+            logging.info("Loader version mismatch detected.")
+        elif minecraft_mismatch:
+            logging.info("Minecraft version mismatch detected.")
+        else:
+            logging.info("No version mismatches detected.")
 
         # self._set_up_profile()
         # self._check_for_updates()
@@ -41,6 +56,10 @@ class Launcher:
                 logging.info("Updater replaced successfully.")
         except Exception as e:
             logging.error(f"Failed to replace updater: {e}")
+
+    def _check_for_updates(self):
+        logging.info("Checking for updates...")
+        self.version_service.check_for_updates(self.versions_content)
 
     def _update_launcher(self):
         logging.info("Updating launcher...")
