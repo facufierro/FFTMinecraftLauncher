@@ -2,6 +2,10 @@ import os
 from enum import Enum
 
 
+INSTANCE_NAME = "instance"
+LOADER_FILE_NAME = "neoforge-%s-installer.jar"
+
+
 class Window(Enum):
     MAIN = "MAIN"
     SETTINGS = "SETTINGS"
@@ -12,10 +16,13 @@ class Paths(Enum):
     MINECRAFT_DIR = "C:\\Users\\fierr\\AppData\\Roaming\\.minecraft"
     DEFAULT_PROFILE_FILE = f"{MINECRAFT_DIR}\\launcher_profiles.json"
     INSTANCE_DIR = f"{os.getcwd()}\\instance"
+    VERSIONS_FILE = f"versions.json"
+    DOWNLOADS_DIR = f"{os.getcwd()}\\downloads"
 
 
 class Urls(Enum):
     GITHUB_REPO = "https://github.com/facufierro/FFTMinecraftLauncher"
+    LOADER_DOWNLOAD = "https://maven.neoforged.net/releases/net/neoforged/neoforge/%s/neoforge-%s-installer.jar"
 
 
 class Component(Enum):
