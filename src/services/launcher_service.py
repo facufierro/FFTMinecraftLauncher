@@ -1,39 +1,32 @@
 import logging
-import json
+import subprocess
+
 from ..services.version_service import VersionService
+from ..services.github_service import GitHubService
 
 
 class LauncherService:
-    def __init__(self, version_service: VersionService):
+    def __init__(self, version_service: VersionService, github_service: GitHubService):
         try:
             self.version_service = version_service
+            self.github_service = github_service
+            self.updater_file = github_service.get_release_file("updater.exe")
             logging.debug("LauncherService initialized")
         except Exception as e:
             logging.critical("Error initializing LauncherService: %s", e)
             raise e
 
-    def check_for_updates(self):
-        logging.info("Checking for updates...")
-        self.version_service.check_for_updates("launcher")
+    def replace_updater(self):
+        try:
+            if self.updater_file:
+                self.github_service.save_file(self.updater_file, "updater.exe")
+                logging.info("Updater replaced successfully.")
+        except Exception as e:
+            logging.error(f"Failed to replace updater: {e}")
 
     def update(self):
-        logging.info("Updating the application")
-        self._close_launcher()
-        self._download_update()
-        # Logic to perform the update goes here
-        logging.debug("Update completed successfully")
+        self._launch_updater()
 
-    def _close_launcher(self):
-        logging.info("Closing the launcher")
-        # Logic to close the launcher goes here
-        logging.debug("Launcher closed successfully")
-
-    def _download_update(self):
-        logging.info("Downloading update")
-        # Logic to download the update goes here
-        logging.debug("Update downloaded successfully")
-
-    def _replace_updater(self):
-        logging.info("Replacing updater")
-        # Logic to replace the updater goes here
-        logging.debug("Updater replaced successfully")
+    def _launch_updater(self):
+        logging.info("Launching updater...")
+        # subprocess.Popen(["updater.exe"], cwd=".")
