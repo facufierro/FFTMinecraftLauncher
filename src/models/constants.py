@@ -18,6 +18,13 @@ class Urls(Enum):
     GITHUB_REPO = "https://github.com/facufierro/FFTMinecraftLauncher"
 
 
+class Component(Enum):
+    LAUNCHER = "launcher"
+    MINECRAFT = "minecraft"
+    LOADER = "loader"
+    JAVA = "java"
+
+
 PROFILE_DATA = {
     "a4e7d1b6b0974c87bd556f8db97afda3": {
         "created": "2024-01-01T00:00:00.000Z",
