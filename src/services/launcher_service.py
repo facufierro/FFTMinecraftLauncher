@@ -3,6 +3,7 @@ import subprocess
 
 from .versions_service import VersionsService
 from ..services.github_service import GitHubService
+from ..models.constants import Url
 
 
 class LauncherService:
@@ -10,7 +11,9 @@ class LauncherService:
         try:
             self.version_service = version_service
             self.github_service = github_service
-            self.updater_file = github_service.get_release_file("updater.exe")
+            self.updater_file = github_service.get_release_file(
+                "updater.exe", Url.LAUNCHER_REPO.value
+            )
             logging.debug("LauncherService initialized")
         except Exception as e:
             logging.critical("Error initializing LauncherService: %s", e)
