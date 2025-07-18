@@ -1,12 +1,12 @@
 import logging
 import subprocess
 
-from ..services.version_service import VersionService
+from .versions_service import VersionsService
 from ..services.github_service import GitHubService
 
 
 class LauncherService:
-    def __init__(self, version_service: VersionService, github_service: GitHubService):
+    def __init__(self, version_service: VersionsService, github_service: GitHubService):
         try:
             self.version_service = version_service
             self.github_service = github_service
