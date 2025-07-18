@@ -5,7 +5,7 @@ import re
 import subprocess
 from typing import Dict
 from ..models.instance import Instance
-from ..models.constants import Component
+from ..models.constants import Component, Url, Branch
 from .github_service import GitHubService
 
 
@@ -98,7 +98,11 @@ class VersionsService:
             Dict[str, str]: Launcher, Loader, Minecraft, and Java versions.
         """
         try:
-            versions = self.github_service.get_file(self.instance.versions_file)
+            versions = self.github_service.get_file(
+                self.instance.versions_file,
+                Branch.LAUNCHER.value,
+                Url.LAUNCHER_REPO.value,
+            )
             launcher_version = self._extract_version(
                 str(versions.get(Component.LAUNCHER.value, ""))
             )
