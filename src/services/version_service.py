@@ -2,35 +2,51 @@ import logging
 import json
 import re
 
-from ..services import github_service
+from ..services.github_service import GitHubService
 
 
 class VersionService:
-    def __init__(self):
-        self.versions_file = "versions.json"
-        self.current_versions = self._get_current_versions()
-        self.github_versions = self._get_github_versions()
-        logging.info("VersionService initialized")
+    def __init__(self, github_service: GitHubService):
+        try:
+            self.github_service = github_service
+            self.versions_file = "versions.json"
+            self.current_versions = self._get_current_versions()
+            self.github_versions = self._get_github_versions()
+            logging.debug("VersionService initialized")
+        except Exception as e:
+            logging.critical("Error initializing VersionService: %s", e)
+            raise e
 
     def check_for_updates(self, component):
         try:
-
             match (component):
                 case "launcher":
-                    return (
-                        self.current_versions["launcher"]
-                        != self.github_versions["launcher"]
+                    current_version = self.current_versions.get("launcher")
+                    github_version = self.github_versions.get("launcher")
+                    logging.info(
+                        "Checking for updates for launcher: %s vs %s",
+                        current_version,
+                        github_version,
                     )
+                    return current_version != github_version
                 case "loader":
-                    return (
-                        self.current_versions["loader"]
-                        != self.github_versions["loader"]
+                    current_version = self.current_versions.get("loader")
+                    github_version = self.github_versions.get("loader")
+                    logging.info(
+                        "Checking for updates for loader: %s vs %s",
+                        current_version,
+                        github_version,
                     )
+                    return current_version != github_version
                 case "minecraft":
-                    return (
-                        self.current_versions["minecraft"]
-                        != self.github_versions["minecraft"]
+                    current_version = self.current_versions.get("minecraft")
+                    github_version = self.github_versions.get("minecraft")
+                    logging.info(
+                        "Checking for updates for minecraft: %s vs %s",
+                        current_version,
+                        github_version,
                     )
+                    return current_version != github_version
                 case _:
                     logging.warning("Unknown component: %s", component)
                     return False
@@ -49,10 +65,6 @@ class VersionService:
                 minecraft_version = self._extract_version(
                     str(versions.get("minecraft", ""))
                 )
-                logging.info("Current Versions:")
-                logging.info(f"  Launcher: {launcher_version}")
-                logging.info(f"  Loader: {loader_version}")
-                logging.info(f"  Minecraft: {minecraft_version}")
                 return {
                     "launcher": launcher_version,
                     "loader": loader_version,
@@ -64,16 +76,12 @@ class VersionService:
 
     def _get_github_versions(self):
         try:
-            versions = github_service.get_file(self.versions_file)
+            versions = self.github_service.get_file(self.versions_file)
             launcher_version = self._extract_version(str(versions.get("launcher", "")))
             loader_version = self._extract_version(str(versions.get("loader", "")))
             minecraft_version = self._extract_version(
                 str(versions.get("minecraft", ""))
             )
-            logging.info("GitHub Versions:")
-            logging.info(f"  Launcher: {launcher_version}")
-            logging.info(f"  Loader: {loader_version}")
-            logging.info(f"  Minecraft: {minecraft_version}")
             return {
                 "launcher": launcher_version,
                 "loader": loader_version,
