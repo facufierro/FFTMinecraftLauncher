@@ -1,7 +1,7 @@
 import logging
 
 
-from ..models.constants import INSTANCE_NAME, Component, Folder, File
+from ..models.constants import INSTANCE_NAME, Component, Folder, File, Url, Branch, RepoFolder
 from ..models.instance import Instance
 
 from ..ui.components.update_dialog import UpdateDialog
@@ -22,7 +22,7 @@ class Launcher:
         logging.info("Initializing Launcher...")
         self.instance = Instance(INSTANCE_NAME)
         self.ui_service = UIService()
-        self.github_service = GitHubService()
+        self._set_up_github_service()
         self.version_service = VersionsService(self.instance, self.github_service)
         self.launcher_service = LauncherService(
             self.version_service, self.github_service
@@ -46,6 +46,13 @@ class Launcher:
     def exit(self):
         logging.info("Exiting the launcher")
         self.ui_service.main_window.close()
+
+    def _set_up_github_service(self):
+        self.github_service = GitHubService()
+        self.launcher_repo = Url.LAUNCHER_REPO.value
+        self.client_repo = Url.CLIENT_REPO.value
+        self.launcher_branch = Branch.LAUNCHER.value
+        self.client_branch = Branch.CLIENT.value
 
     def _check_launcher_update(self):
         if self.version_service.check_for_updates(Component.LAUNCHER):
@@ -93,29 +100,43 @@ class Launcher:
             else:
                 logging.warning("No profile found, creating a new one")
                 self.profile_service.update_profile()
-            self.profile_service.add_profile_to_instance()
         except Exception as e:
             logging.error(f"Failed to set up profile: {e}")
 
     def update_instance(self):
         self.instance_service.update_config(
-            self.github_service.get_folder(Folder.DEFAULTCONFIGS.value)
+            self.github_service.get_folder(
+                RepoFolder.DEFAULTCONFIGS.value, self.client_branch, self.client_repo
+            )
         )
         self.instance_service.update_kubejs(
-            self.github_service.get_folder(Folder.KUBEJS.value)
+            self.github_service.get_folder(
+                RepoFolder.KUBEJS.value, self.client_branch, self.client_repo
+            )
         )
         self.instance_service.update_modflared(
-            self.github_service.get_folder(Folder.MODFLARED.value)
+            self.github_service.get_folder(
+                RepoFolder.MODFLARED.value, self.client_branch, self.client_repo
+            )
         )
         self.instance_service.update_mods(
-            self.github_service.get_folder(Folder.MODS.value)
+            self.github_service.get_folder(
+                RepoFolder.MODS.value, self.client_branch, self.client_repo
+            )
         )
         self.instance_service.update_resourcepacks(
-            self.github_service.get_folder(Folder.RESOURCEPACKS.value)
+            self.github_service.get_folder(
+                RepoFolder.RESOURCEPACKS.value, self.client_branch, self.client_repo
+            )
         )
         self.instance_service.update_shaderpacks(
-            self.github_service.get_folder(Folder.SHADERPACKS.value)
+            self.github_service.get_folder(
+                RepoFolder.SHADERPACKS.value, self.client_branch, self.client_repo
+            )
         )
-        self.file_service.replace_file(
-            File.SERVERS.value, self.github_service.get_file(File.SERVERS.value)
+        # Download and save the servers.dat file
+        servers_content = self.github_service.get_file(
+            File.SERVERS.value, self.client_branch, self.client_repo
         )
+        if servers_content:
+            self.file_service.save_file_content(servers_content, File.SERVERS.value)
