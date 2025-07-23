@@ -25,11 +25,11 @@ from ..services.file_service import FileService
 from ..version import __version__
 
 
-
 class Launcher:
     def __init__(self):
         logging.info("Initializing Launcher...")
         from src.models.constants import get_instance_dir, get_downloads_dir
+
         # Ensure instance and downloads directories exist in the real install dir
         instance_dir = get_instance_dir()
         downloads_dir = get_downloads_dir()
@@ -167,6 +167,7 @@ class Launcher:
                     logging.error(f"[Update] Exception during get_release_file: {e}")
                     return
                 from src.models.constants import get_downloads_dir
+
                 downloads_dir = get_downloads_dir()
                 logging.debug(f"[Update] Downloads dir resolved to: {downloads_dir}")
                 try:
