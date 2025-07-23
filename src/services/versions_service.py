@@ -34,10 +34,35 @@ class VersionsService:
                 current_version,
                 required_version,
             )
+            # Special logic for loader: check all installed NeoForge versions
+            if component == Component.LOADER:
+                installed_versions = self._get_all_installed_neoforge_versions()
+                logging.info("Installed NeoForge versions: %s", installed_versions)
+                # If required_version is None, treat as no update needed
+                if not required_version:
+                    return False
+                # If required_version is present, no update needed
+                if required_version in installed_versions:
+                    return False
+                return True
             return current_version != required_version
         except Exception as e:
             logging.error("Error checking for updates: %s", e)
             return False
+
+    def _get_all_installed_neoforge_versions(self):
+        """Return a list of all installed NeoForge versions (e.g., ['21.1.192', '21.1.193'])"""
+        import os
+        import re
+        versions_dir = os.path.join(self.instance.game_dir, "versions")
+        if not os.path.isdir(versions_dir):
+            return []
+        neoforge_versions = []
+        for name in os.listdir(versions_dir):
+            match = re.match(r"neoforge-(\d+\.\d+\.\d+)", name)
+            if match:
+                neoforge_versions.append(match.group(1))
+        return neoforge_versions
 
     def _check_java_update(self):
         try:
