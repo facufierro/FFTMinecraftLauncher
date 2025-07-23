@@ -11,13 +11,12 @@ class GitHubService:
 
     def list_files_in_folder(self, folder, branch, repo_url):
         """List files in a folder of the repo using the GitHub API."""
-        import requests
         import logging
         try:
             parts = repo_url.rstrip('/').split('/')
             owner, repo = parts[-2], parts[-1]
             api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{folder}?ref={branch}"
-            resp = requests.get(api_url, timeout=10)
+            resp = self.session.get(api_url, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 return {item['name']: item for item in data if item['type'] == 'file'}
@@ -30,13 +29,12 @@ class GitHubService:
 
     def download_file_from_repo(self, path, branch, repo_url):
         """Download a single file from the repo using the raw URL."""
-        import requests
         import logging
         try:
             parts = repo_url.rstrip('/').split('/')
             owner, repo = parts[-2], parts[-1]
             raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
-            resp = requests.get(raw_url, timeout=20)
+            resp = self.session.get(raw_url, timeout=20)
             if resp.status_code == 200:
                 return resp.content
             else:
@@ -48,14 +46,13 @@ class GitHubService:
 
     def get_mod_filenames_from_github(self, branch, repo_url):
         """Fetch the list of mod filenames in the mods folder from the GitHub repo using the API (no zip download)."""
-        import requests
         import logging
         # repo_url: e.g. https://github.com/facufierro/FFTClientMinecraft1211
         try:
             parts = repo_url.rstrip('/').split('/')
             owner, repo = parts[-2], parts[-1]
             api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/mods?ref={branch}"
-            resp = requests.get(api_url, timeout=10)
+            resp = self.session.get(api_url, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 # Only include files (not directories)
@@ -103,8 +100,8 @@ class GitHubService:
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive'
         })
-        # Add GitHub token if available
-        github_token = os.environ.get('GITHUB_TOKEN')
+        # Add GitHub token if available (support both GITHUB_TOKEN and GH_TOKEN)
+        github_token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
         if github_token:
             self.session.headers.update({'Authorization': f'token {github_token}'})
             logging.info('GitHubService: Using API authentication.')
