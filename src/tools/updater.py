@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from src.models.constants import get_downloads_dir
 import subprocess
 import time
 import tkinter as tk
@@ -78,7 +79,7 @@ def replace_file():
     base_dir = get_base_directory()
     logging.debug(f"[Updater] Base directory: {base_dir}")
     exe_file = os.path.join(base_dir, "FFTLauncher.exe")
-    downloads_dir = os.path.join(base_dir, "downloads")
+    downloads_dir = get_downloads_dir()
     update_file = os.path.join(downloads_dir, "FFTLauncher.exe")
 
     logging.debug(f"[Updater] exe_file: {exe_file}")

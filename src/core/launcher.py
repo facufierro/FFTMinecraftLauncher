@@ -29,10 +29,10 @@ from ..version import __version__
 class Launcher:
     def __init__(self):
         logging.info("Initializing Launcher...")
-        from ..models.constants import Path as LauncherPath
+        from src.models.constants import get_instance_dir, get_downloads_dir
         # Ensure instance and downloads directories exist in the real install dir
-        instance_dir = Path(LauncherPath.INSTANCE_DIR.value)
-        downloads_dir = Path(LauncherPath.DOWNLOADS_DIR.value)
+        instance_dir = get_instance_dir()
+        downloads_dir = get_downloads_dir()
         instance_dir.mkdir(parents=True, exist_ok=True)
         downloads_dir.mkdir(parents=True, exist_ok=True)
 
@@ -166,7 +166,8 @@ class Launcher:
                 except Exception as e:
                     logging.error(f"[Update] Exception during get_release_file: {e}")
                     return
-                downloads_dir = Path(__file__).parent.parent.parent / "downloads"
+                from src.models.constants import get_downloads_dir
+                downloads_dir = get_downloads_dir()
                 logging.debug(f"[Update] Downloads dir resolved to: {downloads_dir}")
                 try:
                     downloads_dir.mkdir(parents=True, exist_ok=True)

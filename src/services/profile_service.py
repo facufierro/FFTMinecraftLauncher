@@ -9,7 +9,8 @@ from ..models.constants import Path, PROFILE_DATA
 class ProfileService:
     def __init__(self):
         logging.debug("Initializing ProfileService")
-        self.default_profile = Path.PROFILE_FILE.value
+        from src.models.constants import get_profile_file
+        self.default_profile = get_profile_file()
 
     def get_profile_data(self):
         try:

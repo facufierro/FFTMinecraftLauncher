@@ -11,7 +11,8 @@ class LoaderService:
         logging.debug("Initializing LoaderService")
         self.instance = instance
         self.minecraft_dir = Path.MINECRAFT_DIR.value
-        self.downloads_dir = Path.DOWNLOADS_DIR.value
+        from src.models.constants import get_downloads_dir
+        self.downloads_dir = get_downloads_dir()
         self.loader_url = Url.LOADER_DOWNLOAD.value % (
             self.instance.required_versions.get(Component.LOADER.value),
             self.instance.required_versions.get(Component.LOADER.value),
