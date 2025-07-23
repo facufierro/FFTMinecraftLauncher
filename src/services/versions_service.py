@@ -75,14 +75,36 @@ class VersionsService:
 
     def _get_required_versions(self) -> Dict[str, str]:
         """
-        Returns the required versions as a dictionary. For loader and Minecraft, returns None (or implement as needed). Java is hardcoded to 17.
+        Returns the required versions as a dictionary. Loader version is set to the latest neoforge version found in the versions folder. Java is hardcoded to 17.
         """
+        loader_version = self._get_latest_neoforge_version()
         return {
             Component.LAUNCHER.value: None,
-            Component.LOADER.value: None,
+            Component.LOADER.value: loader_version,
             Component.MINECRAFT.value: None,
             Component.JAVA.value: 17,
         }
+
+    def _get_latest_neoforge_version(self):
+        """
+        Scans the versions directory for neoforge folders and returns the latest version by name.
+        """
+        import os
+        import re
+        versions_dir = os.path.join(self.instance.game_dir, "versions")
+        if not os.path.isdir(versions_dir):
+            return None
+        neoforge_versions = []
+        for name in os.listdir(versions_dir):
+            match = re.match(r"neoforge-(\d+\.\d+\.\d+)", name)
+            if match:
+                neoforge_versions.append(match.group(1))
+        if not neoforge_versions:
+            return None
+        # Sort versions as tuples of integers for correct ordering
+        def version_key(v):
+            return tuple(int(x) for x in v.split('.'))
+        return sorted(neoforge_versions, key=version_key)[-1]
     def _get_installed_loader_version(self):
         # Example: look for loader jar in the versions folder
         versions_dir = os.path.join(self.instance.game_dir, "versions")
