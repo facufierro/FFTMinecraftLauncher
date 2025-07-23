@@ -3,7 +3,7 @@ from PySide6.QtCore import QObject, Signal, QMutex, QMutexLocker
 from PySide6.QtWidgets import QPlainTextEdit, QVBoxLayout, QWidget, QScrollBar
 from PySide6.QtGui import QTextCursor, QFont
 from PySide6.QtCore import Qt
-
+ 
 
 class ConsoleHandler(logging.Handler):
     """Custom logging handler that sends log messages to a console widget"""
