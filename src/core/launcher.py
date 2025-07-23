@@ -357,6 +357,7 @@ class UpdateWorker(QThread):
                 self.launcher.instance.instance_path  # Extract directly to instance folder
             )
             
+            
             if not success:
                 logging.error("Failed to update instance folders")
                 self.update_finished.emit(False)
