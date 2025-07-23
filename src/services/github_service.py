@@ -9,6 +9,66 @@ import json
 
 class GitHubService:
 
+    def list_files_in_folder(self, folder, branch, repo_url):
+        """List files in a folder of the repo using the GitHub API."""
+        import requests
+        import logging
+        try:
+            parts = repo_url.rstrip('/').split('/')
+            owner, repo = parts[-2], parts[-1]
+            api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{folder}?ref={branch}"
+            resp = requests.get(api_url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                return {item['name']: item for item in data if item['type'] == 'file'}
+            else:
+                logging.warning(f"GitHub API returned status {resp.status_code} for {api_url}")
+                return None
+        except Exception as e:
+            logging.error(f"Error listing files in {folder}: {e}")
+            return None
+
+    def download_file_from_repo(self, path, branch, repo_url):
+        """Download a single file from the repo using the raw URL."""
+        import requests
+        import logging
+        try:
+            parts = repo_url.rstrip('/').split('/')
+            owner, repo = parts[-2], parts[-1]
+            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
+            resp = requests.get(raw_url, timeout=20)
+            if resp.status_code == 200:
+                return resp.content
+            else:
+                logging.warning(f"Failed to download {path} (status {resp.status_code})")
+                return None
+        except Exception as e:
+            logging.error(f"Error downloading {path}: {e}")
+            return None
+
+    def get_mod_filenames_from_github(self, branch, repo_url):
+        """Fetch the list of mod filenames in the mods folder from the GitHub repo using the API (no zip download)."""
+        import requests
+        import logging
+        # repo_url: e.g. https://github.com/facufierro/FFTClientMinecraft1211
+        try:
+            parts = repo_url.rstrip('/').split('/')
+            owner, repo = parts[-2], parts[-1]
+            api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/mods?ref={branch}"
+            resp = requests.get(api_url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                # Only include files (not directories)
+                filenames = set(item['name'] for item in data if item['type'] == 'file')
+                logging.info(f"Fetched {len(filenames)} mod filenames from GitHub API.")
+                return filenames
+            else:
+                logging.warning(f"GitHub API returned status {resp.status_code} for {api_url}")
+                return None
+        except Exception as e:
+            logging.error(f"Error fetching mod filenames from GitHub: {e}")
+            return None
+
     def get_latest_release_version(self, repo_url):
         """
         Fetch the latest release version (tag name) from the GitHub repo.

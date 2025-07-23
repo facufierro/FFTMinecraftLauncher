@@ -380,16 +380,15 @@ class UpdateWorker(QThread):
         super().__init__()
         self.launcher = launcher
 
+
     def run(self):
         """Run the update process in background thread"""
         try:
-            logging.info("UpdateWorker started")
+            logging.info("UpdateWorker started (dynamic per-file update)")
 
-            # Connect progress callback to emit signals
             def progress_callback(progress, status, details=""):
                 try:
                     self.progress_update.emit(progress, status, details)
-                    # Only log important milestones to reduce log spam
                     if (
                         progress in [0, 25, 50, 75, 90, 100]
                         or "complete" in status.lower()
@@ -399,59 +398,86 @@ class UpdateWorker(QThread):
                 except Exception as e:
                     logging.error(f"Progress callback error: {e}")
 
-            # Set up progress callback for GitHub service
             self.launcher.github_service.progress_callback = progress_callback
-
-            # Clear cache to force fresh download with optimizations
             self.launcher.github_service.clear_cache()
+            self.progress_update.emit(0, "Starting update...", "Checking files")
 
-            # Initial progress update
-            self.progress_update.emit(
-                0, "Starting update...", "Preparing to download files"
-            )
-
-            # Extract all folders directly to filesystem - much faster!
-            folder_names = [
-                RepoFolder.DEFAULTCONFIGS.value,
-                RepoFolder.KUBEJS.value,
-                RepoFolder.MODFLARED.value,
-                RepoFolder.MODS.value,
-                RepoFolder.RESOURCEPACKS.value,
-                RepoFolder.SHADERPACKS.value,
+            import os
+            folders_to_check = [
+                ("defaultconfigs", "config", True),  # (repo_folder, local_folder, replace_only_existing)
+                ("kubejs", "kubejs", False),
+                ("modflared", "modflared", False),
+                ("mods", "mods", False),
+                ("resourcepacks", "resourcepacks", False),
+                ("shaderpacks", "shaderpacks", False),
             ]
+            repo_url = self.launcher.client_repo
+            branch = self.launcher.client_branch
+            base_path = self.launcher.instance.instance_path
+            file_service = self.launcher.file_service
 
-            logging.info("Updating instance folders...")
-            success = self.launcher.github_service.extract_folders_directly(
-                folder_names,
-                self.launcher.client_branch,
-                self.launcher.client_repo,
-                self.launcher.instance.instance_path,  # Extract directly to instance folder
-            )
 
-            if not success:
-                logging.error("Failed to update instance folders")
-                self.update_finished.emit(False)
-                return
+            for idx, (repo_folder, local_folder, replace_only_existing) in enumerate(folders_to_check):
+                self.progress_update.emit(5 + idx*10, f"Checking {repo_folder}...", "Comparing files")
+                remote_files = self.launcher.github_service.list_files_in_folder(repo_folder, branch, repo_url)
+                if remote_files is None:
+                    logging.warning(f"Could not list files for {repo_folder}, skipping.")
+                    continue
+                local_folder_path = os.path.join(base_path, local_folder)
+                os.makedirs(local_folder_path, exist_ok=True)
+                local_files = set(os.listdir(local_folder_path))
+                remote_file_set = set(remote_files.keys())
+                # Delete local files not present in the repo
+                files_to_delete = local_files - remote_file_set
+                for fname in files_to_delete:
+                    try:
+                        os.remove(os.path.join(local_folder_path, fname))
+                        logging.info(f"Deleted {local_folder}/{fname} (not present in repo)")
+                    except Exception as e:
+                        logging.warning(f"Failed to delete {local_folder}/{fname}: {e}")
+                # Add/update files as before
+                for fname, remote_info in remote_files.items():
+                    local_file_path = os.path.join(local_folder_path, fname)
+                    needs_update = False
+                    if fname not in local_files:
+                        needs_update = True
+                    else:
+                        # Compare size for quick check
+                        try:
+                            local_size = os.path.getsize(local_file_path)
+                            if local_size != remote_info.get('size', -1):
+                                needs_update = True
+                        except Exception:
+                            needs_update = True
+                    if needs_update:
+                        self.progress_update.emit(10 + idx*10, f"Updating {local_folder}/{fname}", "Downloading file")
+                        content = self.launcher.github_service.download_file_from_repo(f"{repo_folder}/{fname}", branch, repo_url)
+                        if content is not None:
+                            file_service.save_file_content(content, local_file_path)
+                            logging.info(f"Updated {local_folder}/{fname}")
+                        else:
+                            logging.warning(f"Failed to download {repo_folder}/{fname}")
+                # For defaultconfigs, only replace files that exist in config
+                if replace_only_existing and repo_folder == "defaultconfigs":
+                    for fname in remote_files:
+                        config_file = os.path.join(base_path, "config", fname)
+                        if os.path.exists(config_file):
+                            content = self.launcher.github_service.download_file_from_repo(f"{repo_folder}/{fname}", branch, repo_url)
+                            if content is not None:
+                                file_service.save_file_content(content, config_file)
+                                logging.info(f"Replaced config/{fname} from defaultconfigs")
 
-            # Download and save the servers.dat file
-            self.progress_update.emit(
-                95, "Downloading server list...", "Getting servers.dat"
-            )
-            servers_content = self.launcher.github_service.get_file(
-                File.SERVERS.value,
-                self.launcher.client_branch,
-                self.launcher.client_repo,
-            )
+            # Special handling for servers.dat
+            self.progress_update.emit(90, "Updating servers.dat", "Downloading file")
+            servers_content = self.launcher.github_service.download_file_from_repo("servers.dat", branch, repo_url)
             if servers_content:
-                self.launcher.file_service.save_file_content(
-                    servers_content, File.SERVERS.value
-                )
-                logging.info("servers.dat downloaded successfully")
+                file_service.save_file_content(servers_content, os.path.join(base_path, "servers.dat"))
+                logging.info("servers.dat downloaded and replaced")
             else:
                 logging.warning("Failed to download servers.dat")
 
+            self.progress_update.emit(100, "Update complete!", "All files checked and updated as needed.")
             self.update_finished.emit(True)
-
         except Exception as e:
             logging.error(f"Update failed with exception: {e}")
             self.update_finished.emit(False)
