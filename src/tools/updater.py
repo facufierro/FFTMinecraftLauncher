@@ -9,10 +9,13 @@ from tkinter import ttk
 
 def get_base_directory():
     """Get the directory where the executable or script is located"""
+    # Always use the root directory passed as the first argument, or fallback to executable/script dir
+    if len(sys.argv) > 1:
+        return os.path.abspath(sys.argv[1])
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     else:
-        return os.path.dirname(__file__)
+        return os.path.dirname(os.path.abspath(__file__))
 
 
 
@@ -79,6 +82,7 @@ def replace_file():
     update_file = os.path.join(downloads_dir, "FFTLauncher.exe")
 
     logging.debug(f"[Updater] exe_file: {exe_file}")
+    logging.debug(f"[Updater] downloads_dir: {downloads_dir}")
     logging.debug(f"[Updater] update_file (from downloads): {update_file}")
 
     # Wait for the update file to appear (up to 30 seconds)
