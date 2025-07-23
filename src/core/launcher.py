@@ -31,8 +31,8 @@ class Launcher:
         from src.models.constants import get_instance_dir, get_downloads_dir
 
         # Ensure instance and downloads directories exist in the real install dir
-        instance_dir = get_instance_dir()
-        downloads_dir = get_downloads_dir()
+        instance_dir = Path(get_instance_dir())
+        downloads_dir = Path(get_downloads_dir())
         instance_dir.mkdir(parents=True, exist_ok=True)
         downloads_dir.mkdir(parents=True, exist_ok=True)
 
@@ -168,7 +168,8 @@ class Launcher:
                     return
                 from src.models.constants import get_downloads_dir
 
-                downloads_dir = get_downloads_dir()
+                from pathlib import Path
+                downloads_dir = Path(get_downloads_dir())
                 logging.debug(f"[Update] Downloads dir resolved to: {downloads_dir}")
                 try:
                     downloads_dir.mkdir(parents=True, exist_ok=True)

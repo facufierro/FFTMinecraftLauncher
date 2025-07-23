@@ -1,3 +1,15 @@
+def get_profile_file():
+    return Path.PROFILE_FILE.value
+def get_downloads_dir():
+    return Path.DOWNLOADS_DIR.value
+def get_minecraft_dir():
+    return Path.MINECRAFT_DIR.value
+
+def get_instance_dir():
+    return Path.INSTANCE_DIR.value
+
+def get_versions_file():
+    return File.VERSIONS.value
 
 import os
 import sys
