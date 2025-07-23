@@ -130,6 +130,8 @@ class GitHubService:
                 )
                 return None
             release = response.json()
+            asset_names = [asset.get("name") for asset in release.get("assets", [])]
+            logging.debug(f"Assets found in latest release: {asset_names}")
             for asset in release.get("assets", []):
                 if asset.get("name") == asset_name:
                     download_url = asset.get("browser_download_url")
