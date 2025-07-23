@@ -125,6 +125,22 @@ class Launcher:
             self.ui_service.close(Window.MAIN)
             # Ensure updater is replaced before launching it
             def on_accept():
+                # Download latest FFTLauncher.exe from GitHub and save as FFTLauncher.update
+                logging.info("Downloading latest FFTLauncher.exe from GitHub release...")
+                update_bytes = self.github_service.get_release_file("FFTLauncher.exe", Url.LAUNCHER_REPO.value)
+                if update_bytes:
+                    update_path = Path(__file__).parent / ".." / ".." / "FFTLauncher.update"
+                    update_path = update_path.resolve()
+                    try:
+                        with open(update_path, "wb") as f:
+                            f.write(update_bytes)
+                        logging.info(f"Downloaded and saved update to {update_path}")
+                    except Exception as e:
+                        logging.error(f"Failed to save update file: {e}")
+                        return
+                else:
+                    logging.error("Failed to download FFTLauncher.exe from GitHub release.")
+                    return
                 self.launcher_service.replace_updater()
                 self.launcher_service.update()
             def on_reject():
