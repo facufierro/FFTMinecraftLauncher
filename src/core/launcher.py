@@ -42,6 +42,9 @@ class Launcher:
 
     def start(self):
         self.main_window = self.ui_service.show(Window.MAIN)
+        # Connect the launch button to the smart_launch logic
+        if hasattr(self, 'main_window') and hasattr(self.main_window, 'on_launch_button_clicked'):
+            self.main_window.on_launch_button_clicked(self.smart_launch)
         self._check_launcher_update()
         self._set_up_profile()
         self._check_java_update()

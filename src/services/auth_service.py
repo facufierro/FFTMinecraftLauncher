@@ -42,39 +42,70 @@ class AuthService:
             logging.error(f"Failed to save auth data: {e}")
     
     def authenticate(self):
-        """Perform authentication using vanilla Minecraft launcher flow"""
+        """Perform authentication using Microsoft device code flow (browser login, no QR code)"""
         try:
-            # Check if we have valid cached auth
             if self.is_authenticated():
                 logging.info("Using cached authentication")
                 return True
-            
-            logging.info("Starting Microsoft authentication...")
-            
-            # Create authorization URL
-            auth_url = self._create_auth_url()
-            
-            print(f"\nPlease open this URL in your browser to login:")
-            print(f"{auth_url}\n")
-            
-            # Try to open browser automatically
+
+            logging.info("Starting Microsoft device code authentication...")
+            device_code_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode"
+            data = {
+                'client_id': self.client_id,
+                'scope': self.scopes
+            }
+            resp = requests.post(device_code_url, data=data)
+            if resp.status_code != 200:
+                raise Exception(f"Failed to get device code: {resp.text}")
+            device_data = resp.json()
+
+            user_code = device_data['user_code']
+            verification_uri = device_data['verification_uri']
+            message = device_data.get('message')
+            device_code = device_data['device_code']
+            interval = device_data.get('interval', 5)
+
+            print(f"\nTo sign in, go to {verification_uri} and enter the code: {user_code}\n")
+            if message:
+                print(message)
+
+            # Open browser automatically
             try:
-                webbrowser.open(auth_url)
+                webbrowser.open(verification_uri)
             except Exception as e:
                 logging.warning(f"Could not open browser automatically: {e}")
-            
-            # Get authorization code from user
-            auth_code = input("Enter the code from the browser URL (after ?code=): ").strip()
-            
-            if not auth_code:
-                raise Exception("No authorization code provided")
-            
-            # Exchange code for tokens
-            ms_token = self._get_microsoft_token(auth_code)
-            
+
+            # Poll for token
+            token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+            while True:
+                time.sleep(interval)
+                poll_data = {
+                    'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+                    'client_id': self.client_id,
+                    'device_code': device_code
+                }
+                poll_resp = requests.post(token_url, data=poll_data)
+                if poll_resp.status_code == 200:
+                    ms_token = poll_resp.json()
+                    break
+                err = poll_resp.json()
+                if err.get('error') == 'authorization_pending':
+                    continue
+                elif err.get('error') == 'authorization_declined':
+                    logging.error("Authorization was declined by the user.")
+                    return False
+                elif err.get('error') == 'expired_token':
+                    logging.error("Device code expired. Please try again.")
+                    return False
+                elif err.get('error') == 'bad_verification_code':
+                    logging.error("Invalid verification code.")
+                    return False
+                else:
+                    logging.error(f"Device code error: {err}")
+                    return False
+
             # Complete the authentication chain
             return self._complete_minecraft_auth(ms_token)
-            
         except Exception as e:
             logging.error(f"Authentication failed: {e}")
             return False
