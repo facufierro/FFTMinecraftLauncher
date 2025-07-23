@@ -11,8 +11,9 @@ from pathlib import Path
 # Project structure
 spec_dir = Path(SPEC).parent
 project_root = spec_dir.parent.parent
-launcher_dir = project_root / 'launcher'
-main_script = launcher_dir / 'src' / 'utils' / 'updater.py'
+
+# Use the correct updater script path
+main_script = project_root / 'src' / 'tools' / 'updater.py'
 
 print(f"Building Simple Updater from: {main_script}")
 
