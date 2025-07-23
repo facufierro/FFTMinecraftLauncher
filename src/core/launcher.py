@@ -77,6 +77,8 @@ class Launcher:
 
     def exit(self):
         import sys
+        import os
+        import signal
         from PySide6.QtCore import QCoreApplication
         logging.info("Exiting the launcher")
         # Attempt to stop update worker if running
@@ -88,7 +90,11 @@ class Launcher:
         self.ui_service.main_window.close()
         # Ensure Qt event loop and process exit
         QCoreApplication.quit()
-        sys.exit(0)
+        try:
+            sys.exit(0)
+        finally:
+            # As a last resort, force kill the process
+            os.kill(os.getpid(), signal.SIGTERM)
 
     def _set_up_github_service(self):
         # Create progress callback that updates the UI
