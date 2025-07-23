@@ -72,12 +72,8 @@ def replace_file():
     logging.info(f"exe_file: {exe_file}")
     logging.info(f"update_file: {update_file}")
 
-        # Wait for the update file to appear (up to 30 seconds)
-        progress.update_progress(10, "Waiting for update file...")
-        base_dir = get_base_directory()
-        logging.info(f"Base directory: {base_dir}")
-        exe_file = os.path.join(base_dir, "FFTLauncher.exe")
-        update_file = os.path.join(base_dir, "FFTLauncher.update")
+    # Wait for the update file to appear (up to 30 seconds)
+    progress.update_progress(10, "Waiting for update file...")
 
         logging.info(f"exe_file: {exe_file}")
         logging.info(f"update_file: {update_file}")
@@ -148,5 +144,14 @@ def replace_file():
         finally:
             progress.close()
             logging.info("Updater exiting.")
+
+def main():
+    try:
+        replace_file()
+    except Exception:
+        pass
+    # Exit immediately without any output or pause
+    sys.exit(0)
+
 if __name__ == "__main__":
     main()
