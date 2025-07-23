@@ -59,6 +59,9 @@ class LauncherService:
     def _launch_updater(self):
         logging.info("Launching updater...")
         subprocess.Popen(["updater.exe"], cwd=".")
+        # Ensure the launcher process exits after starting the updater
+        import sys
+        sys.exit(0)
 
     def launch_game(self):
         """Launch Minecraft with NeoForge support using existing constants"""
