@@ -1,5 +1,15 @@
+
 import os
+import sys
 from enum import Enum
+
+def get_root_dir():
+    if getattr(sys, 'frozen', False):
+        # Running in a PyInstaller bundle (onefile or onedir)
+        return os.path.dirname(sys.executable)
+    else:
+        # Running from source
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 INSTANCE_NAME = "instance"
@@ -18,8 +28,7 @@ class Window(Enum):
 
 
 class Path(Enum):
-    # Use the directory where this file resides as the root (the real install dir)
-    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    ROOT_DIR = get_root_dir()
     MINECRAFT_DIR = "C:\\Users\\fierr\\AppData\\Roaming\\.minecraft"
     PROFILE_FILE = f"{MINECRAFT_DIR}\\launcher_profiles.json"
     INSTANCE_DIR = f"{ROOT_DIR}\\instance"
