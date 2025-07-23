@@ -29,14 +29,16 @@ class Launcher:
         self._set_up_github_service()
         
         self.version_service = VersionsService(self.instance, self.github_service)
-        self.launcher_service = LauncherService(
-            self.version_service, self.github_service
-        )
         self.profile_service = ProfileService()
         self.java_service = JavaService(self.version_service)
         self.loader_service = LoaderService(self.instance)
         self.file_service = FileService()
         self.instance_service = InstanceService(self.instance, self.file_service)
+        
+        # Initialize LauncherService last so it can use other services
+        self.launcher_service = LauncherService(
+            self.version_service, self.github_service, self.loader_service
+        )
 
     def start(self):
         self.main_window = self.ui_service.show(Window.MAIN)
@@ -123,10 +125,8 @@ class Launcher:
             if self.version_service.check_for_updates(Component.LOADER):
                 logging.info("Loader update is needed.")
                 self.loader_service.connect_update_finished(self.update_instance)
-                self.main_window.on_launch_button_clicked(self.smart_launch)
             else:
                 logging.info("Loader is up to date.")
-                self.main_window.on_launch_button_clicked(self.smart_launch)
         except Exception as e:
             logging.error(f"Failed to check Loader update: {e}")
 

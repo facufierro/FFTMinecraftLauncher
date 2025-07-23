@@ -1,6 +1,6 @@
 {
     "launcher": "2.0.0",
     "minecraft": "1.21.2",
-    "loader": "neoforge-21.1.192",
+    "loader": "neoforge-21.1.193s",
     "java": "17"
 }
