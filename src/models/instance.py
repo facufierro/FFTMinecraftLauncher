@@ -5,8 +5,8 @@ from ..models.constants import Path, File
 
 @dataclass
 class Instance:
-    game_dir: str = Path.MINECRAFT_DIR.value
     name: str
+    game_dir: str = Path.MINECRAFT_DIR.value
     current_versions: Dict[str, str] = field(default_factory=dict)
     required_versions: Dict[str, str] = field(default_factory=dict)
     instance_path: str = Path.INSTANCE_DIR.value
