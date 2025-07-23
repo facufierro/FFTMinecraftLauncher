@@ -1,7 +1,6 @@
 {
     "files": [
         "dist/FFTLauncher.exe",
-        "dist/Updater.exe",
-        "versions.json"
+        "dist/Updater.exe"
     ]
 }
