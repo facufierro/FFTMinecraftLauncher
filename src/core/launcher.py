@@ -103,7 +103,11 @@ class Launcher:
         if self.version_service.check_for_updates(Component.LAUNCHER):
             update_dialog: UpdateDialog = self.ui_service.show(Window.UPDATE)
             self.ui_service.close(Window.MAIN)
-            update_dialog.accept_pressed.connect(self.launcher_service.update)
+            # Ensure updater is replaced before launching it
+            def on_accept():
+                self.launcher_service.replace_updater()
+                self.launcher_service.update()
+            update_dialog.accept_pressed.connect(on_accept)
             update_dialog.exec()
         else:
             logging.info("Launcher is up to date.")
