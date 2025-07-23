@@ -18,10 +18,12 @@ class Window(Enum):
 
 
 class Path(Enum):
+    # Use the directory where this file resides as the root (the real install dir)
+    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     MINECRAFT_DIR = "C:\\Users\\fierr\\AppData\\Roaming\\.minecraft"
     PROFILE_FILE = f"{MINECRAFT_DIR}\\launcher_profiles.json"
-    INSTANCE_DIR = f"{os.getcwd()}\\instance"
-    DOWNLOADS_DIR = f"{os.getcwd()}\\downloads"
+    INSTANCE_DIR = f"{ROOT_DIR}\\instance"
+    DOWNLOADS_DIR = f"{ROOT_DIR}\\downloads"
 
 
 class Folder(Enum):
