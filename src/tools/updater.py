@@ -75,19 +75,20 @@ def replace_file():
     base_dir = get_base_directory()
     logging.info(f"Base directory: {base_dir}")
     exe_file = os.path.join(base_dir, "FFTLauncher.exe")
-    update_file = os.path.join(base_dir, "FFTLauncher.update")
+    downloads_dir = os.path.join(base_dir, "downloads")
+    update_file = os.path.join(downloads_dir, "FFTLauncher.exe")
 
     logging.info(f"exe_file: {exe_file}")
-    logging.info(f"update_file: {update_file}")
+    logging.info(f"update_file (from downloads): {update_file}")
 
     # Wait for the update file to appear (up to 30 seconds)
-    progress.update_progress(10, "Waiting for update file...")
+    progress.update_progress(10, "Waiting for update file in downloads...")
     try:
         found = False
         for i in range(30):
             if os.path.exists(update_file):
                 found = True
-                logging.info("Update file found.")
+                logging.info("Update file found in downloads.")
                 break
             progress.update_progress(
                 10 + (i * 2), f"Waiting for update file... ({i+1}/30)"
@@ -95,7 +96,7 @@ def replace_file():
             time.sleep(1)
 
         if not found:
-            logging.error("Update file not found after waiting.")
+            logging.error("Update file not found in downloads after waiting.")
             progress.update_progress(100, "Update file not found!")
             time.sleep(2)
             return False
@@ -104,6 +105,7 @@ def replace_file():
         progress.update_progress(70, "Preparing update...")
         logging.info("Preparing update...")
         time.sleep(2)
+
 
         # Remove the exe file if it exists
         progress.update_progress(80, "Removing old launcher...")
@@ -115,13 +117,16 @@ def replace_file():
                 logging.error(f"Failed to remove old launcher: {e}")
                 raise
 
-        # Rename update file to exe
+        # Move update file from downloads to root as exe
         progress.update_progress(90, "Installing update...")
         try:
             os.rename(update_file, exe_file)
-            logging.info("Update file renamed to launcher executable.")
+            logging.info("Update file moved from downloads to launcher executable.")
+            # Delete the update file from downloads if it still exists (shouldn't, but for safety)
+            if os.path.exists(update_file):
+                os.remove(update_file)
         except Exception as e:
-            logging.error(f"Failed to rename update file: {e}")
+            logging.error(f"Failed to move update file: {e}")
             raise
 
         # Launch the new executable
