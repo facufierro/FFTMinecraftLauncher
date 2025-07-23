@@ -36,12 +36,13 @@ class Folder(Enum):
 
 class RepoFolder(Enum):
     """Repository folder names (what exists in the GitHub repo)"""
+
     DEFAULTCONFIGS = "configureddefaults"
-    CONFIGS = "configs"  
+    CONFIGS = "configs"
     KUBEJS = "kubejs"
     MODFLARED = "modflared"
     MODS = "mods"
-    RESOURCEPACKS = "resourcepacks" 
+    RESOURCEPACKS = "resourcepacks"
     SHADERPACKS = "shaderpacks"
 
 
