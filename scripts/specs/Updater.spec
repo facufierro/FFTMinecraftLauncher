@@ -39,7 +39,7 @@ hiddenimports = [
 # hiddenimports already contains everything we need
 
 # Build analysis
-    a = Analysis(
+a = Analysis(
     [str(main_script)],
     pathex=[str(project_root)],
     binaries=[],

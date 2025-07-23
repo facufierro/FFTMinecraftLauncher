@@ -15,7 +15,7 @@ project_root = spec_dir.parent.parent
 src_dir = project_root / 'src'
 main_script = project_root / 'app.py'
 
-print(f"Building FFT Launcher from: {launcher_dir}")
+print(f"Building FFT Launcher from: {src_dir}")
 print(f"Main script: {main_script}")
 
 # Application metadata
@@ -36,20 +36,26 @@ hiddenimports = [
     'tkinter.ttk',
     'tkinter.messagebox',
     'tkinter.filedialog',
-    
+
+    # PySide6 (Qt for Python)
+    'PySide6',
+    'PySide6.QtCore',
+    'PySide6.QtWidgets',
+    'PySide6.QtGui',
+
     # Image processing for CustomTkinter
     'PIL',
     'PIL.Image',
     'PIL.ImageTk',
     'PIL._tkinter_finder',
-    
+
     # HTTP and networking
     'requests',
     'urllib3',
     'certifi',
     'charset_normalizer',
     'idna',
-    
+
     # Standard library essentials
     'json',
     'logging',
@@ -67,7 +73,7 @@ hiddenimports = [
     'webbrowser',
     'queue',
     'concurrent.futures',
-    
+
     # Type hints
     'typing',
     'dataclasses',
@@ -81,16 +87,17 @@ def collect_source_modules():
     for py_file in src_dir.rglob('*.py'):
         if py_file.name != '__init__.py':
             # Convert to module path: src/core/launcher.py -> src.core.launcher
-            relative = py_file.relative_to(launcher_dir)
-            module = str(relative.with_suffix('')).replace(os.sep, '.')
+            relative = py_file.relative_to(src_dir)
+            module = f"src.{str(relative.with_suffix('')).replace(os.sep, '.')}"
             modules.append(module)
     return modules
 
 # Add discovered modules to hidden imports
+
 hiddenimports.extend(collect_source_modules())
 
 # Build analysis
-    a = Analysis(
+a = Analysis(
     [str(main_script)],
     pathex=[str(project_root), str(src_dir)],
     binaries=[],
@@ -104,15 +111,12 @@ hiddenimports.extend(collect_source_modules())
         'pytest',
         'unittest',
         'doctest',
-        
         # Development tools
         'pdb',
         'cProfile',
         'profile',
-        
         # System monitoring (not needed for launcher)
         'psutil',
-        
         # Unix-specific modules (building for Windows)
         'pwd',
         'grp',
@@ -120,7 +124,6 @@ hiddenimports.extend(collect_source_modules())
         'fcntl',
         'resource',
         'readline',
-        
         # Audio modules not needed
         'audioop',
         'wave',
