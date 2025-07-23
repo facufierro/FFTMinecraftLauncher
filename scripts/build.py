@@ -15,6 +15,16 @@ from typing import List, Dict, Any
 
 
 class BuildScript:
+    def _update_version_py(self) -> None:
+        """Update src/version.py with the current version from git tag."""
+        try:
+            version_py = self.project_root / "src" / "version.py"
+            version_clean = self.version.lstrip('v')
+            with open(version_py, 'w', encoding='utf-8') as f:
+                f.write(f'__version__ = "{version_clean}"\n')
+            print(f"Updated src/version.py to: {version_clean}")
+        except Exception as e:
+            print(f"Warning: Could not update src/version.py: {e}")
     def __init__(self):
         self.project_root = Path(__file__).parent.parent
         self.python_exe = self._find_python_executable()
@@ -228,31 +238,31 @@ class BuildScript:
         """Build all or specific applications."""
         print("Building FFT Applications...")
         print("=" * 30)
-        
+
         # Change to project root
         os.chdir(self.project_root)
         print(f"Working directory: {self.project_root}")
-        
+
         # Clean if requested
         if clean:
             self.clean_build_cache()
-        
+
         print(f"Version: {self.version}")
-        
+
         # Update launcher_config.json with current version
         self._update_config_version()
-        
-        # Update launcher version constant before building
-        self._update_launcher_version_constant()
-        
+
+        # Update src/version.py with current version
+        self._update_version_py()
+
         # Check PyInstaller
         if not self._check_pyinstaller():
             print("ERROR: Failed to install PyInstaller")
             sys.exit(1)
-        
+
         # Build applications
         build_results = []
-        
+
         # Build Launcher
         if target in ["launcher", "all"]:
             success = self.build_application(
@@ -266,7 +276,7 @@ class BuildScript:
                 "success": success,
                 "path": "dist/FFTLauncher.exe"
             })
-        
+
         # Build Updater
         if target in ["updater", "all"]:
             success = self.build_application(
@@ -280,12 +290,12 @@ class BuildScript:
                 "success": success,
                 "path": "dist/Updater.exe"
             })
-        
+
         # Summary
         print("\n" + "=" * 40)
         print("BUILD SUMMARY")
         print("=" * 40)
-        
+
         all_successful = True
         for result in build_results:
             if result["success"]:
