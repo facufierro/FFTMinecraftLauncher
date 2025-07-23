@@ -92,10 +92,10 @@ class GitHubService:
             logging.error(f"Error fetching latest release version: {e}")
         return None
     def __init__(self, progress_callback=None):
+        import os
         logging.debug("GitHubService initialized")
-    # Removed cache: always download fresh
         self.progress_callback = progress_callback  # Callback for progress updates
-        
+
         # Create optimized session for faster downloads
         self.session = requests.Session()
         self.session.headers.update({
@@ -103,6 +103,13 @@ class GitHubService:
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive'
         })
+        # Add GitHub token if available
+        github_token = os.environ.get('GITHUB_TOKEN')
+        if github_token:
+            self.session.headers.update({'Authorization': f'token {github_token}'})
+            logging.info('GitHubService: Using API authentication.')
+        else:
+            logging.info('GitHubService: No GitHub token found, using unauthenticated requests.')
         # Configure connection pooling for better performance
         adapter = requests.adapters.HTTPAdapter(
             pool_connections=10,
