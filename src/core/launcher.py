@@ -417,6 +417,8 @@ class UpdateWorker(QThread):
             file_service = self.launcher.file_service
 
 
+
+            FILE_CHANGE_THRESHOLD = 20  # If more than this, do full folder update
             for idx, (repo_folder, local_folder, replace_only_existing) in enumerate(folders_to_check):
                 self.progress_update.emit(5 + idx*10, f"Checking {repo_folder}...", "Comparing files")
                 remote_files = self.launcher.github_service.list_files_in_folder(repo_folder, branch, repo_url)
@@ -427,36 +429,61 @@ class UpdateWorker(QThread):
                 os.makedirs(local_folder_path, exist_ok=True)
                 local_files = set(os.listdir(local_folder_path))
                 remote_file_set = set(remote_files.keys())
-                # Delete local files not present in the repo
                 files_to_delete = local_files - remote_file_set
+                files_to_add = remote_file_set - local_files
+                files_to_update = set()
+                for fname in remote_file_set & local_files:
+                    local_file_path = os.path.join(local_folder_path, fname)
+                    try:
+                        local_size = os.path.getsize(local_file_path)
+                        if local_size != remote_files[fname].get('size', -1):
+                            files_to_update.add(fname)
+                    except Exception:
+                        files_to_update.add(fname)
+                total_changes = len(files_to_delete) + len(files_to_add) + len(files_to_update)
+                if total_changes > FILE_CHANGE_THRESHOLD:
+                    # Download and extract the whole folder (mirror)
+                    self.progress_update.emit(10 + idx*10, f"Bulk updating {local_folder}", "Downloading full folder")
+                    zip_bytes = self.launcher.github_service.get_folder(repo_folder, branch, repo_url)
+                    if zip_bytes:
+                        import zipfile, io, shutil
+                        # Remove old folder
+                        try:
+                            shutil.rmtree(local_folder_path)
+                        except Exception:
+                            pass
+                        os.makedirs(local_folder_path, exist_ok=True)
+                        with zipfile.ZipFile(io.BytesIO(zip_bytes), 'r') as zip_ref:
+                            zip_ref.extractall(local_folder_path)
+                        logging.info(f"Bulk updated {local_folder} (full folder replaced)")
+                    else:
+                        logging.warning(f"Failed to bulk update {local_folder}")
+                    # For defaultconfigs, only replace files that exist in config
+                    if replace_only_existing and repo_folder == "defaultconfigs":
+                        for fname in remote_files:
+                            config_file = os.path.join(base_path, "config", fname)
+                            if os.path.exists(config_file):
+                                content = self.launcher.github_service.download_file_from_repo(f"{repo_folder}/{fname}", branch, repo_url)
+                                if content is not None:
+                                    file_service.save_file_content(content, config_file)
+                                    logging.info(f"Replaced config/{fname} from defaultconfigs")
+                    continue
+                # Otherwise, do per-file update/delete
                 for fname in files_to_delete:
                     try:
                         os.remove(os.path.join(local_folder_path, fname))
                         logging.info(f"Deleted {local_folder}/{fname} (not present in repo)")
                     except Exception as e:
                         logging.warning(f"Failed to delete {local_folder}/{fname}: {e}")
-                # Add/update files as before
-                for fname, remote_info in remote_files.items():
+                for fname in files_to_add | files_to_update:
                     local_file_path = os.path.join(local_folder_path, fname)
-                    needs_update = False
-                    if fname not in local_files:
-                        needs_update = True
+                    self.progress_update.emit(10 + idx*10, f"Updating {local_folder}/{fname}", "Downloading file")
+                    content = self.launcher.github_service.download_file_from_repo(f"{repo_folder}/{fname}", branch, repo_url)
+                    if content is not None:
+                        file_service.save_file_content(content, local_file_path)
+                        logging.info(f"Updated {local_folder}/{fname}")
                     else:
-                        # Compare size for quick check
-                        try:
-                            local_size = os.path.getsize(local_file_path)
-                            if local_size != remote_info.get('size', -1):
-                                needs_update = True
-                        except Exception:
-                            needs_update = True
-                    if needs_update:
-                        self.progress_update.emit(10 + idx*10, f"Updating {local_folder}/{fname}", "Downloading file")
-                        content = self.launcher.github_service.download_file_from_repo(f"{repo_folder}/{fname}", branch, repo_url)
-                        if content is not None:
-                            file_service.save_file_content(content, local_file_path)
-                            logging.info(f"Updated {local_folder}/{fname}")
-                        else:
-                            logging.warning(f"Failed to download {repo_folder}/{fname}")
+                        logging.warning(f"Failed to download {repo_folder}/{fname}")
                 # For defaultconfigs, only replace files that exist in config
                 if replace_only_existing and repo_folder == "defaultconfigs":
                     for fname in remote_files:
