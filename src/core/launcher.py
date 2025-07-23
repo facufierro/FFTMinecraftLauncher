@@ -76,8 +76,19 @@ class Launcher:
             logging.error("Failed to launch Minecraft")
 
     def exit(self):
+        import sys
+        from PySide6.QtCore import QCoreApplication
         logging.info("Exiting the launcher")
+        # Attempt to stop update worker if running
+        if hasattr(self, 'update_worker') and self.update_worker.isRunning():
+            logging.info("Stopping update worker thread...")
+            self.update_worker.quit()
+            self.update_worker.wait(2000)  # Wait up to 2 seconds
+        # Close the main window
         self.ui_service.main_window.close()
+        # Ensure Qt event loop and process exit
+        QCoreApplication.quit()
+        sys.exit(0)
 
     def _set_up_github_service(self):
         # Create progress callback that updates the UI
