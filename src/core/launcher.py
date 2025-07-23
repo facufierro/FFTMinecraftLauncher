@@ -2,7 +2,15 @@ import logging
 from pathlib import Path
 from PySide6.QtCore import QThread, QObject, Signal
 
-from ..models.constants import INSTANCE_NAME, Component, Folder, File, Url, Branch, RepoFolder
+from ..models.constants import (
+    INSTANCE_NAME,
+    Component,
+    Folder,
+    File,
+    Url,
+    Branch,
+    RepoFolder,
+)
 from ..models.instance import Instance
 from ..ui.components.update_dialog import UpdateDialog
 from ..services.ui_service import UIService, Window
@@ -22,17 +30,17 @@ class Launcher:
         logging.info("Initializing Launcher...")
         self.instance = Instance(INSTANCE_NAME)
         self.ui_service = UIService()
-        
+
         # Initialize GitHub service after UI is ready
         self._set_up_github_service()
-        
+
         self.version_service = VersionsService(self.instance, self.github_service)
         self.profile_service = ProfileService()
         self.java_service = JavaService(self.version_service)
         self.loader_service = LoaderService(self.instance)
         self.file_service = FileService()
         self.instance_service = InstanceService(self.instance, self.file_service)
-        
+
         # Initialize LauncherService last so it can use other services
         self.launcher_service = LauncherService(
             self.version_service, self.github_service, self.loader_service
@@ -43,7 +51,9 @@ class Launcher:
     def start(self):
         self.main_window = self.ui_service.show(Window.MAIN)
         # Connect the launch button to the smart_launch logic
-        if hasattr(self, 'main_window') and hasattr(self.main_window, 'on_launch_button_clicked'):
+        if hasattr(self, "main_window") and hasattr(
+            self.main_window, "on_launch_button_clicked"
+        ):
             self.main_window.on_launch_button_clicked(self.smart_launch)
         self._check_launcher_update()
         self._set_up_profile()
@@ -53,23 +63,23 @@ class Launcher:
     def launch(self):
         """Launch the game directly"""
         logging.info("Launching the game directly...")
-        
+
         # Disable button and change text during launch
-        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+        if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
             main_window = self.ui_service.main_window
-            if hasattr(main_window, 'launch_button'):
+            if hasattr(main_window, "launch_button"):
                 main_window.launch_button.setEnabled(False)
                 main_window.launch_button.setText("Launching...")
-        
+
         game_launched = self.launcher_service.launch_game()
-        
+
         # Re-enable button after launch attempt
-        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+        if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
             main_window = self.ui_service.main_window
-            if hasattr(main_window, 'launch_button'):
+            if hasattr(main_window, "launch_button"):
                 main_window.launch_button.setEnabled(True)
                 main_window.launch_button.setText("Launch")
-        
+
         if game_launched:
             logging.info("Minecraft launched successfully")
         else:
@@ -80,9 +90,10 @@ class Launcher:
         import os
         import signal
         from PySide6.QtCore import QCoreApplication
+
         logging.info("Exiting the launcher")
         # Attempt to stop update worker if running
-        if hasattr(self, 'update_worker') and self.update_worker.isRunning():
+        if hasattr(self, "update_worker") and self.update_worker.isRunning():
             logging.info("Stopping update worker thread...")
             self.update_worker.quit()
             self.update_worker.wait(2000)  # Wait up to 2 seconds
@@ -100,16 +111,18 @@ class Launcher:
         # Create progress callback that updates the UI
         def progress_callback(progress, status, details=None):
             logging.debug(f"Progress update: {progress}% - {status} - {details}")
-            if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+            if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
                 main_window = self.ui_service.main_window
-                if hasattr(main_window, 'progress_bar'):
+                if hasattr(main_window, "progress_bar"):
                     main_window.progress_bar.set_progress(progress, status, details)
                     logging.debug(f"Progress bar updated: {progress}%")
                 else:
                     logging.warning("No progress bar found in main window")
             else:
-                logging.warning("UI service or main window not available for progress update")
-        
+                logging.warning(
+                    "UI service or main window not available for progress update"
+                )
+
         self.github_service = GitHubService(progress_callback)
         self.launcher_repo = Url.LAUNCHER_REPO.value
         self.client_repo = Url.CLIENT_REPO.value
@@ -118,19 +131,30 @@ class Launcher:
 
     def _check_launcher_update(self):
         # Fetch latest release version from GitHub
-        latest_version = self.github_service.get_latest_release_version(Url.LAUNCHER_REPO.value)
-        logging.info(f"Current launcher version: {__version__}, Latest release: {latest_version}")
+        latest_version = self.github_service.get_latest_release_version(
+            Url.LAUNCHER_REPO.value
+        )
+        logging.info(
+            f"Current launcher version: {__version__}, Latest release: {latest_version}"
+        )
         if latest_version and __version__ != latest_version:
             update_dialog: UpdateDialog = self.ui_service.show(Window.UPDATE)
             self.ui_service.close(Window.MAIN)
+
             # Ensure updater is replaced before launching it
             def on_accept():
                 logging.debug("[Update] Accept pressed: starting update process.")
                 # Download latest FFTLauncher.exe from GitHub and save to downloads/FFTLauncher.exe
-                logging.info("[Update] Downloading latest FFTLauncher.exe from GitHub release...")
+                logging.info(
+                    "[Update] Downloading latest FFTLauncher.exe from GitHub release..."
+                )
                 try:
-                    update_bytes = self.github_service.get_release_file("FFTLauncher.exe", Url.LAUNCHER_REPO.value)
-                    logging.debug(f"[Update] get_release_file returned: {type(update_bytes)} size={len(update_bytes) if update_bytes else 'None'}")
+                    update_bytes = self.github_service.get_release_file(
+                        "FFTLauncher.exe", Url.LAUNCHER_REPO.value
+                    )
+                    logging.debug(
+                        f"[Update] get_release_file returned: {type(update_bytes)} size={len(update_bytes) if update_bytes else 'None'}"
+                    )
                 except Exception as e:
                     logging.error(f"[Update] Exception during get_release_file: {e}")
                     return
@@ -147,20 +171,28 @@ class Launcher:
                     try:
                         with open(update_path, "wb") as f:
                             f.write(update_bytes)
-                        logging.info(f"[Update] Downloaded and saved update to {update_path}")
+                        logging.info(
+                            f"[Update] Downloaded and saved update to {update_path}"
+                        )
                     except Exception as e:
                         logging.error(f"[Update] Failed to save update file: {e}")
                         return
                 else:
-                    logging.error("[Update] Failed to download FFTLauncher.exe from GitHub release.")
+                    logging.error(
+                        "[Update] Failed to download FFTLauncher.exe from GitHub release."
+                    )
                     return
                 logging.debug("[Update] Calling replace_updater()...")
                 self.launcher_service.replace_updater()
-                logging.debug("[Update] Calling launcher_service.update() to launch updater...")
+                logging.debug(
+                    "[Update] Calling launcher_service.update() to launch updater..."
+                )
                 self.launcher_service.update()
+
             def on_reject():
                 logging.info("Update dialog closed or rejected. Exiting launcher.")
                 self.exit()
+
             update_dialog.accept_pressed.connect(on_accept)
             update_dialog.rejected.connect(on_reject)
             update_dialog.exec()
@@ -197,12 +229,14 @@ class Launcher:
         try:
             logging.info("Smart launch initiated...")
             main_window = None
-            if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+            if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
                 main_window = self.ui_service.main_window
-            needs_loader_update = self.version_service.check_for_updates(Component.LOADER)
+            needs_loader_update = self.version_service.check_for_updates(
+                Component.LOADER
+            )
             if needs_loader_update:
                 logging.info("Loader update needed - starting loader update...")
-                if main_window and hasattr(main_window, 'launch_button'):
+                if main_window and hasattr(main_window, "launch_button"):
                     main_window.launch_button.setEnabled(False)
                     main_window.launch_button.setText("Updating Loader...")
                 self.loader_service.update()
@@ -211,11 +245,9 @@ class Launcher:
                 self.update_instance()  # Always update instance before launch
         except Exception as e:
             logging.error(f"Smart launch failed: {e}")
-            if main_window and hasattr(main_window, 'launch_button'):
+            if main_window and hasattr(main_window, "launch_button"):
                 main_window.launch_button.setEnabled(True)
                 main_window.launch_button.setText("Launch")
-    
-
 
     def _set_up_profile(self):
         try:
@@ -232,150 +264,183 @@ class Launcher:
 
     def update_instance(self):
         # Show progress bar and reset it
-        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+        if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
             main_window = self.ui_service.main_window
-            if hasattr(main_window, 'progress_bar'):
+            if hasattr(main_window, "progress_bar"):
                 main_window.progress_bar.reset()
-                main_window.progress_bar.start_multi_step(2, "Preparing instance update...")
-                
+                main_window.progress_bar.start_multi_step(
+                    2, "Preparing instance update..."
+                )
+
                 # Disable launch button during update and change text
-                if hasattr(main_window, 'launch_button'):
+                if hasattr(main_window, "launch_button"):
                     main_window.launch_button.setEnabled(False)
                     main_window.launch_button.setText("Updating...")
-        
+
         # Create and start worker thread
         self.update_worker = UpdateWorker(self)
         self.update_worker.progress_update.connect(self._on_progress_update)
         self.update_worker.update_finished.connect(self._on_update_finished)
         self.update_worker.start()
-    
+
     def _on_progress_update(self, progress, status, details):
         """Handle progress updates from worker thread"""
-        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+        if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
             main_window = self.ui_service.main_window
-            
+
             # Update progress bar
-            if hasattr(main_window, 'progress_bar'):
+            if hasattr(main_window, "progress_bar"):
                 main_window.progress_bar.set_progress(progress, status, details)
-            
+
             # Only log important progress milestones, not every update
-            if progress in [0, 25, 50, 75, 90, 100] or "complete" in status.lower() or "error" in status.lower():
-                if hasattr(main_window, 'console'):
-                    main_window.console.append_message.emit(f"[{progress:3d}%] {status}", "INFO")
-    
+            if (
+                progress in [0, 25, 50, 75, 90, 100]
+                or "complete" in status.lower()
+                or "error" in status.lower()
+            ):
+                if hasattr(main_window, "console"):
+                    main_window.console.append_message.emit(
+                        f"[{progress:3d}%] {status}", "INFO"
+                    )
+
     def _on_update_finished(self, success):
         """Handle update completion"""
-        if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
+        if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
             main_window = self.ui_service.main_window
-            
+
             # Update progress bar
-            if hasattr(main_window, 'progress_bar'):
+            if hasattr(main_window, "progress_bar"):
                 if success:
-                    main_window.progress_bar.set_progress(100, "Update completed!", "All folders updated successfully")
+                    main_window.progress_bar.set_progress(
+                        100, "Update completed!", "All folders updated successfully"
+                    )
                 else:
-                    main_window.progress_bar.set_error("Update failed - check console for details")
-        
+                    main_window.progress_bar.set_error(
+                        "Update failed - check console for details"
+                    )
+
         if success:
-            logging.info("Instance update completed successfully - launching Minecraft...")
+            logging.info(
+                "Instance update completed successfully - launching Minecraft..."
+            )
             # Update progress to show launching state and change button text
-            if hasattr(main_window, 'progress_bar'):
-                main_window.progress_bar.set_progress(100, "Launching Minecraft...", "Starting game with updated files")
-            if hasattr(main_window, 'launch_button'):
+            if hasattr(main_window, "progress_bar"):
+                main_window.progress_bar.set_progress(
+                    100, "Launching Minecraft...", "Starting game with updated files"
+                )
+            if hasattr(main_window, "launch_button"):
                 main_window.launch_button.setText("Launching...")
-            
+
             # Launch the game after successful update
             game_launched = self.launcher_service.launch_game()
-            
+
             # Re-enable launch button and update text after game launch attempt
-            if hasattr(main_window, 'launch_button'):
+            if hasattr(main_window, "launch_button"):
                 main_window.launch_button.setEnabled(True)
                 main_window.launch_button.setText("Launch")
-            
+
             if game_launched:
                 logging.info("Minecraft launched successfully")
-                if hasattr(main_window, 'progress_bar'):
-                    main_window.progress_bar.set_progress(100, "Game launched!", "Minecraft is starting...")
+                if hasattr(main_window, "progress_bar"):
+                    main_window.progress_bar.set_progress(
+                        100, "Game launched!", "Minecraft is starting..."
+                    )
             else:
                 logging.error("Failed to launch Minecraft")
-                if hasattr(main_window, 'progress_bar'):
-                    main_window.progress_bar.set_error("Launch failed - check console for details")
+                if hasattr(main_window, "progress_bar"):
+                    main_window.progress_bar.set_error(
+                        "Launch failed - check console for details"
+                    )
         else:
             logging.info("Instance update failed")
             # Re-enable launch button on failure
-            if hasattr(main_window, 'launch_button'):
+            if hasattr(main_window, "launch_button"):
                 main_window.launch_button.setEnabled(True)
                 main_window.launch_button.setText("Launch")
 
 
 class UpdateWorker(QThread):
     """Worker thread for instance updates to prevent UI freezing"""
+
     progress_update = Signal(int, str, str)  # progress, status, details
     update_finished = Signal(bool)  # success
-    
+
     def __init__(self, launcher):
         super().__init__()
         self.launcher = launcher
-    
+
     def run(self):
         """Run the update process in background thread"""
         try:
             logging.info("UpdateWorker started")
+
             # Connect progress callback to emit signals
             def progress_callback(progress, status, details=""):
                 try:
                     self.progress_update.emit(progress, status, details)
                     # Only log important milestones to reduce log spam
-                    if progress in [0, 25, 50, 75, 90, 100] or "complete" in status.lower() or "error" in status.lower():
+                    if (
+                        progress in [0, 25, 50, 75, 90, 100]
+                        or "complete" in status.lower()
+                        or "error" in status.lower()
+                    ):
                         logging.debug(f"Progress milestone: {progress}% - {status}")
                 except Exception as e:
                     logging.error(f"Progress callback error: {e}")
-            
+
             # Set up progress callback for GitHub service
             self.launcher.github_service.progress_callback = progress_callback
-            
+
             # Clear cache to force fresh download with optimizations
             self.launcher.github_service.clear_cache()
-            
+
             # Initial progress update
-            self.progress_update.emit(0, "Starting update...", "Preparing to download files")
-            
+            self.progress_update.emit(
+                0, "Starting update...", "Preparing to download files"
+            )
+
             # Extract all folders directly to filesystem - much faster!
             folder_names = [
                 RepoFolder.DEFAULTCONFIGS.value,
-                RepoFolder.KUBEJS.value, 
+                RepoFolder.KUBEJS.value,
                 RepoFolder.MODFLARED.value,
                 RepoFolder.MODS.value,
                 RepoFolder.RESOURCEPACKS.value,
-                RepoFolder.SHADERPACKS.value
+                RepoFolder.SHADERPACKS.value,
             ]
-            
+
             logging.info("Updating instance folders...")
             success = self.launcher.github_service.extract_folders_directly(
-                folder_names, 
-                self.launcher.client_branch, 
+                folder_names,
+                self.launcher.client_branch,
                 self.launcher.client_repo,
-                self.launcher.instance.instance_path  # Extract directly to instance folder
+                self.launcher.instance.instance_path,  # Extract directly to instance folder
             )
-            
-            
+
             if not success:
                 logging.error("Failed to update instance folders")
                 self.update_finished.emit(False)
                 return
-            
+
             # Download and save the servers.dat file
-            self.progress_update.emit(95, "Downloading server list...", "Getting servers.dat")
+            self.progress_update.emit(
+                95, "Downloading server list...", "Getting servers.dat"
+            )
             servers_content = self.launcher.github_service.get_file(
-                File.SERVERS.value, self.launcher.client_branch, self.launcher.client_repo
+                File.SERVERS.value,
+                self.launcher.client_branch,
+                self.launcher.client_repo,
             )
             if servers_content:
-                self.launcher.file_service.save_file_content(servers_content, File.SERVERS.value)
+                self.launcher.file_service.save_file_content(
+                    servers_content, File.SERVERS.value
+                )
                 logging.info("servers.dat downloaded successfully")
             else:
                 logging.warning("Failed to download servers.dat")
-            
+
             self.update_finished.emit(True)
-            
+
         except Exception as e:
             logging.error(f"Update failed with exception: {e}")
             self.update_finished.emit(False)
