@@ -59,33 +59,14 @@ class VersionsService:
 
     def _get_current_versions(self):
         try:
-            if not os.path.exists(self.instance.versions_file):
-                logging.error(
-                    "Versions file not found: %s", self.instance.versions_file
-                )
-                return {
-                    Component.LAUNCHER.value: None,
-                    Component.LOADER.value: None,
-                    Component.MINECRAFT.value: None,
-                }
-            with open(self.instance.versions_file, "r") as file:
-                versions = json.load(file)
-                launcher_version = self._extract_version(
-                    str(versions.get(Component.LAUNCHER.value, ""))
-                )
-                loader_version = self._extract_version(
-                    str(versions.get(Component.LOADER.value, ""))
-                )
-                minecraft_version = self._extract_version(
-                    str(versions.get(Component.MINECRAFT.value, ""))
-                )
-                return {
-                    Component.LAUNCHER.value: launcher_version,
-                    Component.LOADER.value: loader_version,
-                    Component.MINECRAFT.value: minecraft_version,
-                }
-        except FileNotFoundError:
-            logging.error("Versions file not found: %s", self.instance.versions_file)
+            # Only used for legacy or fallback; prefer direct inspection for loader/minecraft
+            return {
+                Component.LAUNCHER.value: None,
+                Component.LOADER.value: self._get_installed_loader_version(),
+                Component.MINECRAFT.value: self._get_installed_minecraft_version(),
+            }
+        except Exception as e:
+            logging.error("Error getting current versions: %s", e)
             return {
                 Component.LAUNCHER.value: None,
                 Component.LOADER.value: None,
@@ -93,42 +74,35 @@ class VersionsService:
             }
 
     def _get_required_versions(self) -> Dict[str, str]:
-        """Fetches the required versions and returns them as a dictionary.
-        Returns:
-            Dict[str, str]: Launcher, Loader, Minecraft, and Java versions.
         """
-        try:
-            versions = self.github_service.get_file(
-                self.instance.versions_file,
-                Branch.LAUNCHER.value,
-                Url.LAUNCHER_REPO.value,
-            )
-            launcher_version = self._extract_version(
-                str(versions.get(Component.LAUNCHER.value, ""))
-            )
-            loader_version = self._extract_version(
-                str(versions.get(Component.LOADER.value, ""))
-            )
-            minecraft_version = self._extract_version(
-                str(versions.get(Component.MINECRAFT.value, ""))
-            )
-            java_version = self._extract_major_version(
-                str(versions.get(Component.JAVA.value, ""))
-            )
-            return {
-                Component.LAUNCHER.value: launcher_version,
-                Component.LOADER.value: loader_version,
-                Component.MINECRAFT.value: minecraft_version,
-                Component.JAVA.value: java_version,
-            }
-        except json.JSONDecodeError as e:
-            logging.error("Error decoding JSON from GitHub: %s", e)
+        Returns the required versions as a dictionary. For loader and Minecraft, returns None (or implement as needed). Java is hardcoded to 17.
+        """
         return {
             Component.LAUNCHER.value: None,
             Component.LOADER.value: None,
             Component.MINECRAFT.value: None,
-            Component.JAVA.value: None,
+            Component.JAVA.value: 17,
         }
+    def _get_installed_loader_version(self):
+        # Example: look for loader jar in the versions folder
+        versions_dir = os.path.join(self.instance.game_dir, "versions")
+        if not os.path.isdir(versions_dir):
+            return None
+        for name in os.listdir(versions_dir):
+            if name.lower().startswith("neoforge-"):
+                return name.replace("neoforge-", "")
+        return None
+
+    def _get_installed_minecraft_version(self):
+        # Example: look for vanilla version folder in versions dir
+        versions_dir = os.path.join(self.instance.game_dir, "versions")
+        if not os.path.isdir(versions_dir):
+            return None
+        for name in os.listdir(versions_dir):
+            # Assume vanilla versions are just numbers, e.g., 1.20.1
+            if re.match(r"^\d+\.\d+", name):
+                return name
+        return None
 
     def _get_java_current_version(self):
         try:
