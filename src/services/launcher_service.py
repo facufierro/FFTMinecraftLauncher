@@ -58,7 +58,7 @@ class LauncherService:
 
     def _launch_updater(self):
         logging.info("Launching updater...")
-        # subprocess.Popen(["updater.exe"], cwd=".")
+        subprocess.Popen(["updater.exe"], cwd=".")
 
     def launch_game(self):
         """Launch Minecraft with NeoForge support using existing constants"""
