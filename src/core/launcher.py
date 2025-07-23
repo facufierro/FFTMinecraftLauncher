@@ -134,76 +134,29 @@ class Launcher:
             logging.error(f"Failed to check Loader update: {e}")
 
     def smart_launch(self):
-        """Smart launch that checks for updates first, then launches if everything is up to date"""
+        """Smart launch that always updates instance and checks loader, then launches."""
         try:
             logging.info("Smart launch initiated...")
-            
-            # Get UI components for button management
             main_window = None
             if hasattr(self, 'ui_service') and hasattr(self.ui_service, 'main_window'):
                 main_window = self.ui_service.main_window
-            
-            # Check if any updates are needed
             needs_loader_update = self.version_service.check_for_updates(Component.LOADER)
-            needs_instance_update = self._needs_instance_update()
-            
             if needs_loader_update:
                 logging.info("Loader update needed - starting loader update...")
-                # Disable button and update text
                 if main_window and hasattr(main_window, 'launch_button'):
                     main_window.launch_button.setEnabled(False)
                     main_window.launch_button.setText("Updating Loader...")
                 self.loader_service.update()
-            elif needs_instance_update:
-                logging.info("Instance update needed - starting instance update...")
-                self.update_instance()  # This already handles button state
             else:
-                logging.info("Everything up to date - launching game directly...")
-                self.launch()  # This already handles button state
-                
+                logging.info("Always updating instance - starting instance update...")
+                self.update_instance()  # Always update instance before launch
         except Exception as e:
             logging.error(f"Smart launch failed: {e}")
-            # Re-enable button on error
             if main_window and hasattr(main_window, 'launch_button'):
                 main_window.launch_button.setEnabled(True)
                 main_window.launch_button.setText("Launch")
     
-    def _needs_instance_update(self):
-        """Check if instance files need updating"""
-        try:
-            instance_dir = Path(self.instance.instance_path)
-            
-            # Check if instance directory exists
-            if not instance_dir.exists():
-                logging.info("Instance update needed - instance directory doesn't exist")
-                return True
-            
-            # Check for essential folders and files
-            required_folders = ['mods', 'configs']
-            for folder in required_folders:
-                folder_path = instance_dir / folder
-                if not folder_path.exists():
-                    logging.info(f"Instance update needed - {folder} folder missing")
-                    return True
-                    
-                # Check if folder is empty (might need content)
-                if not any(folder_path.iterdir()):
-                    logging.info(f"Instance update needed - {folder} folder is empty")
-                    return True
-            
-            # For now, assume if basic folders exist with content, we're good
-            # You could add more sophisticated checks here like:
-            # - Version file comparisons
-            # - File timestamps
-            # - Checksums, etc.
-            
-            logging.info("Instance appears to be up to date")
-            return False
-            
-        except Exception as e:
-            logging.error(f"Error checking instance update status: {e}")
-            # If we can't determine, assume update is needed for safety
-            return True
+
 
     def _set_up_profile(self):
         try:

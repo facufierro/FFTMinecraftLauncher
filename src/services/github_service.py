@@ -10,7 +10,7 @@ import json
 class GitHubService:
     def __init__(self, progress_callback=None):
         logging.debug("GitHubService initialized")
-        self._repo_cache = {}  # Cache for downloaded repository zips
+    # Removed cache: always download fresh
         self.progress_callback = progress_callback  # Callback for progress updates
         
         # Create optimized session for faster downloads
@@ -148,27 +148,16 @@ class GitHubService:
 
     def _get_repo_zip(self, branch, repo_url):
         """
-        Download and cache the repository zip file.
-        Returns the zip content as bytes, cached for subsequent calls.
+        Always download the repository zip file fresh (no cache).
+        Returns the zip content as bytes.
         """
-        cache_key = f"{repo_url}#{branch}"
-        
-        if cache_key in self._repo_cache:
-            logging.debug(f"Using cached zip for {repo_url} branch {branch}")
-            self._update_progress(10, "Using cached repository data")
-            return self._repo_cache[cache_key]
-        
         repo_url = repo_url.rstrip("/")
         zip_url = repo_url + f"/archive/refs/heads/{branch}.zip"
-        
         try:
             logging.info(f"Downloading repository zip from {zip_url}")
             self._update_progress(0, "Starting download...", "Connecting to GitHub")
-            
-            # Optimized for faster downloads using session
             response = self.session.get(zip_url, timeout=60, stream=True)
             if response.status_code == 200:
-                # Get total size if available
                 total_size = int(response.headers.get('content-length', 0))
                 if total_size > 0:
                     size_mb = total_size / 1024 / 1024
@@ -177,48 +166,38 @@ class GitHubService:
                 else:
                     logging.info("Repository size unknown, starting download...")
                     self._update_progress(5, "Downloading repository", "Download started")
-                
-                # Use much larger chunks for better performance - 1MB chunks
                 content = b""
-                chunk_size = 1048576  # 1MB chunks instead of 32KB
+                chunk_size = 1048576  # 1MB
                 downloaded = 0
                 last_progress_update = 0
-                
                 for chunk in response.iter_content(chunk_size=chunk_size):
                     if chunk:
                         content += chunk
                         downloaded += len(chunk)
-                        
-                        # Update progress less frequently to reduce overhead
                         if total_size > 0:
-                            progress = 5 + int((downloaded / total_size) * 85)  # 5-90% for download
+                            progress = 5 + int((downloaded / total_size) * 85)
                             current_mb = downloaded / 1024 / 1024
-                            
-                            # Update only every 10MB or on significant progress change (5%) to reduce UI overhead
                             if current_mb >= last_progress_update + 10 or progress >= last_progress_update + 5 or downloaded == total_size:
                                 last_progress_update = max(current_mb, progress)
                                 mb_total = total_size / 1024 / 1024
                                 self._update_progress(
-                                    progress, 
+                                    progress,
                                     f"Downloading repository ({current_mb:.1f}/{mb_total:.1f}MB)",
                                     f"{progress-5:.1f}% complete"
                                 )
                         else:
-                            # If we don't know the total size, update every 10MB downloaded
                             current_mb = downloaded / 1024 / 1024
                             if current_mb >= last_progress_update + 10:
                                 last_progress_update = current_mb
-                                progress = min(5 + int(current_mb * 5), 85)  # Estimate progress
+                                progress = min(5 + int(current_mb * 5), 85)
                                 self._update_progress(
-                                    progress, 
+                                    progress,
                                     f"Downloading repository ({current_mb:.1f}MB)",
                                     "Download in progress..."
                                 )
-                
                 download_mb = len(content) / 1024 / 1024
-                logging.info(f"Downloaded and cached {download_mb:.1f}MB for branch {branch}")
-                self._update_progress(90, "Download complete, caching...", "Processing repository data")
-                self._repo_cache[cache_key] = content
+                logging.info(f"Downloaded {download_mb:.1f}MB for branch {branch}")
+                self._update_progress(90, "Download complete", "Processing repository data")
                 return content
             else:
                 logging.warning(f"Failed to fetch zip from {branch}, status code: {response.status_code}")
@@ -226,7 +205,6 @@ class GitHubService:
         except Exception as e:
             logging.error(f"Error fetching zip from {zip_url}: {e}")
             self._update_progress(0, "Download error", str(e))
-        
         return None
 
     def extract_folders_directly(self, folder_names, branch, repo_url, base_extract_path):
@@ -317,9 +295,8 @@ class GitHubService:
         return folder_mapping.get(repo_folder_name, repo_folder_name)
 
     def clear_cache(self):
-        """Clear the repository cache to force fresh downloads"""
-        self._repo_cache.clear()
-        logging.debug("Repository cache cleared")
+        """No-op: cache removed, always downloads fresh."""
+        logging.debug("Repository cache cleared (noop, always downloads fresh)")
 
     def _update_progress(self, progress, status, details=None):
         """Update progress if callback is available"""
