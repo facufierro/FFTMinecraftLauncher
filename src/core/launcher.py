@@ -39,6 +39,8 @@ class Launcher:
         self.launcher_service = LauncherService(
             self.version_service, self.github_service, self.loader_service
         )
+        # Always replace Updater.exe on start
+        self.launcher_service.replace_updater()
 
     def start(self):
         self.main_window = self.ui_service.show(Window.MAIN)
