@@ -15,13 +15,15 @@ def get_base_directory():
         return os.path.dirname(__file__)
 
 
-# Set up logging to logs/updater.log at import time
-base_dir_for_logging = (
-    os.path.dirname(sys.executable)
-    if getattr(sys, "frozen", False)
-    else os.path.dirname(__file__)
-)
-logs_dir = os.path.join(base_dir_for_logging, "logs")
+
+# Always log to the logs directory next to the original launcher/updater exe (not temp dir)
+if getattr(sys, "frozen", False):
+    # If running as a PyInstaller exe, use the parent directory of the executable
+    exe_dir = os.path.dirname(sys.executable)
+else:
+    # If running as a script, use the script's directory
+    exe_dir = os.path.dirname(os.path.abspath(__file__))
+logs_dir = os.path.join(exe_dir, "logs")
 os.makedirs(logs_dir, exist_ok=True)
 log_file = os.path.join(logs_dir, "updater.log")
 logging.basicConfig(
