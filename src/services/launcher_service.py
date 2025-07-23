@@ -64,10 +64,11 @@ class LauncherService:
 
     def _launch_updater(self):
         logging.info("Launching updater...")
-        subprocess.Popen(["Updater.exe"], cwd=".")
+        # Pass the root directory to the updater as an argument
+        root_dir = os.path.abspath(os.getcwd())
+        subprocess.Popen(["Updater.exe", root_dir], cwd=".")
         # Ensure the launcher process exits after starting the updater
         import sys
-
         sys.exit(0)
 
     def launch_game(self):
