@@ -11,9 +11,9 @@ from pathlib import Path
 # Project structure
 spec_dir = Path(SPEC).parent
 project_root = spec_dir.parent.parent
-launcher_dir = project_root / 'launcher'
-src_dir = launcher_dir / 'src'
-main_script = launcher_dir / 'app.py'
+
+src_dir = project_root / 'src'
+main_script = project_root / 'app.py'
 
 print(f"Building FFT Launcher from: {launcher_dir}")
 print(f"Main script: {main_script}")
@@ -90,9 +90,9 @@ def collect_source_modules():
 hiddenimports.extend(collect_source_modules())
 
 # Build analysis
-a = Analysis(
+    a = Analysis(
     [str(main_script)],
-    pathex=[str(project_root), str(launcher_dir), str(src_dir)],
+    pathex=[str(project_root), str(src_dir)],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
