@@ -81,17 +81,17 @@ class Launcher:
 
         game_launched = self.launcher_service.launch_game()
 
-        # Re-enable button after launch attempt
-        if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
-            main_window = self.ui_service.main_window
-            if hasattr(main_window, "launch_button"):
-                main_window.launch_button.setEnabled(True)
-                main_window.launch_button.setText("Launch")
-
         if game_launched:
             logging.info("Minecraft launched successfully")
+            self.exit()
         else:
             logging.error("Failed to launch Minecraft")
+            # Re-enable button after failed launch
+            if hasattr(self, "ui_service") and hasattr(self.ui_service, "main_window"):
+                main_window = self.ui_service.main_window
+                if hasattr(main_window, "launch_button"):
+                    main_window.launch_button.setEnabled(True)
+                    main_window.launch_button.setText("Launch")
 
     def exit(self):
         import sys
@@ -345,19 +345,19 @@ class Launcher:
             # Launch the game after successful update
             game_launched = self.launcher_service.launch_game()
 
-            # Re-enable launch button and update text after game launch attempt
-            if hasattr(main_window, "launch_button"):
-                main_window.launch_button.setEnabled(True)
-                main_window.launch_button.setText("Launch")
-
             if game_launched:
                 logging.info("Minecraft launched successfully")
                 if hasattr(main_window, "progress_bar"):
                     main_window.progress_bar.set_progress(
                         100, "Game launched!", "Minecraft is starting..."
                     )
+                self.exit()
             else:
                 logging.error("Failed to launch Minecraft")
+                # Re-enable launch button and update text after failed launch
+                if hasattr(main_window, "launch_button"):
+                    main_window.launch_button.setEnabled(True)
+                    main_window.launch_button.setText("Launch")
                 if hasattr(main_window, "progress_bar"):
                     main_window.progress_bar.set_error(
                         "Launch failed - check console for details"
