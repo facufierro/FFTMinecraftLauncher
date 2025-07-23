@@ -126,7 +126,11 @@ class Launcher:
             def on_accept():
                 self.launcher_service.replace_updater()
                 self.launcher_service.update()
+            def on_reject():
+                logging.info("Update dialog closed or rejected. Exiting launcher.")
+                self.exit()
             update_dialog.accept_pressed.connect(on_accept)
+            update_dialog.rejected.connect(on_reject)
             update_dialog.exec()
         else:
             logging.info("Launcher is up to date.")
