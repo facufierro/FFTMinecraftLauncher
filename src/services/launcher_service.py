@@ -32,7 +32,7 @@ class LauncherService:
             )
             if not self.updater_file:
                 logging.warning(
-                    "updater.exe not found in latest release - updater functionality will be disabled"
+                    "Updater.exe not found in latest release - updater functionality will be disabled"
                 )
             logging.debug("LauncherService initialized")
         except Exception as e:
