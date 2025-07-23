@@ -142,8 +142,18 @@ class BuildScript:
             return False
     
     def clean_build_cache(self) -> None:
-        """Clean build cache directories."""
+        """Clean build cache directories, handling locked files gracefully."""
+        import stat
         print("Cleaning build cache...")
+        
+        def handle_remove_readonly(func, path, exc):
+            import errno
+            excvalue = exc[1]
+            if func in (os.unlink, os.remove) and excvalue.errno == errno.EACCES:
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            else:
+                print(f"Could not remove {path}: {excvalue}")
         
         dirs_to_clean = [
             self.project_root / "build",
@@ -152,8 +162,11 @@ class BuildScript:
         
         for dir_path in dirs_to_clean:
             if dir_path.exists():
-                shutil.rmtree(dir_path)
-                print(f"  Removed: {dir_path}")
+                try:
+                    shutil.rmtree(dir_path, onerror=handle_remove_readonly)
+                    print(f"  Removed: {dir_path}")
+                except Exception as e:
+                    print(f"  Failed to remove {dir_path}: {e}")
     
     def build_application(self, app_name: str, spec_file: str, expected_exe: str, description: str) -> bool:
         """Build a single application using PyInstaller."""

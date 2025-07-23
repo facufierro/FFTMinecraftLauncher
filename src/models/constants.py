@@ -8,7 +8,7 @@ LOADER_FILE_NAME = "neoforge-%s-installer.jar"
 
 class Branch(Enum):
     CLIENT = "main"
-    LAUNCHER = "refactor"
+    LAUNCHER = "main"
 
 
 class Window(Enum):
