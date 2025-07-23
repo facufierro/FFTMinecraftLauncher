@@ -125,24 +125,38 @@ class Launcher:
             self.ui_service.close(Window.MAIN)
             # Ensure updater is replaced before launching it
             def on_accept():
+                logging.debug("[Update] Accept pressed: starting update process.")
                 # Download latest FFTLauncher.exe from GitHub and save to downloads/FFTLauncher.exe
-                logging.info("Downloading latest FFTLauncher.exe from GitHub release...")
-                update_bytes = self.github_service.get_release_file("FFTLauncher.exe", Url.LAUNCHER_REPO.value)
+                logging.info("[Update] Downloading latest FFTLauncher.exe from GitHub release...")
+                try:
+                    update_bytes = self.github_service.get_release_file("FFTLauncher.exe", Url.LAUNCHER_REPO.value)
+                    logging.debug(f"[Update] get_release_file returned: {type(update_bytes)} size={len(update_bytes) if update_bytes else 'None'}")
+                except Exception as e:
+                    logging.error(f"[Update] Exception during get_release_file: {e}")
+                    return
                 downloads_dir = Path(__file__).parent.parent.parent / "downloads"
-                downloads_dir.mkdir(parents=True, exist_ok=True)
+                logging.debug(f"[Update] Downloads dir resolved to: {downloads_dir}")
+                try:
+                    downloads_dir.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    logging.error(f"[Update] Failed to create downloads dir: {e}")
+                    return
                 update_path = downloads_dir / "FFTLauncher.exe"
+                logging.debug(f"[Update] Update path: {update_path}")
                 if update_bytes:
                     try:
                         with open(update_path, "wb") as f:
                             f.write(update_bytes)
-                        logging.info(f"Downloaded and saved update to {update_path}")
+                        logging.info(f"[Update] Downloaded and saved update to {update_path}")
                     except Exception as e:
-                        logging.error(f"Failed to save update file: {e}")
+                        logging.error(f"[Update] Failed to save update file: {e}")
                         return
                 else:
-                    logging.error("Failed to download FFTLauncher.exe from GitHub release.")
+                    logging.error("[Update] Failed to download FFTLauncher.exe from GitHub release.")
                     return
+                logging.debug("[Update] Calling replace_updater()...")
                 self.launcher_service.replace_updater()
+                logging.debug("[Update] Calling launcher_service.update() to launch updater...")
                 self.launcher_service.update()
             def on_reject():
                 logging.info("Update dialog closed or rejected. Exiting launcher.")

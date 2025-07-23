@@ -70,25 +70,26 @@ class UpdateProgress:
 def replace_file():
     """Replace FFTLauncher.exe with FFTLauncher.update"""
     progress = UpdateProgress()
-    logging.info("Starting update process.")
+    logging.info("[Updater] Starting update process.")
 
     base_dir = get_base_directory()
-    logging.info(f"Base directory: {base_dir}")
+    logging.debug(f"[Updater] Base directory: {base_dir}")
     exe_file = os.path.join(base_dir, "FFTLauncher.exe")
     downloads_dir = os.path.join(base_dir, "downloads")
     update_file = os.path.join(downloads_dir, "FFTLauncher.exe")
 
-    logging.info(f"exe_file: {exe_file}")
-    logging.info(f"update_file (from downloads): {update_file}")
+    logging.debug(f"[Updater] exe_file: {exe_file}")
+    logging.debug(f"[Updater] update_file (from downloads): {update_file}")
 
     # Wait for the update file to appear (up to 30 seconds)
     progress.update_progress(10, "Waiting for update file in downloads...")
     try:
         found = False
         for i in range(30):
+            logging.debug(f"[Updater] Checking for update file, attempt {i+1}/30...")
             if os.path.exists(update_file):
                 found = True
-                logging.info("Update file found in downloads.")
+                logging.info("[Updater] Update file found in downloads.")
                 break
             progress.update_progress(
                 10 + (i * 2), f"Waiting for update file... ({i+1}/30)"
@@ -96,59 +97,64 @@ def replace_file():
             time.sleep(1)
 
         if not found:
-            logging.error("Update file not found in downloads after waiting.")
+            logging.error("[Updater] Update file not found in downloads after waiting.")
             progress.update_progress(100, "Update file not found!")
             time.sleep(2)
             return False
 
         # Wait for file to be fully written
         progress.update_progress(70, "Preparing update...")
-        logging.info("Preparing update...")
+        logging.info("[Updater] Preparing update...")
         time.sleep(2)
-
 
         # Remove the exe file if it exists
         progress.update_progress(80, "Removing old launcher...")
         if os.path.exists(exe_file):
             try:
+                logging.debug(f"[Updater] Attempting to remove old launcher: {exe_file}")
                 os.remove(exe_file)
-                logging.info("Old launcher removed.")
+                logging.info("[Updater] Old launcher removed.")
             except Exception as e:
-                logging.error(f"Failed to remove old launcher: {e}")
+                logging.error(f"[Updater] Failed to remove old launcher: {e}")
                 raise
+        else:
+            logging.debug(f"[Updater] Old launcher not found at: {exe_file}")
 
         # Move update file from downloads to root as exe
         progress.update_progress(90, "Installing update...")
         try:
+            logging.debug(f"[Updater] Moving update file from {update_file} to {exe_file}")
             os.rename(update_file, exe_file)
-            logging.info("Update file moved from downloads to launcher executable.")
+            logging.info("[Updater] Update file moved from downloads to launcher executable.")
             # Delete the update file from downloads if it still exists (shouldn't, but for safety)
             if os.path.exists(update_file):
+                logging.warning(f"[Updater] Update file still exists after move, removing: {update_file}")
                 os.remove(update_file)
         except Exception as e:
-            logging.error(f"Failed to move update file: {e}")
+            logging.error(f"[Updater] Failed to move update file: {e}")
             raise
 
         # Launch the new executable
         progress.update_progress(95, "Launching updated launcher...")
         try:
+            logging.debug(f"[Updater] Launching new executable: {exe_file}")
             subprocess.Popen([exe_file], creationflags=subprocess.CREATE_NO_WINDOW)
-            logging.info("Launched updated launcher.")
+            logging.info("[Updater] Launched updated launcher.")
         except Exception as e:
-            logging.error(f"Failed to launch updated launcher: {e}")
+            logging.error(f"[Updater] Failed to launch updated launcher: {e}")
 
         progress.update_progress(100, "Update complete!")
-        logging.info("Update complete!")
+        logging.info("[Updater] Update complete!")
         time.sleep(1)
         return True
     except Exception as e:
-        logging.error(f"Update failed: {e}")
+        logging.error(f"[Updater] Update failed: {e}")
         progress.update_progress(100, "Update failed!")
         time.sleep(2)
         return False
     finally:
         progress.close()
-        logging.info("Updater exiting.")
+        logging.info("[Updater] Updater exiting.")
 
 
 def main():
