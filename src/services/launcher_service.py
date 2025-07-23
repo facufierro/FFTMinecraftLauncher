@@ -146,7 +146,11 @@ class LauncherService:
             working_dir = instance_dir if instance_dir.exists() else self.minecraft_dir
             logging.info(f"Working directory: {working_dir}")
 
-            process = subprocess.Popen(java_args, cwd=working_dir)
+            # Hide console window on Windows
+            creationflags = 0
+            if platform.system() == "Windows":
+                creationflags = subprocess.CREATE_NO_WINDOW
+            process = subprocess.Popen(java_args, cwd=working_dir, creationflags=creationflags)
 
             logging.info(f"Minecraft process started with PID: {process.pid}")
 
