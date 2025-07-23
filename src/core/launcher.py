@@ -25,6 +25,7 @@ from ..services.file_service import FileService
 from ..version import __version__
 
 
+
 class Launcher:
     def __init__(self):
         logging.info("Initializing Launcher...")
