@@ -8,6 +8,29 @@ import json
 
 
 class GitHubService:
+
+    def get_latest_release_version(self, repo_url):
+        """
+        Fetch the latest release version (tag name) from the GitHub repo.
+        Returns the tag name as a string, or None if not found.
+        """
+        repo_url = repo_url.rstrip("/")
+        owner_repo = repo_url.replace("https://github.com/", "")
+        api_url = f"https://api.github.com/repos/{owner_repo}/releases/latest"
+        try:
+            response = self.session.get(api_url, timeout=15)
+            if response.status_code != 200:
+                logging.warning(f"Failed to fetch release info, status code: {response.status_code}")
+                return None
+            release = response.json()
+            tag_name = release.get("tag_name")
+            if tag_name:
+                # Remove leading 'v' if present (e.g., v2.0.0 -> 2.0.0)
+                return tag_name.lstrip('v')
+            return None
+        except Exception as e:
+            logging.error(f"Error fetching latest release version: {e}")
+        return None
     def __init__(self, progress_callback=None):
         logging.debug("GitHubService initialized")
     # Removed cache: always download fresh

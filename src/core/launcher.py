@@ -2,12 +2,9 @@ import logging
 from pathlib import Path
 from PySide6.QtCore import QThread, QObject, Signal
 
-
 from ..models.constants import INSTANCE_NAME, Component, Folder, File, Url, Branch, RepoFolder
 from ..models.instance import Instance
-
 from ..ui.components.update_dialog import UpdateDialog
-
 from ..services.ui_service import UIService, Window
 from ..services.github_service import GitHubService
 from ..services.versions_service import VersionsService
@@ -17,6 +14,7 @@ from ..services.java_service import JavaService
 from ..services.loader_service import LoaderService
 from ..services.instance_service import InstanceService
 from ..services.file_service import FileService
+from ..version import __version__
 
 
 class Launcher:
@@ -119,7 +117,10 @@ class Launcher:
         self.client_branch = Branch.CLIENT.value
 
     def _check_launcher_update(self):
-        if self.version_service.check_for_updates(Component.LAUNCHER):
+        # Fetch latest release version from GitHub
+        latest_version = self.github_service.get_latest_release_version(Url.LAUNCHER_REPO.value)
+        logging.info(f"Current launcher version: {__version__}, Latest release: {latest_version}")
+        if latest_version and __version__ != latest_version:
             update_dialog: UpdateDialog = self.ui_service.show(Window.UPDATE)
             self.ui_service.close(Window.MAIN)
             # Ensure updater is replaced before launching it
