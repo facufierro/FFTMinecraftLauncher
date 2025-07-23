@@ -46,7 +46,8 @@ class LauncherService:
     def replace_updater(self):
         try:
             if self.updater_file:
-                self.github_service.save_file(self.updater_file, "updater.exe")
+                # Save updater.exe as binary
+                self.github_service.save_folder(self.updater_file, "updater.exe")
                 logging.info("Updater replaced successfully.")
             else:
                 logging.warning("Cannot replace updater - updater.exe not available")
