@@ -123,7 +123,9 @@ class GitHubService:
         owner_repo = repo_url.replace("https://github.com/", "")
         api_url = f"https://api.github.com/repos/{owner_repo}/releases/latest"
         try:
+            logging.debug(f"[RELEASE DEBUG] Fetching release info from: {api_url}")
             response = self.session.get(api_url, timeout=15)
+            logging.debug(f"[RELEASE DEBUG] GitHub API status code: {response.status_code}")
             if response.status_code != 200:
                 logging.warning(
                     f"Failed to fetch release info, status code: {response.status_code}"
@@ -131,11 +133,18 @@ class GitHubService:
                 return None
             release = response.json()
             asset_names = [asset.get("name") for asset in release.get("assets", [])]
-            logging.debug(f"Assets found in latest release: {asset_names}")
+            logging.debug(f"[RELEASE DEBUG] Searching for asset: '{asset_name}'")
+            logging.debug(f"[RELEASE DEBUG] Assets found in latest release: {asset_names}")
+            found = False
             for asset in release.get("assets", []):
-                if asset.get("name") == asset_name:
+                asset_name_actual = asset.get('name')
+                logging.debug(f"[RELEASE DEBUG] Comparing asset: '{asset_name_actual}' to requested: '{asset_name}'")
+                if asset_name_actual == asset_name:
+                    found = True
                     download_url = asset.get("browser_download_url")
+                    logging.debug(f"[RELEASE DEBUG] Downloading asset from: {download_url}")
                     asset_resp = self.session.get(download_url, timeout=30)
+                    logging.debug(f"[RELEASE DEBUG] Asset download status code: {asset_resp.status_code}")
                     if asset_resp.status_code == 200:
                         logging.info(f"Downloaded release asset: {asset_name}")
                         return asset_resp.content
@@ -143,7 +152,8 @@ class GitHubService:
                         f"Failed to download asset {asset_name}, status code: {asset_resp.status_code}"
                     )
                     return None
-            logging.warning(f"Asset {asset_name} not found in latest release.")
+            if not found:
+                logging.warning(f"Asset '{asset_name}' not found in latest release. Assets available: {asset_names}")
         except Exception as e:
             logging.error(f"Error fetching release asset {asset_name}: {e}")
         return None
