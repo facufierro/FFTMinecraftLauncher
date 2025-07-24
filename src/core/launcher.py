@@ -45,7 +45,17 @@ class Launcher:
         self.java_service.update()
         self.loader_service.update()
         self.main_window.set_launch_button_text("Launching...")
-        game_launched = self.launcher_service.launch_game()
+
+        # Get profile data from the ProfileService or models
+        # Assuming ProfileService has a method get_active_profile() or similar
+        if hasattr(self.profile_service, "get_active_profile"):
+            profile_data = self.profile_service.get_active_profile()
+        elif hasattr(self.profile_service, "profile"):
+            profile_data = self.profile_service.profile
+        else:
+            profile_data = {}
+
+        game_launched = self.launcher_service.launch_game(profile_data)
 
         if game_launched:
             logging.info("Minecraft launched successfully")
