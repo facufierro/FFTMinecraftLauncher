@@ -22,10 +22,7 @@ class Loader:
         )
         self.launcher = os.path.join(
             self.minecraft_dir,
-            "libraries",
-            "net",
-            "neoforged",
-            "neoforge",
-            self.required_version,
-            f"neoforge-{self.required_version}-client.jar",
+            "versions",
+            f"neoforge-{self.required_version}",
+            f"neoforge-{self.required_version}.jar",
         )
