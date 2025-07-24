@@ -10,7 +10,6 @@ class JavaService:
         self.required_version = "17"
 
     def update(self):
-        logging.info("Checking for Java updates")
         try:
             if any(self._is_update_required()):
                 logging.info("Java update is needed.")
@@ -26,7 +25,7 @@ class JavaService:
             required_version = self.required_version
             current_version = self._get_java_current_version()
             logging.info(
-                "Checking for updates for java: %s vs %s",
+                "Checking for updates for java: current %s vs required %s",
                 current_version,
                 required_version,
             )
