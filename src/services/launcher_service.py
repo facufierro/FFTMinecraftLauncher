@@ -7,21 +7,16 @@ import uuid
 import sys
 from csv import __version__
 from ..utils import github_utils
+from ..models.loader import Loader
 
 
 class LauncherService:
-    def __init__(self, root_dir: str, minecraft_dir: str, loader_current_version: str):
+    def __init__(self, root_dir: str, minecraft_dir: str, loader: Loader):
         try:
             self.root_dir = root_dir
             self.minecraft_dir = minecraft_dir
             self.downloads_dir = os.path.join(root_dir, "downloads")
-            self.loader_current_version = loader_current_version
-            self.loader_file = os.path.join(
-                self.minecraft_dir,
-                "versions",
-                f"neoforge{self.loader_current_version}",
-                f"neoforge{self.loader_current_version}.jar",
-            )
+            self.loader = loader
             self.launcher_repo = {
                 "name": "facufierro/FFTMinecraftLauncher",
                 "url": "https://github.com/facufierro/FFTMinecraftLauncher",
@@ -57,7 +52,7 @@ class LauncherService:
             "java",
             "-Xmx16G",
             "-jar",
-            str(self.loader_file),
+            str(self.loader.launcher),
             "--nogui",
         ]
         process = subprocess.Popen(java_cmd, cwd=self.minecraft_dir)
