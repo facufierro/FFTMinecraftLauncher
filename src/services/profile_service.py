@@ -36,7 +36,7 @@ class ProfileService:
         try:
             if not self._is_update_required():
                 logging.info(
-                    f"Profile '{self.profile.name}' already exists, skipping add."
+                    f"Profile '{self.profile.name}' already exists, skipping..."
                 )
                 return
             # Read the existing launcher_profiles.json
