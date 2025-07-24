@@ -12,7 +12,7 @@ from ..services.java_service import JavaService
 from ..services.loader_service import LoaderService
 from ..services.instance_service import InstanceService
 from ..services.file_service import FileService
-from ..version import __launcher_current_version__
+from ..version import __version__
 
 
 class Launcher:
