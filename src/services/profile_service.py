@@ -1,52 +1,56 @@
 import logging
 import json
 import os
-import shutil
 from ..models.profile import Profile
-from ..models.constants import Path, PROFILE_DATA
 
 
 class ProfileService:
-    def __init__(self):
+    def __init__(self, minecraft_dir: str):
+
         logging.debug("Initializing ProfileService")
-        from src.models.constants import get_profile_file
-        self.default_profile = get_profile_file()
+        self.profile = Profile(
+            id="a4e7d1b6b0974c87bd556f8db97afda3",
+            created="2023-10-01T12:00:00Z",
+            icon="Furnace",
+            lastUsed="2025-07-11T16:45:20.8297Z",
+            lastVersionId="neoforge-21.1.192",
+            name="FFTClient",
+            type="custom",
+        )
+        self.profile_file = os.path.join(minecraft_dir, "launcher_profiles.json")
 
-    def get_profile_data(self):
-        try:
-            with open(self.default_profile, "r", encoding="utf-8") as file:
+    def _is_update_required(self):
+        if os.path.exists(self.profile_file):
+            with open(self.profile_file, "r", encoding="utf-8") as file:
                 data = json.load(file)
-            profiles = data.get("profiles", {})
-            for profile_id, profile_info in profiles.items():
-                if profile_info.get("name") == "FFTClient":
-                    profile_info["id"] = profile_id
-                    return Profile(**profile_info)
-            logging.warning("FFTClient profile not found in: %s", self.default_profile)
-            return None
-        except FileNotFoundError:
-            logging.error("Profile data file not found: %s", self.default_profile)
-            return None
+        else:
+            data = {}
+        profiles = data.get("profiles", {})
+        for profile_info in profiles.values():
+            if profile_info.get("name") == self.profile.name:
+                return False  # Profile exists, no update needed
+        return True  # Profile missing, update needed
 
-    def update_profile(self):
-        logging.info("Updating profile data by appending new profile entry")
+    def update(self):
+        logging.info("Ensuring FFTClient profile exists in launcher_profiles.json")
         try:
+            if not self._is_update_required():
+                logging.info(
+                    f"Profile '{self.profile.name}' already exists, skipping add."
+                )
+                return
             # Read the existing launcher_profiles.json
-            with open(self.default_profile, "r", encoding="utf-8") as file:
-                data = json.load(file)
+            if os.path.exists(self.profile_file):
+                with open(self.profile_file, "r", encoding="utf-8") as file:
+                    data = json.load(file)
+            else:
+                data = {}
             profiles = data.get("profiles", {})
-
-            # Add new profile(s) from PROFILE_DATA
-            for profile_id, profile_info in PROFILE_DATA.items():
-                if profile_id not in profiles:
-                    profiles[profile_id] = profile_info
-                    logging.info(f"Added new profile: {profile_id}")
-                else:
-                    logging.info(f"Profile {profile_id} already exists, skipping.")
-
+            # Add the profile
+            profiles[self.profile.id] = self.profile.__dict__
             data["profiles"] = profiles
-
             # Write back the updated data
-            with open(self.default_profile, "w", encoding="utf-8") as file:
+            with open(self.profile_file, "w", encoding="utf-8") as file:
                 json.dump(data, file, indent=4)
             logging.info("Profile data updated successfully")
         except Exception as e:

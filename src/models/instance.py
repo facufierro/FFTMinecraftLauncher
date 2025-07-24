@@ -1,16 +1,29 @@
+import os
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
-from ..models.constants import get_minecraft_dir, get_instance_dir, get_versions_file
 
 
 @dataclass
 class Instance:
-    name: str
-    game_dir: str = field(default_factory=get_minecraft_dir)
-    current_versions: Dict[str, str] = field(default_factory=dict)
-    required_versions: Dict[str, str] = field(default_factory=dict)
-    instance_path: str = field(default_factory=get_instance_dir)
-    versions_file: str = field(default_factory=get_versions_file)
+    instance_dir: str
+    default_configs_dir: str = field(init=False)
+    config_dir: str = field(init=False)
+    kubejs_dir: str = field(init=False)
+    modflared_dir: str = field(init=False)
+    mods_dir: str = field(init=False)
+    resourcepacks_dir: str = field(init=False)
+    shaders_dir: str = field(init=False)
+    servers_file: Optional[str] = field(init=False)
     mod_list: List[str] = field(default_factory=list)
     resourcepacks: List[Dict[str, str]] = field(default_factory=list)
     shaders: List[Dict[str, str]] = field(default_factory=list)
+
+    def __post_init__(self):
+        self.default_configs_dir = os.path.join(self.instance_dir, "defaultconfigs")
+        self.config_dir = os.path.join(self.instance_dir, "configs")
+        self.kubejs_dir = os.path.join(self.instance_dir, "kubejs")
+        self.modflared_dir = os.path.join(self.instance_dir, "modflared")
+        self.mods_dir = os.path.join(self.instance_dir, "mods")
+        self.resourcepacks_dir = os.path.join(self.instance_dir, "resourcepacks")
+        self.shaders_dir = os.path.join(self.instance_dir, "shaderpacks")
+        self.servers_file = os.path.join(self.instance_dir, "servers.dat")

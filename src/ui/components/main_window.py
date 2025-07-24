@@ -3,7 +3,16 @@ import logging
 import time
 from PySide6.QtCore import Signal, QTimer, Qt
 from PySide6.QtWidgets import (
-    QMainWindow, QLabel, QVBoxLayout, QWidget, QHBoxLayout, QSplitter, QFrame, QPushButton, QCheckBox, QSizePolicy
+    QMainWindow,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+    QHBoxLayout,
+    QSplitter,
+    QFrame,
+    QPushButton,
+    QCheckBox,
+    QSizePolicy,
 )
 from PySide6.QtGui import QPixmap, QFont
 from src.ui.components.launch_button import LaunchButton
@@ -12,9 +21,6 @@ from src.ui.components.progress_bar import ProgressBarWidget
 
 
 class MainWindow(QMainWindow):
-    def on_launch_button_clicked(self, callback):
-        """Set the callback to be called when the launch button is clicked."""
-        self._launch_callback = callback
     launch_requested = Signal()  # Custom signal for launch requests
 
     def __init__(self):
@@ -38,12 +44,14 @@ class MainWindow(QMainWindow):
         for label, value in [
             ("Local Directory", "Instance: FFTClient"),
             ("Last Check", "2025-07-06 18:42:34"),
-            ("Current Version", "1.2.93")
+            ("Current Version", "1.2.93"),
         ]:
             card = QFrame()
             card.setFrameShape(QFrame.StyledPanel)
             card.setFrameShadow(QFrame.Raised)
-            card.setStyleSheet("background-color: #23272e; border-radius: 8px; padding: 8px 12px;")
+            card.setStyleSheet(
+                "background-color: #23272e; border-radius: 8px; padding: 8px 12px;"
+            )
             v = QVBoxLayout(card)
             v.setContentsMargins(4, 4, 4, 4)
             v.setSpacing(2)
@@ -60,14 +68,18 @@ class MainWindow(QMainWindow):
         progress_card = QFrame()
         progress_card.setFrameShape(QFrame.StyledPanel)
         progress_card.setFrameShadow(QFrame.Raised)
-        progress_card.setStyleSheet("background-color: #23272e; border-radius: 8px; padding: 0px 0px;")
+        progress_card.setStyleSheet(
+            "background-color: #23272e; border-radius: 8px; padding: 0px 0px;"
+        )
         progress_layout = QVBoxLayout(progress_card)
         progress_layout.setContentsMargins(0, 0, 0, 0)
         progress_layout.setSpacing(0)
         self.progress_bar = ProgressBarWidget()
         self.progress_bar.setMinimumHeight(22)
         self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.progress_bar.setStyleSheet('QProgressBar { background-color: #23272e; border-radius: 8px; border: 1px solid #444a57; min-height: 22px; } QProgressBar::chunk { background-color: #6c7cff; border-radius: 8px; }')
+        self.progress_bar.setStyleSheet(
+            "QProgressBar { background-color: #23272e; border-radius: 8px; border: 1px solid #444a57; min-height: 22px; } QProgressBar::chunk { background-color: #6c7cff; border-radius: 8px; }"
+        )
         progress_layout.addWidget(self.progress_bar)
         main_layout.addWidget(progress_card)
 
@@ -103,7 +115,9 @@ class MainWindow(QMainWindow):
         self.console_card = QFrame()
         self.console_card.setFrameShape(QFrame.StyledPanel)
         self.console_card.setFrameShadow(QFrame.Raised)
-        self.console_card.setStyleSheet("background-color: #181a1b; border-radius: 8px; padding: 6px 8px;")
+        self.console_card.setStyleSheet(
+            "background-color: #181a1b; border-radius: 8px; padding: 6px 8px;"
+        )
         self.console_layout = QVBoxLayout(self.console_card)
         self.console_layout.setContentsMargins(4, 4, 4, 4)
         self.console_layout.setSpacing(2)
@@ -133,6 +147,18 @@ class MainWindow(QMainWindow):
         self.console_layout.addWidget(self.console)
         main_layout.addWidget(self.console_card)
         # Removed stray __init__ method and associated code
+
+    def set_launch_button_enabled(self, enabled: bool):
+        """Enable or disable the launch button."""
+        self.launch_button.setEnabled(enabled)
+
+    def set_launch_button_text(self, text: str):
+        """Set the text of the launch button."""
+        self.launch_button.setText(text)
+
+    def on_launch_button_clicked(self, callback):
+        """Set the callback to be called when the launch button is clicked."""
+        self._launch_callback = callback
 
     def _handle_launch_button_click(self):
         """Handle the launch button click event."""
