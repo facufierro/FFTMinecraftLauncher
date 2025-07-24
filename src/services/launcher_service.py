@@ -79,6 +79,7 @@ class LauncherService:
                 "FFTLauncher.exe", self.launcher_repo.get("name")
             )
             downloads_dir = self.downloads_dir
+            os.makedirs(downloads_dir, exist_ok=True)
             with open(os.path.join(downloads_dir, "FFTLauncher.exe"), "wb") as f:
                 f.write(self.launcher_file)
             logging.info("Launcher file downloaded successfully.")
