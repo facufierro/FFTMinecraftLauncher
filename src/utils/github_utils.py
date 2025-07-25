@@ -1,17 +1,33 @@
+
 import logging
 import requests
+import os
+
+# Create a session with authentication if GITHUB_TOKEN or GH_TOKEN is set
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "FFT-Minecraft-Launcher/2.0.0",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+})
+github_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+if github_token:
+    session.headers.update({"Authorization": f"token {github_token}"})
+    logging.info("github_utils: Using API authentication.")
+else:
+    logging.info("github_utils: No GitHub token found, using unauthenticated requests.")
 
 
 def get_release_file(file_name: str, repo: str):
     try:
         url = f"https://api.github.com/repos/{repo}/releases/latest"
-        response = requests.get(url)
+        response = session.get(url)
         response.raise_for_status()
         data = response.json()
         for asset in data.get("assets", []):
             if asset["name"] == file_name:
                 download_url = asset["browser_download_url"]
-                file_response = requests.get(download_url)
+                file_response = session.get(download_url)
                 file_response.raise_for_status()
                 return file_response.content
         logging.warning(f"File '{file_name}' not found in the latest release.")
@@ -30,7 +46,7 @@ def get_release_version(repo_url):
     owner_repo = repo_url.replace("https://github.com/", "")
     api_url = f"https://api.github.com/repos/{owner_repo}/releases/latest"
     try:
-        response = requests.get(api_url, timeout=15)
+        response = session.get(api_url, timeout=15)
         if response.status_code != 200:
             logging.warning(
                 f"Failed to fetch release info, status code: {response.status_code}"
@@ -44,7 +60,7 @@ def get_release_version(repo_url):
         return None
     except Exception as e:
         logging.error(f"Error fetching latest release version: {e}")
-    return None
+        return None
 
 
 def fetch_all(repo_url, folder, branch="main"):
@@ -57,41 +73,19 @@ def fetch_all(repo_url, folder, branch="main"):
     try:
         # 1. Get branch info to find commit SHA
         branch_url = f"https://api.github.com/repos/{owner_repo}/branches/{branch}"
-        branch_resp = requests.get(branch_url, timeout=15)
+        branch_resp = session.get(branch_url, timeout=15)
         branch_resp.raise_for_status()
         commit_sha = branch_resp.json()["commit"]["sha"]
 
-        # 2. Get the tree for the commit
-        tree_url = f"https://api.github.com/repos/{owner_repo}/git/trees/{commit_sha}"
-        tree_resp = requests.get(tree_url, timeout=15)
+        # 2. Get the full tree recursively
+        tree_url = f"https://api.github.com/repos/{owner_repo}/git/trees/{commit_sha}?recursive=1"
+        tree_resp = session.get(tree_url, timeout=15)
         tree_resp.raise_for_status()
         tree = tree_resp.json()["tree"]
 
-        # 3. Find the folder in the tree
-        folder_entry = next(
-            (
-                item
-                for item in tree
-                if item["path"] == folder and item["type"] == "tree"
-            ),
-            None,
-        )
-        if not folder_entry:
-            logging.error(f"Folder '{folder}' not found in repo tree.")
-            return []
-        folder_sha = folder_entry["sha"]
-
-        # 4. Get the tree for the folder
-        folder_tree_url = (
-            f"https://api.github.com/repos/{owner_repo}/git/trees/{folder_sha}"
-        )
-        folder_tree_resp = requests.get(folder_tree_url, timeout=15)
-        folder_tree_resp.raise_for_status()
-        folder_tree = folder_tree_resp.json()["tree"]
-
-        # 5. List all files (blobs) in the folder (non-recursive)
-        files = [item["path"] for item in folder_tree if item["type"] == "blob"]
-        return [f"{folder}/{f}" for f in files]
+        # 3. Collect all files (blobs) under the given folder (recursively)
+        files = [item["path"] for item in tree if item["type"] == "blob" and item["path"].startswith(f"{folder}/")]
+        return files
     except Exception as e:
         logging.error(f"Error fetching config files recursively: {e}")
         return []
@@ -105,7 +99,7 @@ def download_repo_file(repo_url, file_path, branch="main", dest=None):
     repo_url = repo_url.rstrip("/")
     owner_repo = repo_url.replace("https://github.com/", "")
     raw_url = f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{file_path}"
-    resp = requests.get(raw_url, timeout=15)
+    resp = session.get(raw_url, timeout=15)
     resp.raise_for_status()
     if dest:
         dest.parent.mkdir(parents=True, exist_ok=True)
