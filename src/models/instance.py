@@ -6,7 +6,7 @@ from typing import Optional, List, Dict
 @dataclass
 class Instance:
     instance_dir: str
-    default_configs_dir: str = field(init=False)
+    defaultconfigs_dir: str = field(init=False)
     config_dir: str = field(init=False)
     kubejs_dir: str = field(init=False)
     modflared_dir: str = field(init=False)
@@ -19,7 +19,7 @@ class Instance:
     shaders: List[Dict[str, str]] = field(default_factory=list)
 
     def __post_init__(self):
-        self.default_configs_dir = os.path.join(self.instance_dir, "defaultconfigs")
+        self.defaultconfigs_dir = os.path.join(self.instance_dir, "defaultconfigs")
         self.config_dir = os.path.join(self.instance_dir, "configs")
         self.kubejs_dir = os.path.join(self.instance_dir, "kubejs")
         self.modflared_dir = os.path.join(self.instance_dir, "modflared")
