@@ -30,7 +30,7 @@ class Launcher:
         self.java_service = JavaService()
         self.game_service = GameService(self.root_dir)
         self.loader_service = LoaderService(self.root_dir)
-        self.instance_service = InstanceService(self.root_dir, self.file_service)
+        self.instance_service = InstanceService(self.root_dir)
         self.launcher_service = LauncherService(
             self.root_dir, self.game_service.game, self.loader_service.loader
         )
@@ -46,6 +46,7 @@ class Launcher:
         self.profile_service.update()
         self.java_service.update()
         self.loader_service.update()
+        self.instance_service.update()
         self.main_window.set_launch_button_text("Launching...")
         game_launched = self.launcher_service.launch_game()
 
