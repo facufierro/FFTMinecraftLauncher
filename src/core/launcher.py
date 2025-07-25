@@ -12,6 +12,7 @@ from ..services.java_service import JavaService
 from ..services.loader_service import LoaderService
 from ..services.instance_service import InstanceService
 from ..services.file_service import FileService
+from ..services.game_service import GameService
 from ..version import __version__
 
 
@@ -27,10 +28,11 @@ class Launcher:
 
         self.profile_service = ProfileService(self.root_dir)
         self.java_service = JavaService()
-        self.loader_service = LoaderService(self.root_dir, self.minecraft_dir)
+        self.game_service = GameService(self.root_dir)
+        self.loader_service = LoaderService(self.root_dir)
         self.instance_service = InstanceService(self.root_dir, self.file_service)
         self.launcher_service = LauncherService(
-            self.root_dir, self.minecraft_dir, self.loader_service.loader
+            self.root_dir, self.game_service.game, self.loader_service.loader
         )
 
     def start(self):
