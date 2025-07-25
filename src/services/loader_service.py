@@ -33,7 +33,7 @@ class LoaderService:
 
     def _is_update_required(self):
         logging.debug("Checking if Launcher is already installed")
-        if not os.path.exists(self.loader.launcher):
+        if not os.path.exists(self.loader.launcher_dir):
             logging.debug("Launcher JAR not found, update needed")
             return True
 
