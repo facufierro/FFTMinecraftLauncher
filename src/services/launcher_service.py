@@ -22,7 +22,7 @@ class LauncherService:
         try:
             self.root_dir = pathlib.Path(root_dir)
             self.minecraft_version = "1.21.1"
-            self.instance_dir = self.root_dir / "instances"
+            self.instance_dir = self.root_dir / "instance"
 
             self.manifest_url = (
                 "https://launchermeta.mojang.com/mc/game/version_manifest.json"
