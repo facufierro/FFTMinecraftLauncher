@@ -76,7 +76,6 @@ class LoaderService:
             ],
             check=True,
         )
-        (self.instance_dir / "installed").touch()
         print("NeoForge install complete.")
 
     def _emit_update_finished(self):
