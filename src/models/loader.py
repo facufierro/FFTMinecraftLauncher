@@ -5,7 +5,7 @@ from ..version import __loader_version__
 
 @dataclass
 class Loader:
-    minecraft_dir: str
+    instance_dir: str
     downloads_dir: str
     required_version: str = __loader_version__
     download_url: str = field(init=False)
@@ -18,7 +18,7 @@ class Loader:
             self.downloads_dir, f"neoforge-{self.required_version}-installer.jar"
         )
         self.launcher_dir = os.path.join(
-            self.minecraft_dir, "versions", f"neoforge-{self.required_version}"
+            self.instance_dir, "versions", f"neoforge-{self.required_version}"
         )
         self.launcher = os.path.join(
             self.launcher_dir,
