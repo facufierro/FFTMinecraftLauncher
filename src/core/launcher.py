@@ -25,7 +25,7 @@ class Launcher:
 
         self.file_service = FileService()
 
-        self.profile_service = ProfileService(self.minecraft_dir)
+        self.profile_service = ProfileService(self.root_dir)
         self.java_service = JavaService()
         self.loader_service = LoaderService(self.root_dir, self.minecraft_dir)
         self.instance_service = InstanceService(self.root_dir, self.file_service)
@@ -43,7 +43,7 @@ class Launcher:
         self.main_window.set_launch_button_text("Updating...")
         self.profile_service.update()
         self.java_service.update()
-        self.loader_service.update()
+        # self.loader_service.update()
         self.main_window.set_launch_button_text("Launching...")
 
         # Get profile data from the ProfileService or models
@@ -55,7 +55,7 @@ class Launcher:
         else:
             profile_data = {}
 
-        game_launched = self.launcher_service.launch_game(profile_data)
+        game_launched = self.launcher_service.launch_game()
 
         if game_launched:
             logging.info("Minecraft launched successfully")
