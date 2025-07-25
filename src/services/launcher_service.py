@@ -8,6 +8,7 @@ import requests
 from pathlib import Path
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from ..utils.file_utils import download_file
 
 from csv import __version__
 from ..utils import github_utils
@@ -82,7 +83,7 @@ class LauncherService:
             print(f"[INFO] Downloading {len(missing_libs)} missing libraries...")
             for url, path in missing_libs:
                 print(f"[INFO] Downloading {url} -> {path}")
-                self.download_file(url, path)
+                download_file(url, path)
 
         # --- Download assets index and all assets if missing ---
         assets_dir = self.instance_dir / "assets"
@@ -90,7 +91,7 @@ class LauncherService:
         if not assets_index_path.exists():
             vjson_vanilla = self.get_version_json(self.minecraft_version)
             assets_index_url = vjson_vanilla["assetIndex"]["url"]
-            self.download_file(assets_index_url, assets_index_path)
+            download_file(assets_index_url, assets_index_path)
         with open(assets_index_path) as f:
             assets = json.load(f)["objects"]
         asset_tasks = []
@@ -100,9 +101,7 @@ class LauncherService:
                 url = f"https://resources.download.minecraft.net/{h[:2]}/{h}"
                 path = assets_dir / "objects" / h[:2] / h
                 if not path.exists():
-                    asset_tasks.append(
-                        executor.submit(self.download_file, url, path, False)
-                    )
+                    asset_tasks.append(executor.submit(download_file, url, path, False))
             for f in tqdm(
                 as_completed(asset_tasks),
                 total=len(asset_tasks),
@@ -185,7 +184,7 @@ class LauncherService:
         ]:
             if not path.exists():
                 print(f"[INFO] Downloading injected {path.name}...")
-                self.download_file(url, path)
+                download_file(url, path)
         if (
             not bl_jar
             or not sjh_jar
@@ -219,7 +218,7 @@ class LauncherService:
             )
             for url, path in missing_vanilla_libs:
                 print(f"[INFO] Downloading {url} -> {path}")
-                self.download_file(url, path)
+                download_file(url, path)
         for jar in vanilla_jars:
             if jar not in cp_jars:
                 cp_jars.append(jar)
