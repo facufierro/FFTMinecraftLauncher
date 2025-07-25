@@ -1,15 +1,13 @@
 import logging
 import os
 from ..models.instance import Instance
-from ..services.file_service import FileService
 
 
 class InstanceService:
-    def __init__(self, root_dir: str, file_service: FileService):
+    def __init__(self, root_dir: str):
         logging.debug("Initializing InstanceService")
         self.instance_dir = os.path.join(root_dir, "instance")
         self.instance = Instance(instance_dir=self.instance_dir)
-        self.file_service = file_service
         self._create_instance_folder()
 
     def update_config(self, zip_file):
