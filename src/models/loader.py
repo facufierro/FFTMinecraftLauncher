@@ -20,9 +20,10 @@ class Loader:
         self.installer = os.path.join(
             self.downloads_dir, f"neoforge-{self.required_version}-installer.jar"
         )
+        self.launcher_dir = os.path.join(
+            self.minecraft_dir, "versions", f"neoforge-{self.required_version}"
+        )
         self.launcher = os.path.join(
-            self.minecraft_dir,
-            "versions",
-            f"neoforge-{self.required_version}",
+            self.launcher_dir,
             f"neoforge-{self.required_version}.jar",
         )
