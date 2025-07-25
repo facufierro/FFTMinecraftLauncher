@@ -47,21 +47,69 @@ def get_release_version(repo_url):
     return None
 
 
-def get_all_config_files(repo_url, branch="main"):
+def fetch_all(repo_url, folder, branch="main"):
     """
-    Recursively get all file paths inside the 'config' folder of a GitHub repo using the tree API.
+    Recursively get all file paths inside the specified folder of a GitHub repo using the tree API.
     Returns a list of file paths (relative to repo root).
     """
     repo_url = repo_url.rstrip("/")
     owner_repo = repo_url.replace("https://github.com/", "")
-    api_url = f"https://api.github.com/repos/{owner_repo}/git/trees/{branch}?recursive=1"
     try:
-        response = requests.get(api_url, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        files = [item["path"] for item in data.get("tree", [])
-                 if item["type"] == "blob" and item["path"].startswith("config/")]
-        return files
+        # 1. Get branch info to find commit SHA
+        branch_url = f"https://api.github.com/repos/{owner_repo}/branches/{branch}"
+        branch_resp = requests.get(branch_url, timeout=15)
+        branch_resp.raise_for_status()
+        commit_sha = branch_resp.json()["commit"]["sha"]
+
+        # 2. Get the tree for the commit
+        tree_url = f"https://api.github.com/repos/{owner_repo}/git/trees/{commit_sha}"
+        tree_resp = requests.get(tree_url, timeout=15)
+        tree_resp.raise_for_status()
+        tree = tree_resp.json()["tree"]
+
+        # 3. Find the folder in the tree
+        folder_entry = next(
+            (
+                item
+                for item in tree
+                if item["path"] == folder and item["type"] == "tree"
+            ),
+            None,
+        )
+        if not folder_entry:
+            logging.error(f"Folder '{folder}' not found in repo tree.")
+            return []
+        folder_sha = folder_entry["sha"]
+
+        # 4. Get the tree for the folder
+        folder_tree_url = (
+            f"https://api.github.com/repos/{owner_repo}/git/trees/{folder_sha}"
+        )
+        folder_tree_resp = requests.get(folder_tree_url, timeout=15)
+        folder_tree_resp.raise_for_status()
+        folder_tree = folder_tree_resp.json()["tree"]
+
+        # 5. List all files (blobs) in the folder (non-recursive)
+        files = [item["path"] for item in folder_tree if item["type"] == "blob"]
+        return [f"{folder}/{f}" for f in files]
     except Exception as e:
         logging.error(f"Error fetching config files recursively: {e}")
         return []
+
+
+def download_repo_file(repo_url, file_path, branch="main", dest=None):
+    """
+    Download a single file from a GitHub repo (raw content) to dest.
+    If dest is None, returns the content as bytes. Otherwise, writes to dest.
+    """
+    repo_url = repo_url.rstrip("/")
+    owner_repo = repo_url.replace("https://github.com/", "")
+    raw_url = f"https://raw.githubusercontent.com/{owner_repo}/{branch}/{file_path}"
+    resp = requests.get(raw_url, timeout=15)
+    resp.raise_for_status()
+    if dest:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, "wb") as f:
+            f.write(resp.content)
+        return dest
+    return resp.content
