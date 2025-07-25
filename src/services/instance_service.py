@@ -1,6 +1,8 @@
 import logging
 import os
 from ..models.instance import Instance
+from ..utils import file_utils, github_utils
+from pathlib import Path
 
 
 class InstanceService:
@@ -9,18 +11,35 @@ class InstanceService:
         self.instance_dir = os.path.join(root_dir, "instance")
         self.instance = Instance(instance_dir=self.instance_dir)
         self._create_instance_folder()
+        self.client_repo = {
+            "name": "facufierro/FFTClientMinecraft1211",
+            "url": "https://github.com/facufierro/FFTClientMinecraft1211",
+            "branch": "main",
+        }
 
-    def update_config(self, zip_file):
-        try:
-            if zip_file is None:
-                logging.warning("No zip file provided for config update")
-                return
-            # Look for files in configs folder that match the name in required_folder, and replace them
-            configs_folder = self.instance.config_dir
-            self.file_service.add_files_to_folder(zip_file, configs_folder)
-        except Exception as e:
-            logging.error("Failed to update configs: %s", e)
-            raise
+    def update(self):
+        self.update_config()
+        # self.update_kubejs()
+        # self.update_modflared()
+        # self.update_mods()
+        # self.update_resourcepacks()
+        # self.update_shaderpacks()
+
+    def update_config(self):
+        # get all the files and folders in the instance.defaultconfigs_dir and copy the to instance.configs_dir
+        defaultconfigs = github_utils.fetch_all(
+            self.client_repo["url"],
+            "defaultconfigs",
+            self.client_repo["branch"],
+        )
+        for file in defaultconfigs:
+            dest = Path(self.instance.config_dir) / Path(file).relative_to("defaultconfigs")
+            github_utils.download_repo_file(
+                self.client_repo["url"],
+                file,
+                self.client_repo["branch"],
+                dest=dest
+            )
 
     def update_kubejs(self, zip_file):
         # replace kubejs folder with files from zip_file
