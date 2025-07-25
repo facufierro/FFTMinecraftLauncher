@@ -2,9 +2,14 @@ import logging
 import subprocess
 import os
 import json
-import platform
+import requests
 import uuid
 import sys
+from pathlib import Path
+from tqdm import tqdm
+import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from csv import __version__
 from ..utils import github_utils
 from ..models.loader import Loader
@@ -13,8 +18,15 @@ from ..models.loader import Loader
 class LauncherService:
     def __init__(self, root_dir: str, minecraft_dir: str, loader: Loader):
         import pathlib
+
         try:
             self.root_dir = pathlib.Path(root_dir)
+            self.minecraft_version = "1.21.1"
+            self.instance_dir = self.root_dir / "instances"
+
+            self.manifest_url = (
+                "https://launchermeta.mojang.com/mc/game/version_manifest.json"
+            )
             self.minecraft_dir = pathlib.Path(minecraft_dir)
             self.downloads_dir = self.root_dir / "downloads"
             self.loader = loader
@@ -47,18 +59,6 @@ class LauncherService:
                 logging.info("No update required, continuing with launcher.")
         except Exception as e:
             logging.error(f"Failed to replace updater: {e}")
-
-    # def launch_game(self):
-    #     java_cmd = [
-    #         "java",
-    #         "-Xmx16G",
-    #         "-jar",
-    #         str(self.loader.launcher),
-    #         "--nogui",
-    #     ]
-    #     process = subprocess.Popen(java_cmd, cwd=self.minecraft_dir)
-    #     print(f"Minecraft started with PID: {process.pid}")
-    #     return process
 
     def _fetch_updater_file(self):
         try:
@@ -93,670 +93,464 @@ class LauncherService:
         )
         return requiered_version and current_version != requiered_version
 
-    def launch_game(self, profile_data):
-        """Launch Minecraft with NeoForge support using existing constants"""
-        try:
-            logging.info("Starting Minecraft launch with NeoForge support...")
-
-            profile_data = profile_data
-            neoforge_version = self.loader.required_version
-            neoforge_id = f"neoforge-{neoforge_version}"
-            logging.info(f"Using NeoForge version: {neoforge_id}")
-
-            # First try NeoForge, then fallback to vanilla
-            version_data = self._get_version_data(neoforge_id)
-            if not version_data:
-                logging.warning(
-                    f"NeoForge version {neoforge_id} not found, trying vanilla Minecraft..."
+    def download_file(self, url, dest, show_progress=True, max_retries=3):
+        """Download a file with progress bar and validate as zip if .jar/.zip. Retries on failure."""
+        for attempt in range(1, max_retries + 1):
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            r = requests.get(url, stream=True)
+            total = int(r.headers.get("content-length", 0))
+            print(
+                f"[DEBUG] Downloading {url} (attempt {attempt}/{max_retries}), HTTP status: {r.status_code}"
+            )
+            if show_progress:
+                bar = tqdm(
+                    desc=dest.name, total=total, unit="B", unit_scale=True, leave=False
                 )
-                # Extract base MC version from NeoForge version if possible
-                base_version = "1.21.1"
-                version_data = self._get_version_data(base_version)
-                neoforge_id = base_version
-
-            if not version_data:
-                logging.error("No valid Minecraft version found")
-                return False
-
-            # Ensure all required files are present
-            if not self._ensure_game_files(version_data, neoforge_id):
-                logging.error("Failed to ensure game files are present")
-                return False
-
-            # Ensure NeoForge is installed using LoaderService
-            if not self._ensure_neoforge_installed_with_loader_service(neoforge_id):
-                logging.error("NeoForge installation failed")
-                return False
-
-            # Build Java command arguments using your profile's Java args
-            java_args = self._build_java_command(
-                version_data, neoforge_id, profile_data
-            )
-            if not java_args:
-                logging.error("Failed to build Java command")
-                return False
-
-            # Launch the process using your instance directory
-            logging.info(f"Launching Minecraft with Java directly")
-            logging.info(f"Full Java command: {' '.join(java_args)}")
-
-            # Use your instance directory as working directory
-            instance_dir = os.path.join(self.root_dir, "instance")
-            working_dir = (
-                instance_dir if os.path.exists(instance_dir) else self.minecraft_dir
-            )
-            logging.info(f"Working directory: {working_dir}")
-
-            process = subprocess.Popen(
-                java_args, cwd=working_dir, creationflags=subprocess.CREATE_NO_WINDOW
-            )
-
-            logging.info(f"Minecraft process started with PID: {process.pid}")
-
-            # Check if process is still running after a short delay
-            import time
-
-            time.sleep(2)
-            return_code = process.poll()
-            if return_code is not None:
-                # Process has already terminated
-                logging.error(
-                    f"Minecraft process terminated early with return code: {return_code}"
-                )
-                return False
             else:
-                logging.info("Minecraft process is running successfully")
-                return True
-
-        except Exception as e:
-            logging.error(f"Failed to launch game: {e}")
-            return False
-
-    def _get_version_data(self, version):
-        """Get version manifest data, handling inheritance"""
-        try:
-            version_manifest_path = (
-                self.minecraft_dir / "versions" / version / f"{version}.json"
-            )
-            if version_manifest_path.exists():
-                with open(version_manifest_path, "r", encoding="utf-8") as f:
-                    version_data = json.load(f)
-
-                # Handle version inheritance (like NeoForge inheriting from base Minecraft)
-                if "inheritsFrom" in version_data:
-                    base_version = version_data["inheritsFrom"]
-                    logging.info(f"Version {version} inherits from {base_version}")
-
-                    # Load base version data
-                    base_version_data = self._get_version_data(base_version)
-                    if base_version_data:
-                        # Merge base version data with current version data
-                        # Game arguments from base version
-                        if "arguments" not in version_data:
-                            version_data["arguments"] = {}
-                        if "game" not in version_data["arguments"]:
-                            version_data["arguments"]["game"] = []
-                        if "jvm" not in version_data["arguments"]:
-                            version_data["arguments"]["jvm"] = []
-
-                        # Add base game arguments first, then NeoForge-specific ones
-                        if (
-                            "arguments" in base_version_data
-                            and "game" in base_version_data["arguments"]
-                        ):
-                            version_data["arguments"]["game"] = (
-                                base_version_data["arguments"]["game"]
-                                + version_data["arguments"]["game"]
+                bar = None
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(1024 * 32):
+                    f.write(chunk)
+                    if bar:
+                        bar.update(len(chunk))
+            if bar:
+                bar.close()
+            # Print file size after download
+            try:
+                size = dest.stat().st_size
+                print(f"[DEBUG] Downloaded file size: {size} bytes")
+            except Exception:
+                print(f"[DEBUG] Could not stat file {dest}")
+            # Validate as zip if .jar or .zip
+            is_zip = str(dest).endswith(".jar") or str(dest).endswith(".zip")
+            valid = True
+            if is_zip:
+                try:
+                    with zipfile.ZipFile(dest, "r") as zf:
+                        bad = zf.testzip()
+                        if bad is not None:
+                            print(
+                                f"[WARN] Corrupt zip entry {bad} in {dest}, retrying..."
                             )
-
-                        # Add base JVM arguments first, then NeoForge-specific ones
-                        if (
-                            "arguments" in base_version_data
-                            and "jvm" in base_version_data["arguments"]
-                        ):
-                            version_data["arguments"]["jvm"] = (
-                                base_version_data["arguments"]["jvm"]
-                                + version_data["arguments"]["jvm"]
-                            )
-
-                        # Handle libraries with better deduplication
-                        if "libraries" not in version_data:
-                            version_data["libraries"] = []
-
-                        if "libraries" in base_version_data:
-                            # Create a combined list while avoiding duplicates by library name
-                            seen_library_names = set()
-                            combined_libraries = []
-
-                            # Add NeoForge libraries first (they take precedence)
-                            for lib in version_data["libraries"]:
-                                lib_name = lib.get("name", "")
-                                if lib_name and lib_name not in seen_library_names:
-                                    combined_libraries.append(lib)
-                                    seen_library_names.add(lib_name)
-
-                            # Add base libraries that aren't already included
-                            for lib in base_version_data["libraries"]:
-                                lib_name = lib.get("name", "")
-                                if lib_name and lib_name not in seen_library_names:
-                                    combined_libraries.append(lib)
-                                    seen_library_names.add(lib_name)
-
-                            version_data["libraries"] = combined_libraries
-                            logging.info(
-                                f"Merged libraries: {len(combined_libraries)} total ({len(version_data.get('libraries', []))} NeoForge + {len(base_version_data['libraries'])} base, deduplicated)"
-                            )
-
-                        # Inherit other properties if not specified
-                        for key in ["assetIndex", "assets", "minecraftArguments"]:
-                            if key not in version_data and key in base_version_data:
-                                version_data[key] = base_version_data[key]
-
-                return version_data
-
-            logging.warning(f"Version manifest not found: {version_manifest_path}")
-            return None
-        except Exception as e:
-            logging.error(f"Failed to load version data: {e}")
-            return None
-
-    def _ensure_game_files(self, version_data, version):
-        """Ensure all required game files are present, including NeoForge if needed"""
-        try:
-            # If this is a NeoForge version, ensure it's installed
-            if version.startswith("neoforge-"):
-                if not self._ensure_neoforge_installed(version):
-                    logging.error(f"Failed to ensure NeoForge {version} is installed")
-                    return False
-
-            # Check if main JAR exists
-            jar_path = self.minecraft_dir / "versions" / version / f"{version}.jar"
-            if not jar_path.exists():
-                logging.error(f"Minecraft JAR not found: {jar_path}")
-                return False
-
-            # Check if libraries directory exists
-            libraries_dir = self.minecraft_dir / "libraries"
-            if not libraries_dir.exists():
-                logging.error(f"Libraries directory not found: {libraries_dir}")
-                return False
-
-            # Check if assets exist
-            assets_dir = self.minecraft_dir / "assets"
-            if not assets_dir.exists():
-                logging.error(f"Assets directory not found: {assets_dir}")
-                return False
-
-            logging.info("All required game files are present")
-            return True
-
-        except Exception as e:
-            logging.error(f"Failed to verify game files: {e}")
-            return False
-
-    def _ensure_neoforge_installed_with_loader_service(self, neoforge_version):
-        """Use LoaderService to ensure NeoForge is installed"""
-        try:
-            # First check if NeoForge is already installed
-            neoforge_dir = self.minecraft_dir / "versions" / neoforge_version
-            neoforge_json = neoforge_dir / f"{neoforge_version}.json"
-            neoforge_jar = neoforge_dir / f"{neoforge_version}.jar"
-
-            if neoforge_json.exists() and neoforge_jar.exists():
-                logging.info(
-                    f"NeoForge {neoforge_version} is already installed - skipping installation"
-                )
-                return True
-
-            if self.loader_service:
-                logging.info(
-                    f"NeoForge {neoforge_version} not found, using LoaderService to install it"
-                )
-                self.loader_service.update()
-                return True
+                            valid = False
+                except Exception as e:
+                    print(
+                        f"[WARN] Downloaded file {dest} is not a valid zip: {e}, retrying..."
+                    )
+                    # Print first 200 bytes of file for debugging
+                    try:
+                        with open(dest, "rb") as f:
+                            snippet = f.read(200)
+                            print(f"[DEBUG] First 200 bytes of file: {snippet}")
+                    except Exception:
+                        print(f"[DEBUG] Could not read file {dest}")
+                    valid = False
+            if valid:
+                return
             else:
-                logging.warning(
-                    "LoaderService not available, falling back to manual installation"
-                )
-                return self._ensure_neoforge_installed(neoforge_version)
-        except Exception as e:
-            logging.error(f"Failed to install NeoForge using LoaderService: {e}")
-            return False
+                try:
+                    dest.unlink()
+                except Exception:
+                    pass
+                if attempt == max_retries:
+                    # Print first 200 bytes of HTTP response if not valid
+                    try:
+                        r2 = requests.get(url)
+                        print(f"[DEBUG] HTTP status: {r2.status_code}")
+                        print(
+                            f"[DEBUG] First 200 bytes of HTTP response: {r2.content[:200]}"
+                        )
+                    except Exception:
+                        print(f"[DEBUG] Could not fetch HTTP response for {url}")
+                    raise Exception(
+                        f"Failed to download a valid file from {url} after {max_retries} attempts."
+                    )
 
-    def _ensure_neoforge_installed(self, neoforge_version):
-        """Ensure NeoForge is installed in .minecraft, install if needed"""
-        try:
-            # Check if NeoForge version directory exists
-            neoforge_dir = self.minecraft_dir / "versions" / neoforge_version
-            neoforge_json = neoforge_dir / f"{neoforge_version}.json"
-            neoforge_jar = neoforge_dir / f"{neoforge_version}.jar"
+    def get_version_json(self, version):
+        manifest = requests.get(self.manifest_url).json()
+        for v in manifest["versions"]:
+            if v["id"] == version:
+                return requests.get(v["url"]).json()
+        raise Exception(f"Version {version} not found")
 
-            if neoforge_json.exists() and neoforge_jar.exists():
-                logging.info(f"NeoForge {neoforge_version} already installed")
-                return True
+    def ensure_java(self):
+        for cmd in ["java", "java.exe"]:
+            if any(
+                os.access(os.path.join(path, cmd), os.X_OK)
+                for path in os.environ["PATH"].split(os.pathsep)
+            ):
+                return cmd
+        print("Java not found in PATH. Please install Java 17+ and add to PATH.")
+        sys.exit(1)
 
-            logging.info(
-                f"NeoForge {neoforge_version} not found, attempting installation..."
+    def install_vanilla_to_dir(self, target_dir):
+        if (target_dir / "vanilla_installed").exists():
+            print(
+                f"Vanilla Minecraft {self.minecraft_version} already present in {target_dir}."
             )
-            return False
+            return
+        print(
+            f"Installing vanilla Minecraft {self.minecraft_version} to {target_dir}..."
+        )
+        vjson = self.get_version_json(self.minecraft_version)
+        client_url = vjson["downloads"]["client"]["url"]
+        client_jar = target_dir / f"minecraft-{self.minecraft_version}.jar"
+        self.download_file(client_url, client_jar)
+        libs_dir = target_dir / "libraries"
+        lib_tasks = []
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            for lib in vjson["libraries"]:
+                if "downloads" in lib and "artifact" in lib["downloads"]:
+                    url = lib["downloads"]["artifact"]["url"]
+                    path = libs_dir / Path(lib["downloads"]["artifact"]["path"])
+                    if not path.exists():
+                        lib_tasks.append(
+                            executor.submit(self.download_file, url, path, False)
+                        )
+            for f in tqdm(
+                as_completed(lib_tasks),
+                total=len(lib_tasks),
+                desc="Libraries",
+                unit="lib",
+            ):
+                pass
+        assets_dir = target_dir / "assets"
+        assets_index_url = vjson["assetIndex"]["url"]
+        assets_index_path = assets_dir / "indexes" / f"{self.minecraft_version}.json"
+        self.download_file(assets_index_url, assets_index_path)
+        with open(assets_index_path) as f:
+            assets = json.load(f)["objects"]
+        asset_tasks = []
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            for name, obj in assets.items():
+                h = obj["hash"]
+                url = f"https://resources.download.minecraft.net/{h[:2]}/{h}"
+                path = assets_dir / "objects" / h[:2] / h
+                if not path.exists():
+                    asset_tasks.append(
+                        executor.submit(self.download_file, url, path, False)
+                    )
+            for f in tqdm(
+                as_completed(asset_tasks),
+                total=len(asset_tasks),
+                desc="Assets",
+                unit="asset",
+            ):
+                pass
+        (target_dir / "vanilla_installed").touch()
+        print(f"Vanilla install complete in {target_dir}.")
 
-        except Exception as e:
-            logging.error(f"Failed to ensure NeoForge installation: {e}")
-            return False
+    def ensure_launcher_profiles_json(self, target_dir):
+        lp = target_dir / "launcher_profiles.json"
+        if not lp.exists():
+            with open(lp, "w") as f:
+                json.dump({"profiles": {}, "settings": {}, "version": 1}, f)
 
-    def _run_neoforge_installer(self, installer_path):
-        """Run the NeoForge installer"""
-        try:
-            logging.info(f"Running NeoForge installer: {installer_path}")
-
-            # Run the installer with --install-client option
-            cmd = [
-                "java",
+    def install_neoforge(self):
+        if (self.instance_dir / "installed").exists():
+            print(
+                f"NeoForge {self.loader.required_version} for Minecraft {self.minecraft_version} already installed."
+            )
+            return
+        self.install_vanilla_to_dir(self.instance_dir)
+        self.ensure_launcher_profiles_json(self.instance_dir)
+        print(
+            f"Installing NeoForge {self.loader.required_version} for Minecraft {self.minecraft_version}..."
+        )
+        self.instance_dir.mkdir(parents=True, exist_ok=True)
+        installer_jar = (
+            self.instance_dir / f"neoforge-{self.loader.required_version}-installer.jar"
+        )
+        if not installer_jar.exists():
+            print(f"Downloading NeoForge installer {self.loader.required_version}...")
+            self.download_file(self.loader.download_url, installer_jar)
+        print("Running NeoForge installer...")
+        java = self.ensure_java()
+        subprocess.run(
+            [
+                java,
                 "-jar",
-                str(installer_path),
-                "--install-client",
-                "--minecraft-dir",
-                str(self.minecraft_dir),
-            ]
+                str(installer_jar),
+                "--installClient",
+                str(self.instance_dir),
+            ],
+            check=True,
+        )
+        (self.instance_dir / "installed").touch()
+        print("NeoForge install complete.")
 
-            result = subprocess.run(
-                cmd,
-                cwd=str(installer_path.parent),
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout
-            )
+    def launch_neoforge(self):
+        # --- Find NeoForge version directory and load version JSON ---
+        versions_dir = self.instance_dir / "versions"
+        version_folder = None
+        for d in versions_dir.iterdir():
+            if d.is_dir() and d.name.startswith("neoforge-"):
+                version_folder = d
+                break
+        if not version_folder:
+            print("Could not find NeoForge version folder after install.")
+            sys.exit(1)
+        version_json = version_folder / f"{version_folder.name}.json"
+        with open(version_json) as f:
+            vjson = json.load(f)
 
-            if result.returncode == 0:
-                logging.info("NeoForge installer completed successfully")
-                return True
-            else:
-                logging.error(f"NeoForge installer failed: {result.stderr}")
-                return False
+        # --- Download all libraries and assets if missing (self-repair) ---
+        libs_dir = self.instance_dir / "libraries"
+        missing_libs = []
+        for lib in vjson["libraries"]:
+            if "downloads" in lib and "artifact" in lib["downloads"]:
+                path = libs_dir / Path(lib["downloads"]["artifact"]["path"])
+                if not path.exists():
+                    missing_libs.append((lib["downloads"]["artifact"]["url"], path))
+        if missing_libs:
+            print(f"[INFO] Downloading {len(missing_libs)} missing libraries...")
+            for url, path in missing_libs:
+                print(f"[INFO] Downloading {url} -> {path}")
+                self.download_file(url, path)
 
-        except subprocess.TimeoutExpired:
-            logging.error("NeoForge installer timed out")
-            return False
-        except Exception as e:
-            logging.error(f"Failed to run NeoForge installer: {e}")
-            return False
-
-    def _build_java_command(self, version_data, version, profile_data=None):
-        """Build the complete Java command line arguments using profile data"""
-        try:
-            args = []
-
-            # Java executable - First check if we have Java 17 or 21 available
-            java_exe = self._find_compatible_java()
-            if not java_exe:
-                logging.error(
-                    "No compatible Java version found. Minecraft 1.21.1 with NeoForge requires Java 17 or 21, but Java 24 was found."
-                )
-                return None
-
-            args.append(java_exe)
-
-            # Use Java args from your profile if available
-            if profile_data and hasattr(profile_data, "javaArgs") and getattr(profile_data, "javaArgs"):
-                java_args_str = getattr(profile_data, "javaArgs")
-                # Split the Java args string and add them
-                for arg in java_args_str.split():
-                    args.append(arg)
-                logging.info(f"Using Java args from profile: {java_args_str}")
-            else:
-                # Fallback memory settings
-                args.extend(["-Xmx2G", "-Xms1G"])
-
-            # System properties
-            args.append("-Duser.language=en")
-            args.append("-Duser.country=US")
-
-            # Add required properties for NeoForge
-            if version.startswith("neoforge-"):
-                args.append("-Dnet.minecraftforge.mergetool.version=1.1.5")
-                args.append("-Dfml.readTimeout=180")
-                args.append("-Dfml.queryResult=confirm")
-
-            # Minecraft-specific JVM args from version manifest
-            if "jvm" in version_data.get("arguments", {}):
-                for arg in version_data["arguments"]["jvm"]:
-                    if isinstance(arg, str):
-                        # Replace variables like ATLauncher does
-                        arg = arg.replace(
-                            "${natives_directory}",
-                            str(self.minecraft_dir / "versions" / version / "natives"),
-                        )
-                        arg = arg.replace("${launcher_name}", "FFTLauncher")
-                        arg = arg.replace("${launcher_version}", "1.0.0")
-                        arg = arg.replace(
-                            "${classpath}", self._build_classpath(version_data, version)
-                        )
-                        arg = arg.replace(
-                            "${library_directory}",
-                            str(self.minecraft_dir / "libraries"),
-                        )
-                        arg = arg.replace(
-                            "${classpath_separator}",
-                            ";" if platform.system() == "Windows" else ":",
-                        )
-                        arg = arg.replace("${version_name}", version)
-                        args.append(arg)
-
-            # Classpath
-            args.extend(["-cp", self._build_classpath(version_data, version)])
-
-            # Main class - use NeoForge main class for NeoForge versions
-            if version.startswith("neoforge-"):
-                main_class = "cpw.mods.bootstraplauncher.BootstrapLauncher"
-            else:
-                main_class = version_data.get(
-                    "mainClass", "net.minecraft.client.main.Main"
-                )
-            args.append(main_class)
-
-            # Game arguments
-            game_args = self._build_game_arguments(version_data, version, profile_data)
-            logging.info(f"Game arguments: {' '.join(game_args)}")
-            args.extend(game_args)
-
-            return args
-
-        except Exception as e:
-            logging.error(f"Failed to build Java command: {e}")
-            return None
-
-    def _find_compatible_java(self):
-        """Find a compatible Java version (17 or 21) for Minecraft 1.21.1"""
-        try:
-            # Check current Java version first
-            result = subprocess.run(
-                ["java", "-version"], capture_output=True, text=True
-            )
-            if result.returncode == 0:
-                version_output = result.stderr
-                # Extract version number
-                import re
-
-                version_match = re.search(r'"(\d+)\.', version_output)
-                if version_match:
-                    major_version = int(version_match.group(1))
-                    if major_version in [17, 21]:
-                        logging.info(f"Using system Java {major_version}")
-                        return "java"
-                    else:
-                        logging.warning(
-                            f"System Java version {major_version} is not compatible. Need Java 17 or 21."
-                        )
-
-            # Try to find Java 21 in common locations
-            java_paths = []
-            if platform.system() == "Windows":
-                java_paths = [
-                    "C:\\Program Files\\Java\\jdk-21\\bin\\java.exe",
-                    "C:\\Program Files\\Java\\jre-21\\bin\\java.exe",
-                    "C:\\Program Files\\Eclipse Adoptium\\jdk-21*\\bin\\java.exe",
-                    "C:\\Program Files\\OpenJDK\\jdk-21*\\bin\\java.exe",
-                    "C:\\Program Files\\Java\\jdk-17\\bin\\java.exe",
-                    "C:\\Program Files\\Java\\jre-17\\bin\\java.exe",
-                    "C:\\Program Files\\Eclipse Adoptium\\jdk-17*\\bin\\java.exe",
-                    "C:\\Program Files\\OpenJDK\\jdk-17*\\bin\\java.exe",
-                ]
-
-            import glob
-
-            for path_pattern in java_paths:
-                matches = glob.glob(path_pattern)
-                for java_path in matches:
-                    if os.path.exists(java_path):
-                        # Verify this Java version
-                        try:
-                            result = subprocess.run(
-                                [java_path, "-version"], capture_output=True, text=True
-                            )
-                            if result.returncode == 0:
-                                version_output = result.stderr
-                                version_match = re.search(r'"(\d+)\.', version_output)
-                                if version_match:
-                                    major_version = int(version_match.group(1))
-                                    if major_version in [17, 21]:
-                                        logging.info(
-                                            f"Found compatible Java {major_version} at: {java_path}"
-                                        )
-                                        return java_path
-                        except:
-                            continue
-
-            logging.error(
-                "No compatible Java version (17 or 21) found. Please install Java 17 or 21."
-            )
-            return None
-
-        except Exception as e:
-            logging.error(f"Error finding compatible Java: {e}")
-            return None
-
-    def _build_classpath(self, version_data, version):
-        """Build the classpath string with all libraries and main JAR"""
-        try:
-            classpath_parts = []
-            seen_libraries = set()  # Track library names to avoid duplicates
-
-            # Add libraries
-            libraries_dir = self.minecraft_dir / "libraries"
-            if "libraries" in version_data:
-                for lib in version_data["libraries"]:
-                    if self._should_include_library(lib):
-                        lib_path = self._get_library_path(lib, libraries_dir)
-                        if lib_path and lib_path.exists():
-                            lib_path_str = str(lib_path)
-                            # Check for duplicates by comparing the actual file path
-                            if lib_path_str not in seen_libraries:
-                                classpath_parts.append(lib_path_str)
-                                seen_libraries.add(lib_path_str)
-                            # Removed excessive debug logging for each library
-                        else:
-                            logging.warning(
-                                f"Library not found: {lib.get('name', 'unknown')} at {lib_path}"
-                            )
-
-            # For NeoForge, also check for the NeoForge universal jar
-            if version.startswith("neoforge-"):
-                # Add NeoForge specific libraries that might be in the version folder
-                version_dir = self.minecraft_dir / "versions" / version
-                universal_jar = version_dir / f"{version}-universal.jar"
-                if universal_jar.exists():
-                    universal_jar_str = str(universal_jar)
-                    if universal_jar_str not in seen_libraries:
-                        logging.info(f"Adding NeoForge universal jar: {universal_jar}")
-                        classpath_parts.append(universal_jar_str)
-                        seen_libraries.add(universal_jar_str)
-
-            # Add main Minecraft JAR - this should be last in classpath for proper loading order
-            jar_path = self.minecraft_dir / "versions" / version / f"{version}.jar"
-            if jar_path.exists():
-                jar_path_str = str(jar_path)
-                if jar_path_str not in seen_libraries:
-                    classpath_parts.append(jar_path_str)
-                    seen_libraries.add(jar_path_str)
-                else:
-                    logging.warning(
-                        f"Main JAR was already in classpath: {jar_path_str}"
+        # --- Download assets index and all assets if missing ---
+        assets_dir = self.instance_dir / "assets"
+        assets_index_path = assets_dir / "indexes" / f"{self.minecraft_version}.json"
+        if not assets_index_path.exists():
+            vjson_vanilla = self.get_version_json(self.minecraft_version)
+            assets_index_url = vjson_vanilla["assetIndex"]["url"]
+            self.download_file(assets_index_url, assets_index_path)
+        with open(assets_index_path) as f:
+            assets = json.load(f)["objects"]
+        asset_tasks = []
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            for name, obj in assets.items():
+                h = obj["hash"]
+                url = f"https://resources.download.minecraft.net/{h[:2]}/{h}"
+                path = assets_dir / "objects" / h[:2] / h
+                if not path.exists():
+                    asset_tasks.append(
+                        executor.submit(self.download_file, url, path, False)
                     )
-            else:
-                logging.error(f"Main Minecraft JAR not found: {jar_path}")
+            for f in tqdm(
+                as_completed(asset_tasks),
+                total=len(asset_tasks),
+                desc="Assets",
+                unit="asset",
+            ):
+                pass
 
-            # Join with appropriate separator
-            separator = ";" if platform.system() == "Windows" else ":"
-            classpath = separator.join(classpath_parts)
+        # --- Extract all native jars to natives directory ---
+        natives_dir = self.instance_dir / "natives"
+        natives_dir.mkdir(parents=True, exist_ok=True)
+        for lib in vjson["libraries"]:
+            if "downloads" in lib and "artifact" in lib["downloads"]:
+                path = libs_dir / Path(lib["downloads"]["artifact"]["path"])
+                if (
+                    path.name.endswith(".jar")
+                    and "-natives-" in path.name
+                    and path.exists()
+                ):
+                    try:
+                        with zipfile.ZipFile(path, "r") as zf:
+                            zf.extractall(natives_dir)
+                    except Exception as e:
+                        print(f"[WARN] Failed to extract natives from {path}: {e}")
 
-            logging.info(
-                f"Built classpath with {len(classpath_parts)} unique entries (removed duplicates)"
+        # --- Build classpath and module-path strictly from version JSON, inject bootstraplauncher/securejarhandler ---
+        cp_jars = []
+        bl_jar = None
+        sjh_jar = None
+        asm_jars = []
+        jarjarfs_jar = None
+        lwjgl_jars = []
+        vjson["libraries"] = [
+            lib
+            for lib in vjson["libraries"]
+            if not (
+                lib["name"].startswith("cpw.mods.bootstraplauncher:")
+                or lib["name"].startswith("cpw.mods.securejarhandler:")
             )
+        ]
+        BOOTSTRAPLAUNCHER_VERSION = "2.0.2"
+        SECUREJARHANDLER_VERSION = "3.0.8"
+        FORGE_MAVEN = "https://maven.minecraftforge.net/"
+        bl_path = f"cpw/mods/bootstraplauncher/{BOOTSTRAPLAUNCHER_VERSION}/bootstraplauncher-{BOOTSTRAPLAUNCHER_VERSION}.jar"
+        sjh_path = f"cpw/mods/securejarhandler/{SECUREJARHANDLER_VERSION}/securejarhandler-{SECUREJARHANDLER_VERSION}.jar"
+        vjson["libraries"].append(
+            {
+                "name": f"cpw.mods.bootstraplauncher:bootstraplauncher:{BOOTSTRAPLAUNCHER_VERSION}",
+                "downloads": {
+                    "artifact": {"path": bl_path, "url": FORGE_MAVEN + bl_path}
+                },
+            }
+        )
+        vjson["libraries"].append(
+            {
+                "name": f"cpw.mods.securejarhandler:securejarhandler:{SECUREJARHANDLER_VERSION}",
+                "downloads": {
+                    "artifact": {"path": sjh_path, "url": FORGE_MAVEN + sjh_path}
+                },
+            }
+        )
+        for lib in vjson["libraries"]:
+            if "downloads" in lib and "artifact" in lib["downloads"]:
+                path = libs_dir / Path(lib["downloads"]["artifact"]["path"])
+                name = lib["name"]
+                cp_jars.append(str(path))
+                if name.startswith("cpw.mods.bootstraplauncher:"):
+                    bl_jar = str(path)
+                if name.startswith("cpw.mods.securejarhandler:"):
+                    sjh_jar = str(path)
+                if name.startswith("org.ow2.asm:"):
+                    asm_jars.append(str(path))
+                if name.startswith("net.neoforged.JarJarFileSystems:"):
+                    jarjarfs_jar = str(path)
+                if name.startswith("org.lwjgl:"):
+                    lwjgl_jars.append(str(path))
+        for url, path in [
+            (FORGE_MAVEN + bl_path, libs_dir / bl_path),
+            (FORGE_MAVEN + sjh_path, libs_dir / sjh_path),
+        ]:
+            if not path.exists():
+                print(f"[INFO] Downloading injected {path.name}...")
+                self.download_file(url, path)
+        if (
+            not bl_jar
+            or not sjh_jar
+            or not Path(bl_jar).exists()
+            or not Path(sjh_jar).exists()
+        ):
+            print(
+                "[ERROR] Still missing bootstraplauncher or securejarhandler jar after library download. Aborting launch."
+            )
+            return
+        mp_jars = [j for j in [bl_jar, sjh_jar] if j] + asm_jars
+        if jarjarfs_jar:
+            mp_jars.append(jarjarfs_jar)
 
-            # Only log classpath details in debug mode to avoid spam
-            if logging.getLogger().isEnabledFor(logging.DEBUG):
-                if len(classpath) > 2000:  # Only log first part if very long
-                    logging.debug(
-                        f"Classpath (first 1000 chars): {classpath[:1000]}..."
-                    )
-                else:
-                    logging.debug(f"Full classpath: {classpath}")
+        vjson_vanilla = self.get_version_json(self.minecraft_version)
+        vanilla_libs = [
+            lib
+            for lib in vjson_vanilla["libraries"]
+            if "downloads" in lib and "artifact" in lib["downloads"]
+        ]
+        vanilla_jars = []
+        missing_vanilla_libs = []
+        for lib in vanilla_libs:
+            path = libs_dir / Path(lib["downloads"]["artifact"]["path"])
+            vanilla_jars.append(str(path))
+            if not path.exists():
+                missing_vanilla_libs.append((lib["downloads"]["artifact"]["url"], path))
+        if missing_vanilla_libs:
+            print(
+                f"[INFO] Downloading {len(missing_vanilla_libs)} missing vanilla libraries..."
+            )
+            for url, path in missing_vanilla_libs:
+                print(f"[INFO] Downloading {url} -> {path}")
+                self.download_file(url, path)
+        for jar in vanilla_jars:
+            if jar not in cp_jars:
+                cp_jars.append(jar)
+        import zipfile
 
-            return classpath
+        all_lwjgl_jars = [j for j in cp_jars if r"org\lwjgl" in j or "org/lwjgl" in j]
+        struct_found = False
+        for jar in all_lwjgl_jars:
+            try:
+                with zipfile.ZipFile(jar, "r") as zf:
+                    if any(
+                        x.startswith("org/lwjgl/system/Struct") for x in zf.namelist()
+                    ):
+                        struct_found = True
+                        break
+            except Exception as e:
+                print(f"[ERROR] LWJGL jar {jar} is corrupt or unreadable: {e}")
+        if not struct_found:
+            print(
+                "[ERROR] None of the LWJGL jars (including vanilla) contain org/lwjgl/system/Struct. Your libraries may be corrupt or incomplete."
+            )
+            print("[DEBUG] Searched jars:")
+            for jar in all_lwjgl_jars:
+                print("  ", jar)
+            print("[ERROR] Try deleting your libraries folder and reinstalling.")
+            return
 
-        except Exception as e:
-            logging.error(f"Failed to build classpath: {e}")
-            return ""
+        classpath = ";".join(cp_jars)
+        module_path = ";".join(mp_jars)
+        print(f"[DEBUG] Module path: {module_path}")
+        print(f"[DEBUG] Full classpath:")
+        for j in cp_jars:
+            print("  ", j)
 
-    def _should_include_library(self, library):
-        """Check if a library should be included based on rules"""
-        if "rules" not in library:
-            return True
+        java = self.ensure_java()
+        random_uuid = str(uuid.uuid4())
+        natives_dir_str = str(natives_dir)
+        args = [
+            java,
+            "-Xmx8192M",
+            "-XX:MetaspaceSize=256M",
+            "-Duser.language=en",
+            "-Duser.country=US",
+            "-XX:+UnlockExperimentalVMOptions",
+            "-XX:+UseG1GC",
+            "-XX:G1NewSizePercent=20",
+            "-XX:G1ReservePercent=20",
+            "-XX:MaxGCPauseMillis=50",
+            "-XX:G1HeapRegionSize=32M",
+            f"-Djava.library.path={natives_dir_str}",
+            f"-Djna.tmpdir={natives_dir_str}",
+            f"-Dorg.lwjgl.system.SharedLibraryExtractPath={natives_dir_str}",
+            f"-Dio.netty.native.workdir={natives_dir_str}",
+            f"-DlibraryDirectory={str(libs_dir)}",
+            "-Dminecraft.launcher.brand=ATLauncher",
+            "-Dminecraft.launcher.version=3.4.40.1",
+            "-cp",
+            classpath,
+        ]
+        if module_path:
+            args += ["-p", module_path]
+        args += [
+            "--add-modules",
+            "ALL-MODULE-PATH",
+            "--add-opens",
+            "java.base/java.util.jar=cpw.mods.securejarhandler",
+            "--add-opens",
+            "java.base/java.lang.invoke=cpw.mods.securejarhandler",
+            "--add-opens",
+            "java.base/java.lang.invoke=ALL-UNNAMED",
+            "--add-exports",
+            "java.base/sun.security.util=cpw.mods.securejarhandler",
+            "--add-exports",
+            "jdk.naming.dns/com.sun.jndi.dns=java.naming",
+            vjson.get("mainClass", "cpw.mods.bootstraplauncher.BootstrapLauncher"),
+            "--username",
+            "Player",
+            "--version",
+            self.minecraft_version,
+            "--gameDir",
+            str(self.instance_dir),
+            "--assetsDir",
+            str(self.instance_dir / "assets"),
+            "--assetIndex",
+            self.minecraft_version,
+            "--uuid",
+            random_uuid,
+            "--accessToken",
+            "0",
+            "--userType",
+            "msa",
+            "--versionType",
+            "release",
+            "--fml.neoForgeVersion",
+            self.loader.required_version,
+            "--fml.fmlVersion",
+            "4.0.41",
+            "--fml.mcVersion",
+            self.minecraft_version,
+            "--fml.neoFormVersion",
+            "20240808.144430",
+            "--launchTarget",
+            "forgeclient",
+        ]
+        print(f"Launching NeoForge with UUID: {random_uuid}")
+        subprocess.run(args, cwd=self.instance_dir)
 
-        # Process rules similar to ATLauncher
-        for rule in library["rules"]:
-            action = rule.get("action", "allow")
-
-            # Check OS-specific rules
-            if "os" in rule:
-                os_rule = rule["os"]
-                current_os = platform.system().lower()
-
-                # Map platform names
-                os_mapping = {"windows": "windows", "darwin": "osx", "linux": "linux"}
-
-                rule_os = os_rule.get("name", "").lower()
-                if rule_os in os_mapping.values():
-                    if action == "allow" and rule_os != os_mapping.get(current_os):
-                        return False
-                    elif action == "disallow" and rule_os == os_mapping.get(current_os):
-                        return False
-
-                # Check architecture if specified
-                if "arch" in os_rule:
-                    import platform as plat
-
-                    arch = plat.architecture()[0]
-                    rule_arch = os_rule["arch"]
-                    if rule_arch == "x86" and "64" in arch:
-                        if action == "allow":
-                            return False
-                    elif rule_arch == "x86-64" and "32" in arch:
-                        if action == "allow":
-                            return False
-
-            # If it's a disallow rule without specific conditions, exclude it
-            if action == "disallow" and "os" not in rule:
-                return False
-
-        return True
-
-    def _get_library_path(self, library, libraries_dir):
-        """Get the path to a library file"""
-        try:
-            if "downloads" in library and "artifact" in library["downloads"]:
-                artifact_path = library["downloads"]["artifact"]["path"]
-                return libraries_dir / artifact_path
-
-            # Fallback: construct path from name
-            name = library.get("name", "")
-            parts = name.split(":")
-            if len(parts) >= 3:
-                group, artifact, version = parts[0], parts[1], parts[2]
-                path = (
-                    "/".join(group.split("."))
-                    + f"/{artifact}/{version}/{artifact}-{version}.jar"
-                )
-                return libraries_dir / path
-
-            return None
-
-        except Exception as e:
-            logging.error(f"Failed to get library path: {e}")
-            return None
-
-    def _build_game_arguments(self, version_data, version, profile_data=None):
-        """Build game-specific arguments using profile data"""
-        try:
-            args = []
-
-            # Completely ignored arguments that cause launch issues (following ATLauncher approach)
-            ignored_arguments = ["--xuid", "${auth_xuid}", "--clientId", "${clientid}"]
-
-            # Always use fallback/fake authentication info for now
-            username = "Player"
-            uuid_str = str(uuid.uuid4())
-            access_token = "fake_access_token"
-
-            # Use your instance directory from profile or constants
-            if profile_data and hasattr(profile_data, "gameDir") and getattr(profile_data, "gameDir"):
-                game_dir = getattr(profile_data, "gameDir")
-            else:
-                # Fallback to a default instance directory path
-                game_dir = str(self.root_dir / "instance")
-
-            # Standard game arguments
-            if "game" in version_data.get("arguments", {}):
-                for arg in version_data["arguments"]["game"]:
-                    if isinstance(arg, str):
-                        # Skip problematic arguments that cause launch issues
-                        if arg in ignored_arguments:
-                            logging.debug(f"Skipping problematic argument: {arg}")
-                            continue
-
-                        # Replace variables
-                        arg = arg.replace("${auth_player_name}", username)
-                        arg = arg.replace("${version_name}", version)
-                        arg = arg.replace("${game_directory}", game_dir)
-                        arg = arg.replace(
-                            "${assets_root}", str(self.minecraft_dir / "assets")
-                        )
-                        arg = arg.replace(
-                            "${assets_index_name}",
-                            version_data.get("assetIndex", {}).get("id", version),
-                        )
-                        arg = arg.replace("${auth_uuid}", uuid_str)
-                        arg = arg.replace("${auth_access_token}", access_token)
-                        arg = arg.replace(
-                            "${user_type}", "offline"
-                        )  # Always offline for now
-                        arg = arg.replace(
-                            "${version_type}", version_data.get("type", "release")
-                        )
-                        # Skip clientid and xuid variables completely
-                        if "${clientid}" in arg or "${auth_xuid}" in arg:
-                            logging.debug(
-                                f"Skipping argument with clientid/xuid: {arg}"
-                            )
-                            continue
-                        args.append(arg)
-            else:
-                # Fallback for older versions - don't include problematic parameters
-                args.extend(
-                    [
-                        "--username",
-                        username,
-                        "--version",
-                        version,
-                        "--gameDir",
-                        game_dir,
-                        "--assetsDir",
-                        str(self.minecraft_dir / "assets"),
-                        "--assetIndex",
-                        version_data.get("assetIndex", {}).get("id", version),
-                        "--uuid",
-                        uuid_str,
-                        "--accessToken",
-                        access_token,
-                        "--userType",
-                        "offline",
-                    ]
-                )
-                # Completely skip --xuid and --clientId parameters to avoid launch issues
-
-            logging.info(f"Using game directory: {game_dir}")
-            return args
-
-        except Exception as e:
-            logging.error(f"Failed to build game arguments: {e}")
-            return []
+    def launch_game(self):
+        self.install_neoforge()
+        self.launch_neoforge()
