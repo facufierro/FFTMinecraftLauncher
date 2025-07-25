@@ -28,15 +28,11 @@ class LauncherService:
             self.manifest_url = game.manifest_url
 
             self.launcher_repo = {
-                "name": "facufierro/FFTMinecraftLauncher",
-                "url": "https://github.com/facufierro/FFTMinecraftLauncher",
+                "name": "facufierro/FFTClientMinecraft1211",
+                "url": "https://github.com/facufierro/FFTClientMinecraft1211",
                 "branch": "main",
             }
-            self.client_repo = {
-                "name": "facufierro/FFTClientMinecraft",
-                "url": "https://github.com/facufierro/FFTClientMinecraft",
-                "branch": "main",
-            }
+
         except Exception as e:
             logging.critical("Error initializing LauncherService: %s", e)
             raise e
