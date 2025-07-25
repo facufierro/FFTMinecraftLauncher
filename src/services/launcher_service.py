@@ -84,13 +84,39 @@ class LauncherService:
         # --- Download assets index and all assets if missing ---
         assets_dir = self.instance_dir / "assets"
         assets_index_path = assets_dir / "indexes" / f"{self.minecraft_version}.json"
+        vjson_vanilla = self.get_version_json(self.minecraft_version)
+        assets_index_url = vjson_vanilla["assetIndex"]["url"]
+        # Validate asset index
+        need_download = False
         if not assets_index_path.exists():
-            vjson_vanilla = self.get_version_json(self.minecraft_version)
-            assets_index_url = vjson_vanilla["assetIndex"]["url"]
+            need_download = True
+            print(f"[ASSETS] Asset index missing, will download.")
+        else:
+            try:
+                with open(assets_index_path, 'r') as f:
+                    data = json.load(f)
+                if "objects" not in data or not isinstance(data["objects"], dict) or not data["objects"]:
+                    print(f"[ASSETS] Asset index exists but is invalid or empty. Will re-download.")
+                    assets_index_path.unlink(missing_ok=True)
+                    need_download = True
+                else:
+                    print(f"[ASSETS] Asset index exists and is valid.")
+            except Exception as e:
+                print(f"[ASSETS] Failed to validate asset index: {e}. Will re-download.")
+                assets_index_path.unlink(missing_ok=True)
+                need_download = True
+        if need_download:
+            print(f"[ASSETS] Downloading asset index: {assets_index_url} -> {assets_index_path}")
             download_file(assets_index_url, assets_index_path)
-        with open(assets_index_path) as f:
-            assets = json.load(f)["objects"]
+        try:
+            with open(assets_index_path) as f:
+                assets = json.load(f)["objects"]
+            print(f"[ASSETS] Asset index loaded, {len(assets)} assets found.")
+        except Exception as e:
+            print(f"[ASSETS] Failed to load asset index: {e}")
+            return
         asset_tasks = []
+        failed_assets = []
         with ThreadPoolExecutor(max_workers=16) as executor:
             for name, obj in assets.items():
                 h = obj["hash"]
@@ -98,13 +124,21 @@ class LauncherService:
                 path = assets_dir / "objects" / h[:2] / h
                 if not path.exists():
                     asset_tasks.append(executor.submit(download_file, url, path, False))
-            for f in tqdm(
-                as_completed(asset_tasks),
-                total=len(asset_tasks),
-                desc="Assets",
-                unit="asset",
-            ):
-                pass
+            for future in as_completed(asset_tasks):
+                try:
+                    future.result()
+                except Exception as e:
+                    failed_assets.append(str(e))
+        if failed_assets:
+            print(f"[ASSETS] {len(failed_assets)} assets failed to download:")
+            for err in failed_assets:
+                print(f"  {err}")
+            # Write to a log file
+            log_path = Path("assets_failed.log")
+            with open(log_path, "w", encoding="utf-8") as logf:
+                logf.write(f"[ASSETS] {len(failed_assets)} assets failed to download:\n")
+                for err in failed_assets:
+                    logf.write(f"  {err}\n")
 
         # --- Extract all native jars to natives directory ---
         natives_dir = self.instance_dir / "natives"
