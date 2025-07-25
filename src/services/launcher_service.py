@@ -173,16 +173,6 @@ class LauncherService:
                 return requests.get(v["url"]).json()
         raise Exception(f"Version {version} not found")
 
-    def ensure_java(self):
-        for cmd in ["java", "java.exe"]:
-            if any(
-                os.access(os.path.join(path, cmd), os.X_OK)
-                for path in os.environ["PATH"].split(os.pathsep)
-            ):
-                return cmd
-        print("Java not found in PATH. Please install Java 17+ and add to PATH.")
-        sys.exit(1)
-
     def install_vanilla_to_dir(self, target_dir):
         if (target_dir / "vanilla_installed").exists():
             print(
@@ -258,10 +248,9 @@ class LauncherService:
             print(f"Downloading NeoForge installer {self.loader.required_version}...")
             self.download_file(self.loader.download_url, installer_jar)
         print("Running NeoForge installer...")
-        java = self.ensure_java()
         subprocess.run(
             [
-                java,
+                "java",
                 "-jar",
                 str(installer_jar),
                 "--installClient",
@@ -470,11 +459,10 @@ class LauncherService:
         for j in cp_jars:
             print("  ", j)
 
-        java = self.ensure_java()
         random_uuid = str(uuid.uuid4())
         natives_dir_str = str(natives_dir)
         args = [
-            java,
+            "java",
             "-Xmx8192M",
             "-XX:MetaspaceSize=256M",
             "-Duser.language=en",
