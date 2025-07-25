@@ -8,6 +8,7 @@ class ProfileService:
     def __init__(self, root_dir: str):
 
         logging.debug("Initializing ProfileService")
+        self.instance_dir = os.path.join(root_dir, "instance")
         self.profile = Profile(
             id="a4e7d1b6b0974c87bd556f8db97afda3",
             created="2023-10-01T12:00:00Z",
@@ -17,7 +18,7 @@ class ProfileService:
             name="FFTClient",
             type="custom",
         )
-        self.profile_file = os.path.join(root_dir, "launcher_profiles.json")
+        self.profile_file = os.path.join(self.instance_dir, "launcher_profiles.json")
 
     def _is_update_required(self):
         if os.path.exists(self.profile_file):
@@ -28,8 +29,8 @@ class ProfileService:
         profiles = data.get("profiles", {})
         for profile_info in profiles.values():
             if profile_info.get("name") == self.profile.name:
-                return False  # Profile exists, no update needed
-        return True  # Profile missing, update needed
+                return False
+        return True
 
     def update(self):
         logging.info("Ensuring FFTClient profile exists in launcher_profiles.json")
