@@ -5,7 +5,7 @@ from ..models.profile import Profile
 
 
 class ProfileService:
-    def __init__(self, minecraft_dir: str):
+    def __init__(self, root_dir: str):
 
         logging.debug("Initializing ProfileService")
         self.profile = Profile(
@@ -17,7 +17,7 @@ class ProfileService:
             name="FFTClient",
             type="custom",
         )
-        self.profile_file = os.path.join(minecraft_dir, "launcher_profiles.json")
+        self.profile_file = os.path.join(root_dir, "launcher_profiles.json")
 
     def _is_update_required(self):
         if os.path.exists(self.profile_file):
