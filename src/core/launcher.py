@@ -45,7 +45,7 @@ class Launcher:
         self.main_window.set_launch_button_text("Updating...")
         self.profile_service.update()
         self.java_service.update()
-        # self.loader_service.update()
+        self.loader_service.update()
         self.main_window.set_launch_button_text("Launching...")
         game_launched = self.launcher_service.launch_game()
 
