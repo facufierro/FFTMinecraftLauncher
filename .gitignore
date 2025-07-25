@@ -41,3 +41,6 @@ temp/
 java/
 downloads/
 src/version.py
+
+.Minecraft_1.21.1/
+.Minecraft_1.20.1/
