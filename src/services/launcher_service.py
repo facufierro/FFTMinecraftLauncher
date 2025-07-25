@@ -240,12 +240,6 @@ class LauncherService:
         (target_dir / "vanilla_installed").touch()
         print(f"Vanilla install complete in {target_dir}.")
 
-    # def ensure_launcher_profiles_json(self, target_dir):
-    #     lp = target_dir / "launcher_profiles.json"
-    #     if not lp.exists():
-    #         with open(lp, "w") as f:
-    #             json.dump({"profiles": {}, "settings": {}, "version": 1}, f)
-
     def install_neoforge(self):
         if (self.instance_dir / "installed").exists():
             print(
@@ -253,7 +247,6 @@ class LauncherService:
             )
             return
         self.install_vanilla_to_dir(self.instance_dir)
-        # self.ensure_launcher_profiles_json(self.instance_dir)
         print(
             f"Installing NeoForge {self.loader.required_version} for Minecraft {self.minecraft_version}..."
         )
@@ -280,7 +273,6 @@ class LauncherService:
         print("NeoForge install complete.")
 
     def launch_neoforge(self):
-        # --- Find NeoForge version directory and load version JSON ---
         versions_dir = self.instance_dir / "versions"
         version_folder = None
         for d in versions_dir.iterdir():
