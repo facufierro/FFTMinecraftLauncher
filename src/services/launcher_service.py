@@ -2,34 +2,30 @@ import logging
 import subprocess
 import os
 import json
-import requests
 import uuid
 import sys
+import requests
 from pathlib import Path
 from tqdm import tqdm
-import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from csv import __version__
 from ..utils import github_utils
 from ..models.loader import Loader
+from ..models.game import Game
 
 
 class LauncherService:
-    def __init__(self, root_dir: str, minecraft_dir: str, loader: Loader):
-        import pathlib
-
+    def __init__(self, root_dir: str, game: Game, loader: Loader):
         try:
-            self.root_dir = pathlib.Path(root_dir)
-            self.minecraft_version = "1.21.1"
-            self.instance_dir = self.root_dir / "instance"
-
-            self.manifest_url = (
-                "https://launchermeta.mojang.com/mc/game/version_manifest.json"
-            )
-            self.minecraft_dir = pathlib.Path(minecraft_dir)
-            self.downloads_dir = self.root_dir / "downloads"
+            self.root_dir = Path(root_dir)
+            self.instance_dir = Path(self.root_dir, "instance")
+            self.downloads_dir = Path(self.root_dir, "downloads")
             self.loader = loader
+            self.game = game
+            self.minecraft_version = game.version
+            self.manifest_url = game.manifest_url
+
             self.launcher_repo = {
                 "name": "facufierro/FFTMinecraftLauncher",
                 "url": "https://github.com/facufierro/FFTMinecraftLauncher",
@@ -60,208 +56,7 @@ class LauncherService:
         except Exception as e:
             logging.error(f"Failed to replace updater: {e}")
 
-    def _fetch_updater_file(self):
-        try:
-            self.updater_file = github_utils.get_release_file(
-                "Updater.exe", self.launcher_repo.get("name")
-            )
-        except Exception as e:
-            logging.error(f"Failed to fetch Updater.exe: {e}")
-            raise e
-
-    def _fetch_launcher_file(self):
-        try:
-            self.launcher_file = github_utils.get_release_file(
-                "FFTLauncher.exe", self.launcher_repo.get("name")
-            )
-            downloads_dir = self.downloads_dir
-            os.makedirs(downloads_dir, exist_ok=True)
-            with open(os.path.join(downloads_dir, "FFTLauncher.exe"), "wb") as f:
-                f.write(self.launcher_file)
-            logging.info("Launcher file downloaded successfully.")
-        except Exception as e:
-            logging.error(f"Failed to fetch FFTLauncher.exe: {e}")
-            raise e
-
-    def _is_update_required(self):
-        requiered_version = github_utils.get_release_version(
-            self.launcher_repo.get("url")
-        )
-        current_version = __version__
-        logging.info(
-            f"Current launcher version: {current_version}, Latest release: {requiered_version}"
-        )
-        return requiered_version and current_version != requiered_version
-
-    def download_file(self, url, dest, show_progress=True, max_retries=3):
-        """Download a file with progress bar and validate as zip if .jar/.zip. Retries on failure."""
-        for attempt in range(1, max_retries + 1):
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            r = requests.get(url, stream=True)
-            total = int(r.headers.get("content-length", 0))
-            print(
-                f"[DEBUG] Downloading {url} (attempt {attempt}/{max_retries}), HTTP status: {r.status_code}"
-            )
-            if show_progress:
-                bar = tqdm(
-                    desc=dest.name, total=total, unit="B", unit_scale=True, leave=False
-                )
-            else:
-                bar = None
-            with open(dest, "wb") as f:
-                for chunk in r.iter_content(1024 * 32):
-                    f.write(chunk)
-                    if bar:
-                        bar.update(len(chunk))
-            if bar:
-                bar.close()
-            # Print file size after download
-            try:
-                size = dest.stat().st_size
-                print(f"[DEBUG] Downloaded file size: {size} bytes")
-            except Exception:
-                print(f"[DEBUG] Could not stat file {dest}")
-            # Validate as zip if .jar or .zip
-            is_zip = str(dest).endswith(".jar") or str(dest).endswith(".zip")
-            valid = True
-            if is_zip:
-                try:
-                    with zipfile.ZipFile(dest, "r") as zf:
-                        bad = zf.testzip()
-                        if bad is not None:
-                            print(
-                                f"[WARN] Corrupt zip entry {bad} in {dest}, retrying..."
-                            )
-                            valid = False
-                except Exception as e:
-                    print(
-                        f"[WARN] Downloaded file {dest} is not a valid zip: {e}, retrying..."
-                    )
-                    # Print first 200 bytes of file for debugging
-                    try:
-                        with open(dest, "rb") as f:
-                            snippet = f.read(200)
-                            print(f"[DEBUG] First 200 bytes of file: {snippet}")
-                    except Exception:
-                        print(f"[DEBUG] Could not read file {dest}")
-                    valid = False
-            if valid:
-                return
-            else:
-                try:
-                    dest.unlink()
-                except Exception:
-                    pass
-                if attempt == max_retries:
-                    # Print first 200 bytes of HTTP response if not valid
-                    try:
-                        r2 = requests.get(url)
-                        print(f"[DEBUG] HTTP status: {r2.status_code}")
-                        print(
-                            f"[DEBUG] First 200 bytes of HTTP response: {r2.content[:200]}"
-                        )
-                    except Exception:
-                        print(f"[DEBUG] Could not fetch HTTP response for {url}")
-                    raise Exception(
-                        f"Failed to download a valid file from {url} after {max_retries} attempts."
-                    )
-
-    def get_version_json(self, version):
-        manifest = requests.get(self.manifest_url).json()
-        for v in manifest["versions"]:
-            if v["id"] == version:
-                return requests.get(v["url"]).json()
-        raise Exception(f"Version {version} not found")
-
-    def install_vanilla_to_dir(self, target_dir):
-        if (target_dir / "vanilla_installed").exists():
-            print(
-                f"Vanilla Minecraft {self.minecraft_version} already present in {target_dir}."
-            )
-            return
-        print(
-            f"Installing vanilla Minecraft {self.minecraft_version} to {target_dir}..."
-        )
-        vjson = self.get_version_json(self.minecraft_version)
-        client_url = vjson["downloads"]["client"]["url"]
-        client_jar = target_dir / f"minecraft-{self.minecraft_version}.jar"
-        self.download_file(client_url, client_jar)
-        libs_dir = target_dir / "libraries"
-        lib_tasks = []
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            for lib in vjson["libraries"]:
-                if "downloads" in lib and "artifact" in lib["downloads"]:
-                    url = lib["downloads"]["artifact"]["url"]
-                    path = libs_dir / Path(lib["downloads"]["artifact"]["path"])
-                    if not path.exists():
-                        lib_tasks.append(
-                            executor.submit(self.download_file, url, path, False)
-                        )
-            for f in tqdm(
-                as_completed(lib_tasks),
-                total=len(lib_tasks),
-                desc="Libraries",
-                unit="lib",
-            ):
-                pass
-        assets_dir = target_dir / "assets"
-        assets_index_url = vjson["assetIndex"]["url"]
-        assets_index_path = assets_dir / "indexes" / f"{self.minecraft_version}.json"
-        self.download_file(assets_index_url, assets_index_path)
-        with open(assets_index_path) as f:
-            assets = json.load(f)["objects"]
-        asset_tasks = []
-        with ThreadPoolExecutor(max_workers=16) as executor:
-            for name, obj in assets.items():
-                h = obj["hash"]
-                url = f"https://resources.download.minecraft.net/{h[:2]}/{h}"
-                path = assets_dir / "objects" / h[:2] / h
-                if not path.exists():
-                    asset_tasks.append(
-                        executor.submit(self.download_file, url, path, False)
-                    )
-            for f in tqdm(
-                as_completed(asset_tasks),
-                total=len(asset_tasks),
-                desc="Assets",
-                unit="asset",
-            ):
-                pass
-        (target_dir / "vanilla_installed").touch()
-        print(f"Vanilla install complete in {target_dir}.")
-
-    def install_neoforge(self):
-        if (self.instance_dir / "installed").exists():
-            print(
-                f"NeoForge {self.loader.required_version} for Minecraft {self.minecraft_version} already installed."
-            )
-            return
-        self.install_vanilla_to_dir(self.instance_dir)
-        print(
-            f"Installing NeoForge {self.loader.required_version} for Minecraft {self.minecraft_version}..."
-        )
-        self.instance_dir.mkdir(parents=True, exist_ok=True)
-        installer_jar = (
-            self.instance_dir / f"neoforge-{self.loader.required_version}-installer.jar"
-        )
-        if not installer_jar.exists():
-            print(f"Downloading NeoForge installer {self.loader.required_version}...")
-            self.download_file(self.loader.download_url, installer_jar)
-        print("Running NeoForge installer...")
-        subprocess.run(
-            [
-                "java",
-                "-jar",
-                str(installer_jar),
-                "--installClient",
-                str(self.instance_dir),
-            ],
-            check=True,
-        )
-        (self.instance_dir / "installed").touch()
-        print("NeoForge install complete.")
-
-    def launch_neoforge(self):
+    def launch_game(self):
         versions_dir = self.instance_dir / "versions"
         version_folder = None
         for d in versions_dir.iterdir():
@@ -531,6 +326,42 @@ class LauncherService:
         print(f"Launching NeoForge with UUID: {random_uuid}")
         subprocess.run(args, cwd=self.instance_dir)
 
-    def launch_game(self):
-        self.install_neoforge()
-        self.launch_neoforge()
+    def _fetch_updater_file(self):
+        try:
+            self.updater_file = github_utils.get_release_file(
+                "Updater.exe", self.launcher_repo.get("name")
+            )
+        except Exception as e:
+            logging.error(f"Failed to fetch Updater.exe: {e}")
+            raise e
+
+    def _fetch_launcher_file(self):
+        try:
+            self.launcher_file = github_utils.get_release_file(
+                "FFTLauncher.exe", self.launcher_repo.get("name")
+            )
+            downloads_dir = self.downloads_dir
+            os.makedirs(downloads_dir, exist_ok=True)
+            with open(os.path.join(downloads_dir, "FFTLauncher.exe"), "wb") as f:
+                f.write(self.launcher_file)
+            logging.info("Launcher file downloaded successfully.")
+        except Exception as e:
+            logging.error(f"Failed to fetch FFTLauncher.exe: {e}")
+            raise e
+
+    def _is_update_required(self):
+        requiered_version = github_utils.get_release_version(
+            self.launcher_repo.get("url")
+        )
+        current_version = __version__
+        logging.info(
+            f"Current launcher version: {current_version}, Latest release: {requiered_version}"
+        )
+        return requiered_version and current_version != requiered_version
+
+    def get_version_json(self, version):
+        manifest = requests.get(self.game.manifest_url).json()
+        for v in manifest["versions"]:
+            if v["id"] == version:
+                return requests.get(v["url"]).json()
+        raise Exception(f"Version {version} not found")
