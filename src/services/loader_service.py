@@ -7,12 +7,13 @@ from ..models.loader import Loader
 
 
 class LoaderService:
-    def __init__(self, root_dir: str, minecraft_dir: str):
+    def __init__(self, root_dir: str):
         logging.debug("Initializing LoaderService")
+        self.root_dir = root_dir
         self.downloads_dir = os.path.join(root_dir, "downloads")
-        self.minecraft_dir = minecraft_dir
+        self.instance_dir = os.path.join(root_dir, "instance")
         self.loader = Loader(
-            self.minecraft_dir,
+            self.instance_dir,
             self.downloads_dir,
         )
         self.update_finished_callbacks = []
@@ -64,22 +65,19 @@ class LoaderService:
             raise
 
     def _install(self):
-        logging.debug("Installing Loader...")
-        if not os.path.exists(self.loader.installer):
-            logging.error(f"Loader JAR not found at {self.loader.installer}")
-            raise FileNotFoundError(f"Loader JAR not found at {self.loader.installer}")
-        try:
-            result = subprocess.run(
-                ["java", "-jar", self.loader.installer, "--installClient"],
-                cwd=self.minecraft_dir,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            logging.debug(f"Loader installed successfully: {result.stdout}")
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Failed to install Loader: {e.stderr}")
-            raise
+        print("Running NeoForge installer...")
+        subprocess.run(
+            [
+                "java",
+                "-jar",
+                str(self.loader.installer),
+                "--installClient",
+                str(self.instance_dir),
+            ],
+            check=True,
+        )
+        (self.instance_dir / "installed").touch()
+        print("NeoForge install complete.")
 
     def _emit_update_finished(self):
         for cb in self.update_finished_callbacks:
