@@ -20,7 +20,7 @@ class Instance:
 
     def __post_init__(self):
         self.defaultconfigs_dir = os.path.join(self.instance_dir, "defaultconfigs")
-        self.config_dir = os.path.join(self.instance_dir, "configs")
+        self.config_dir = os.path.join(self.instance_dir, "config")
         self.kubejs_dir = os.path.join(self.instance_dir, "kubejs")
         self.modflared_dir = os.path.join(self.instance_dir, "modflared")
         self.mods_dir = os.path.join(self.instance_dir, "mods")
