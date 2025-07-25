@@ -13,10 +13,7 @@ class Loader:
     launcher: str = field(init=False)
 
     def __post_init__(self):
-        self.download_url = (
-            f"https://maven.neoforged.net/releases/net/neoforged/neoforge/"
-            f"{self.required_version}/neoforge-{self.required_version}-installer.jar"
-        )
+        self.download_url = f"https://maven.neoforged.net/releases/net/neoforged/neoforge/{self.required_version}/neoforge-{self.required_version}-installer.jar"
         self.installer = os.path.join(
             self.downloads_dir, f"neoforge-{self.required_version}-installer.jar"
         )
