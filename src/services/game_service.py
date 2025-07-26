@@ -47,9 +47,14 @@ class GameService:
         client_jar = target_dir / f"minecraft-{self.game.version}.jar"
         file_utils.download_file(client_url, client_jar)
         libs_dir = target_dir / "libraries"
+        natives_dir = target_dir / "natives"
+        natives_dir.mkdir(exist_ok=True)
         lib_tasks = []
+        native_tasks = []
+        native_files = []
         with ThreadPoolExecutor(max_workers=8) as executor:
             for lib in vjson["libraries"]:
+                # Download main jar
                 if "downloads" in lib and "artifact" in lib["downloads"]:
                     url = lib["downloads"]["artifact"]["url"]
                     path = libs_dir / Path(lib["downloads"]["artifact"]["path"])
@@ -57,6 +62,29 @@ class GameService:
                         lib_tasks.append(
                             executor.submit(file_utils.download_file, url, path, False)
                         )
+                # Download and extract natives if present
+                if "downloads" in lib and "classifiers" in lib["downloads"] and "natives" in lib:
+                    # Find correct classifier for this OS
+                    import platform
+                    system = platform.system().lower()
+                    arch = platform.machine().lower()
+                    native_key = None
+                    if system == "windows" and "windows" in lib["natives"]:
+                        native_key = lib["natives"]["windows"].replace("${arch}", "64")
+                    elif system == "linux" and "linux" in lib["natives"]:
+                        native_key = lib["natives"]["linux"].replace("${arch}", "64")
+                    elif system == "darwin" and "osx" in lib["natives"]:
+                        native_key = lib["natives"]["osx"].replace("${arch}", "64")
+                    if native_key and native_key in lib["downloads"]["classifiers"]:
+                        native_info = lib["downloads"]["classifiers"][native_key]
+                        native_url = native_info["url"]
+                        native_path = libs_dir / Path(native_info["path"])
+                        if not native_path.exists():
+                            native_tasks.append(
+                                executor.submit(file_utils.download_file, native_url, native_path, False)
+                            )
+                        native_files.append(native_path)
+            # Wait for library downloads
             for f in tqdm(
                 as_completed(lib_tasks),
                 total=len(lib_tasks),
@@ -64,6 +92,22 @@ class GameService:
                 unit="lib",
             ):
                 pass
+            # Wait for native downloads
+            for f in tqdm(
+                as_completed(native_tasks),
+                total=len(native_tasks),
+                desc="Natives",
+                unit="native",
+            ):
+                pass
+        # Extract native files (zip/jar) to natives_dir
+        for native_path in native_files:
+            try:
+                with zipfile.ZipFile(native_path, 'r') as zf:
+                    zf.extractall(natives_dir)
+                logging.info(f"[NATIVES] Extracted {native_path} to {natives_dir}")
+            except Exception as e:
+                logging.error(f"[NATIVES] Failed to extract {native_path}: {e}")
         assets_dir = target_dir / "assets"
         assets_index_url = vjson["assetIndex"]["url"]
         assets_index_path = assets_dir / "indexes" / f"{self.game.version}.json"
