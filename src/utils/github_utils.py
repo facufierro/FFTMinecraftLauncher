@@ -13,7 +13,9 @@ session.headers.update({
 github_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
 if github_token:
     session.headers.update({"Authorization": f"token {github_token}"})
-    logging.info("github_utils: Using API authentication.")
+    # Mask the token for logging: show only first 4 and last 4 chars
+    masked = github_token[:4] + "..." + github_token[-4:] if len(github_token) > 8 else "****"
+    logging.info(f"github_utils: Using API authentication. Token: {masked}")
 else:
     logging.info("github_utils: No GitHub token found, using unauthenticated requests.")
 
